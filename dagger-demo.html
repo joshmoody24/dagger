@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Storyline: PR 4812</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F4F5F2;--surface:#FFFFFF;--ink:#1A1F1C;--muted:#747D78;--faint:#A9B0AC;--rule:#DDE1DD;
+  --add:#1E8A55;--del:#C23B32;--chg:#B8740A;--addbg:#E4F4EA;--delbg:#FAE7E5;
+  --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#111412;--surface:#181C1A;--ink:#E4E9E6;--muted:#8C9690;--faint:#5A635E;--rule:#2B312E;
+    --add:#5FC58F;--del:#EF7C72;--chg:#E3A54B;--addbg:#16301F;--delbg:#3A1D1A;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111412;--surface:#181C1A;--ink:#E4E9E6;--muted:#8C9690;--faint:#5A635E;--rule:#2B312E;
+  --add:#5FC58F;--del:#EF7C72;--chg:#E3A54B;--addbg:#16301F;--delbg:#3A1D1A;color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--ink);font:15px/1.45 var(--sans);-webkit-text-size-adjust:100%;
+  display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.add{color:var(--add)}.del{color:var(--del)}.chg{color:var(--chg)}.aff{color:var(--muted)}
+.ch{font:700 13px/1 var(--mono);display:inline-block;width:1ch;text-align:center}
+
+header{padding:12px 16px 8px;flex:none}
+.t{font-weight:600;font-size:16px;line-height:1.3}
+.t .n{color:var(--muted);font-weight:400;margin-right:6px}
+.prog{float:right;padding-left:12px;font:500 12.5px/1.6 var(--mono);color:var(--muted)}
+.d{color:var(--muted);font-size:13.5px;margin-top:2px}
+.lg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);margin-top:8px}
+.lg span{display:inline-flex;gap:5px;align-items:baseline}
+
+.tb{flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px 8px;border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none}
+.tb::-webkit-scrollbar{display:none}
+.tbtn{flex:none;border:1px solid var(--rule);border-radius:7px;padding:6px 10px;font-size:13.5px;color:var(--muted);min-height:34px;white-space:nowrap}
+.tbtn.on,.tbtn[aria-expanded="true"]{color:var(--ink);border-color:var(--ink)}
+
+.edges{flex:none;padding:8px 12px 10px;border-bottom:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{border:1px solid var(--rule);border-radius:999px;padding:5px 11px;font-size:13px;color:var(--muted);min-height:32px}
+.chip[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+.chip small{font-family:var(--mono);margin-left:5px;opacity:.7}
+.edges .gl{font-size:12px;color:var(--muted);flex-basis:100%;margin-top:2px}
+.edges .gl:first-child{margin-top:0}
+
+main{flex:1;min-height:0;position:relative;display:flex}
+.stage{flex:1;min-width:0;position:relative}
+.scroll{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.scroll.pad{padding-bottom:58dvh}
+svg{display:block}
+svg text{font-family:var(--mono);font-size:12px;fill:var(--ink)}
+.nd{cursor:pointer}
+.nd rect{fill:var(--surface);stroke:var(--rule)}
+.nd.sel rect{stroke:var(--ink);stroke-width:1.6}
+.nd.dim{opacity:.2}
+.nd.done text.nm{fill:var(--muted)}
+.nd.ps rect{fill:var(--paper);stroke:var(--faint);stroke-dasharray:3 3}
+.pk rect{fill:none;stroke:var(--rule)}
+.pk text{fill:var(--muted);font-size:11px;cursor:pointer}
+.eg{fill:none;stroke:var(--faint);stroke-width:1;opacity:.5}
+svg.focus .eg{opacity:.15}
+.eh{fill:none;stroke:var(--ink);stroke-width:1.5}
+.ec{fill:none;stroke:var(--faint);stroke-width:1.2;opacity:.8}
+.ec.on{stroke:var(--ink);opacity:1;stroke-width:1.5}
+svg.focus .ec:not(.on){opacity:.2}
+
+
+.sheet{position:fixed;left:0;right:0;bottom:0;height:58dvh;z-index:10;background:var(--surface);border-top:1px solid var(--rule);
+  border-radius:12px 12px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.08);transform:translateY(105%);transition:transform .2s ease,height .2s ease;
+  display:flex;flex-direction:column}
+.sheet.open{transform:none}
+.sheet.full{height:100dvh;border-radius:0}
+.sh{display:flex;align-items:center;gap:10px;padding:10px 8px 6px 16px;flex:none}
+.sh h2{margin:0;font:500 16px/1.25 var(--mono);word-break:break-all;flex:1;min-width:0}
+.sh .ch{font-size:15px}
+.ib{width:38px;height:38px;border-radius:8px;color:var(--muted);font-size:18px;flex:none}
+.sb{flex:1;overflow-y:auto;padding:0 16px 12px;-webkit-overflow-scrolling:touch}
+.file{font:12px var(--mono);color:var(--muted);margin:0 0 10px}
+pre.code{margin:0 0 10px;background:var(--paper);border-radius:6px;overflow-x:auto;font:12px/1.6 var(--mono);padding:6px 0}
+pre.code .ln{display:block;padding:0 12px 0 24px;position:relative;white-space:pre;min-width:max-content}
+pre.code .ln i{position:absolute;left:9px;font-style:normal;font-weight:700}
+pre.code .ln.a{background:var(--addbg)}pre.code .ln.a i{color:var(--add)}
+pre.code .ln.r{background:var(--delbg)}pre.code .ln.r i{color:var(--del)}
+pre.code.same{color:var(--muted)}
+.tq{color:var(--muted)}
+.lnk{text-decoration:underline dotted var(--faint);text-underline-offset:3px;cursor:pointer}
+.rel{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:10px 0 0}
+.rel .lbl{font-size:12px;color:var(--muted);width:100%}
+.c{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);border-radius:6px;padding:4px 8px;font:12.5px var(--mono);min-height:32px}
+.nav{flex:none;display:flex;align-items:center;gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--rule)}
+.nav .nb{width:44px;height:44px;border:1px solid var(--rule);border-radius:8px;font-size:18px;color:var(--muted)}
+.nav .nb:disabled{opacity:.35;cursor:default}
+.nav .pos{flex:1;text-align:center;font:13px var(--mono);color:var(--muted);height:44px;border-radius:8px}
+.nav .pos.done{color:var(--add)}
+.nav .go{height:44px;padding:0 18px;border-radius:8px;background:var(--ink);color:var(--paper);font-weight:600;font-size:14.5px}
+
+@media (min-width:900px){
+  .sheet{position:relative;transform:none;height:auto;width:46%;max-width:640px;border-radius:0;border-top:0;border-left:1px solid var(--rule);box-shadow:none;transition:none}
+  .sheet.full{height:auto}
+  .scroll.pad{padding-bottom:0}
+  #expBtn,#closeBtn{display:none}
+}
+@media (prefers-reduced-motion:reduce){.sheet{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="t"><span class="prog" id="prog"></span><span class="n">#4812</span>Make Money currency-aware</div>
+  <div class="d">Money no longer assumes USD cents. Every amount now carries its currency.</div>
+  <div class="lg">
+    <span><b class="ch add">+</b>new</span><span><b class="ch chg">~</b>body</span>
+    <span><b class="ch chg">≠</b>interface</span><span><b class="ch del">−</b>gone</span>
+    <span><b class="ch aff">≠</b>interface, via a dependency</span>
+  </div>
+</header>
+<nav class="tb">
+  <button class="tbtn" id="edgeBtn" aria-expanded="false">references</button>
+</nav>
+<div class="edges" id="edges" hidden></div>
+<main>
+  <div class="stage">
+    <div class="scroll" id="graph"></div>
+  </div>
+  <aside class="sheet" id="sheet" aria-label="Definition"></aside>
+</main>
+
+<script>
+
+/* ---------------- Facts: Bazel groups (from a bazel-query adapter) ---------------- */
+const G = {
+  web:      {label:"//apps/web"},
+  checkout: {label:"//services/checkout"},
+  email:    {label:"//services/email"},
+  cart:     {label:"//services/cart"},
+  pricing:  {label:"//lib/pricing"},
+  money:    {label:"//lib/money"},
+};
+const GROUP_DEPS = [["web","cart"],["web","checkout"],["web","money"],["checkout","cart"],["checkout","email"],
+  ["checkout","money"],["email","cart"],["email","money"],["cart","pricing"],["cart","money"],["pricing","money"]];
+
+/* ---------------- Facts: definitions + mentions (from the TypeScript extractor) ----------------
+   iface/body are [before, after]; null = absent. mentions: [to, role, when?, resolver?]  */
+const same = x => [x, x];
+const DEFS = [
+{id:"Currency",g:"money",file:"lib/money/money.ts",kind:"type",change:"added",
+ iface:[null,`export type Currency = "USD" | "EUR" | "GBP";`],m:[]},
+{id:"Money",g:"money",file:"lib/money/money.ts",kind:"type",change:"iface",
+ iface:[`export type Money = number; // integer cents, always USD`,
+`export interface Money {
+  readonly amount: number; // integer minor units
+  readonly currency: Currency;
+}`],m:[["Currency","type","h"]]},
+{id:"money",g:"money",file:"lib/money/money.ts",kind:"function",change:"added",
+ iface:[null,`export function money(amount: number, currency: Currency): Money`],
+ body:[null,`{
+  if (!Number.isInteger(amount)) {
+    throw new RangeError("amount must be in integer minor units");
+  }
+  return { amount, currency };
+}`],m:[["Money","type"],["Currency","type"]]},
+{id:"ZERO",g:"money",file:"lib/money/money.ts",kind:"const",change:"removed",
+ iface:[`export const ZERO: Money`,null],body:[`= 0;`,null],m:[["Money","type"]]},
+{id:"zero",g:"money",file:"lib/money/money.ts",kind:"function",change:"added",
+ iface:[null,`export function zero(currency: Currency): Money`],body:[null,`{
+  return money(0, currency);
+}`],m:[["Currency","type"],["Money","type"],["money","call"]]},
+{id:"CurrencyMismatchError",g:"money",file:"lib/money/money.ts",kind:"class",change:"added",
+ iface:[null,`export class CurrencyMismatchError extends Error`],body:[null,`{
+  constructor(readonly left: Currency, readonly right: Currency) {
+    super(\`cannot combine \${left} with \${right}\`);
+  }
+}`],m:[["Currency","type"]]},
+{id:"addMoney",g:"money",file:"lib/money/money.ts",kind:"function",change:"body",
+ iface:same(`export function addMoney(a: Money, b: Money): Money`),body:[`{
+  return a + b;
+}`,`{
+  if (a.currency !== b.currency) {
+    throw new CurrencyMismatchError(a.currency, b.currency);
+  }
+  return money(a.amount + b.amount, a.currency);
+}`],m:[["Money","type"],["CurrencyMismatchError","new","h"],["money","call","h"]]},
+{id:"subtractMoney",g:"money",file:"lib/money/money.ts",kind:"function",change:"added",
+ iface:[null,`export function subtractMoney(a: Money, b: Money): Money`],body:[null,`{
+  return addMoney(a, money(-b.amount, b.currency));
+}`],m:[["Money","type"],["addMoney","call"],["money","call"]]},
+{id:"multiplyMoney",g:"money",file:"lib/money/money.ts",kind:"function",change:"body",
+ iface:same(`export function multiplyMoney(m: Money, factor: number): Money`),body:[`{
+  return Math.round(m * factor);
+}`,`{
+  return money(Math.round(m.amount * factor), m.currency);
+}`],m:[["Money","type"],["money","call","h"]]},
+{id:"compareMoney",g:"money",file:"lib/money/money.ts",kind:"function",change:"added",
+ iface:[null,`export function compareMoney(a: Money, b: Money): -1 | 0 | 1`],body:[null,`{
+  if (a.currency !== b.currency) {
+    throw new CurrencyMismatchError(a.currency, b.currency);
+  }
+  return Math.sign(a.amount - b.amount) as -1 | 0 | 1;
+}`],m:[["Money","type"],["CurrencyMismatchError","new"]]},
+{id:"formatMoney",g:"money",file:"lib/money/format.ts",kind:"function",change:"body",
+ iface:same(`export function formatMoney(m: Money, locale = "en-US"): string`),body:[`{
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "USD",
+  }).format(m / 100);
+}`,`{
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: m.currency,
+  }).format(m.amount / 100);
+}`],m:[["Money","type"]]},
+
+{id:"Discount",g:"pricing",file:"lib/pricing/discount.ts",kind:"type",change:"none",
+ iface:same(`export type Discount =
+  | { kind: "percent"; pct: number }
+  | { kind: "fixed"; off: Money };`),m:[["Money","type"]]},
+{id:"applyDiscount",g:"pricing",file:"lib/pricing/discount.ts",kind:"function",change:"body",
+ iface:same(`export function applyDiscount(price: Money, d: Discount): Money`),body:[`{
+  switch (d.kind) {
+    case "percent":
+      return multiplyMoney(price, 1 - d.pct / 100);
+    case "fixed":
+      return Math.max(0, price - d.off);
+  }
+}`,`{
+  switch (d.kind) {
+    case "percent":
+      return multiplyMoney(price, 1 - d.pct / 100);
+    case "fixed": {
+      const out = subtractMoney(price, d.off);
+      return out.amount < 0 ? zero(price.currency) : out;
+    }
+  }
+}`],m:[["Money","type"],["Discount","type"],["multiplyMoney","call"],["subtractMoney","call","h"],["zero","call","h"]]},
+
+{id:"LineItem",g:"cart",file:"services/cart/cart.ts",kind:"type",change:"none",
+ iface:same(`export interface LineItem {
+  sku: string;
+  unitPrice: Money;
+  qty: number;
+}`),m:[["Money","type"]]},
+{id:"Cart",g:"cart",file:"services/cart/cart.ts",kind:"type",change:"iface",
+ iface:[`export interface Cart {
+  items: LineItem[];
+  promos: Promotion[];
+}`,`export interface Cart {
+  currency: Currency;
+  items: LineItem[];
+  promos: Promotion[];
+}`],m:[["LineItem","type"],["Promotion","type"],["Currency","type","h"]]},
+{id:"lineTotal",g:"cart",file:"services/cart/cart.ts",kind:"function",change:"body",
+ iface:same(`export function lineTotal(item: LineItem): Money`),body:[`{
+  return item.unitPrice * item.qty;
+}`,`{
+  return multiplyMoney(item.unitPrice, item.qty);
+}`],m:[["LineItem","type"],["Money","type"],["multiplyMoney","call","h"]]},
+{id:"cartTotal",g:"cart",file:"services/cart/cart.ts",kind:"function",change:"body",
+ iface:same(`export function cartTotal(cart: Cart): Money`),body:[`{
+  const subtotal = cart.items.reduce(
+    (sum, item) => sum + lineTotal(item),
+    ZERO,
+  );
+  return applyPromotions(subtotal, cart.promos);
+}`,`{
+  const subtotal = cart.items.reduce(
+    (sum, item) => addMoney(sum, lineTotal(item)),
+    zero(cart.currency),
+  );
+  return applyPromotions(subtotal, cart.promos);
+}`],m:[["Cart","type"],["Money","type"],["lineTotal","call"],["ZERO","value","b"],["zero","call","h"],["addMoney","call","h"],["applyPromotions","call"]]},
+{id:"Promotion",g:"cart",file:"services/cart/promotions.ts",kind:"type",change:"none",
+ iface:same(`export interface Promotion {
+  code: string;
+  discount: Discount;
+  stackable: boolean;
+}`),m:[["Discount","type"]]},
+{id:"applyPromotions",g:"cart",file:"services/cart/promotions.ts",kind:"function",change:"body",
+ iface:same(`export function applyPromotions(total: Money, promos: Promotion[]): Money`),body:[`{
+  if (promos.length === 0 || total === 0) return total;
+  const [best, rest] = bestPromotion(total, promos);
+  const discounted = applyDiscount(total, best.discount);
+  return best.stackable ? applyPromotions(discounted, rest) : discounted;
+}`,`{
+  if (promos.length === 0 || total.amount === 0) return total;
+  const [best, rest] = bestPromotion(total, promos);
+  const discounted = applyDiscount(total, best.discount);
+  return best.stackable ? applyPromotions(discounted, rest) : discounted;
+}`],m:[["Money","type"],["Promotion","type"],["bestPromotion","call"],["applyDiscount","call"]]},
+{id:"bestPromotion",g:"cart",file:"services/cart/promotions.ts",kind:"function",change:"body",
+ iface:same(`function bestPromotion(
+  total: Money,
+  promos: Promotion[],
+): [best: Promotion, rest: Promotion[]]`),body:[`{
+  // A promo is worth what it saves plus whatever it lets you stack after it.
+  let best = promos[0];
+  let bestPrice: Money | undefined;
+  for (const p of promos) {
+    const rest = promos.filter((q) => q !== p);
+    const after = applyDiscount(total, p.discount);
+    const price = p.stackable ? applyPromotions(after, rest) : after;
+    if (bestPrice === undefined || price < bestPrice) {
+      best = p;
+      bestPrice = price;
+    }
+  }
+  return [best, promos.filter((p) => p !== best)];
+}`,`{
+  // A promo is worth what it saves plus whatever it lets you stack after it.
+  let best = promos[0];
+  let bestPrice: Money | undefined;
+  for (const p of promos) {
+    const rest = promos.filter((q) => q !== p);
+    const after = applyDiscount(total, p.discount);
+    const price = p.stackable ? applyPromotions(after, rest) : after;
+    if (bestPrice === undefined || compareMoney(price, bestPrice) < 0) {
+      best = p;
+      bestPrice = price;
+    }
+  }
+  return [best, promos.filter((p) => p !== best)];
+}`],m:[["Money","type"],["Promotion","type"],["applyDiscount","call"],["applyPromotions","call"],["compareMoney","call","h"]]},
+
+{id:"renderReceipt",g:"email",file:"services/email/receipt.ts",kind:"function",change:"none",
+ iface:same(`export function renderReceipt(items: LineItem[], total: Money): string`),body:same(`{
+  const lines = items.map(
+    (i) => \`\${i.qty} × \${i.sku}  \${formatMoney(lineTotal(i))}\`,
+  );
+  return [...lines, \`Total  \${formatMoney(total)}\`].join("\\n");
+}`),m:[["LineItem","type"],["Money","type"],["formatMoney","call"],["lineTotal","call"]]},
+
+{id:"CheckoutRequest",g:"checkout",file:"services/checkout/api.ts",kind:"type",change:"iface",
+ iface:[`export interface CheckoutRequest {
+  userId: string;
+  items: { sku: string; qty: number }[];
+  promoCodes: string[];
+}`,`export interface CheckoutRequest {
+  userId: string;
+  currency: Currency;
+  items: { sku: string; qty: number }[];
+  promoCodes: string[];
+}`],m:[["Currency","type","h"]]},
+{id:"lookupPrice",g:"checkout",file:"services/checkout/prices.ts",kind:"function",change:"body",
+ iface:same(`async function lookupPrice(sku: string): Promise<Money>`),body:[`{
+  const row = await db.one(
+    "SELECT price_cents FROM catalog WHERE sku = $1",
+    [sku],
+  );
+  return row.price_cents;
+}`,`{
+  const row = await db.one(
+    "SELECT amount_minor, currency FROM catalog_prices WHERE sku = $1",
+    [sku],
+  );
+  return money(row.amount_minor, row.currency);
+}`],m:[["Money","type"],["money","call","h"]]},
+{id:"buildLineItems",g:"checkout",file:"services/checkout/prices.ts",kind:"function",change:"none",
+ iface:same(`export async function buildLineItems(req: CheckoutRequest): Promise<LineItem[]>`),body:same(`{
+  return Promise.all(
+    req.items.map(async ({ sku, qty }) => ({
+      sku,
+      qty,
+      unitPrice: await lookupPrice(sku),
+    })),
+  );
+}`),m:[["CheckoutRequest","type"],["LineItem","type"],["lookupPrice","call"]]},
+{id:"SUPPORTED",g:"checkout",file:"services/checkout/handler.ts",kind:"const",change:"added",
+ iface:[null,`const SUPPORTED: ReadonlySet<Currency>`],body:[null,`= new Set<Currency>(["USD", "EUR", "GBP"]);`],m:[["Currency","type"]]},
+{id:"handleCheckout",g:"checkout",file:"services/checkout/handler.ts",kind:"function",change:"body",
+ iface:same(`export async function handleCheckout(req: CheckoutRequest): Promise<Receipt>`),body:[`{
+  const items = await buildLineItems(req);
+  const promos = await loadPromotions(req.promoCodes);
+  const total = cartTotal({ items, promos });
+  await payments.charge(req.userId, total);
+  return { total, text: renderReceipt(items, total) };
+}`,`{
+  if (!SUPPORTED.has(req.currency)) {
+    throw new BadRequest(\`unsupported currency \${req.currency}\`);
+  }
+  const items = await buildLineItems(req);
+  const promos = await loadPromotions(req.promoCodes);
+  const total = cartTotal({ currency: req.currency, items, promos });
+  await payments.charge(req.userId, total.amount, total.currency);
+  return { total, text: renderReceipt(items, total) };
+}`],m:[["CheckoutRequest","type"],["buildLineItems","call"],["cartTotal","call"],["renderReceipt","call"],["SUPPORTED","value","h"]]},
+
+{id:"CartSummary",g:"web",file:"apps/web/src/CartSummary.tsx",kind:"component",change:"body",
+ iface:same(`export function CartSummary({ cart }: { cart: Cart }): JSX.Element`),body:[`{
+  const total = cartTotal(cart);
+  return (
+    <aside className="summary">
+      <span>Total</span>
+      <strong>{formatMoney(total)}</strong>
+    </aside>
+  );
+}`,`{
+  const total = cartTotal(cart);
+  return (
+    <aside className="summary">
+      <span>Total ({cart.currency})</span>
+      <strong>{formatMoney(total, navigator.language)}</strong>
+    </aside>
+  );
+}`],m:[["Cart","type"],["cartTotal","call"],["formatMoney","call"]]},
+{id:"submitCheckout",g:"web",file:"apps/web/src/checkout.ts",kind:"function",change:"body",
+ iface:same(`export async function submitCheckout(cart: Cart, codes: string[]): Promise<Receipt>`),body:[`{
+  const body: CheckoutRequest = {
+    userId: session.userId,
+    items: cart.items.map(({ sku, qty }) => ({ sku, qty })),
+    promoCodes: codes,
+  };
+  const res = await fetch("/api/checkout", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}`,`{
+  const body: CheckoutRequest = {
+    userId: session.userId,
+    currency: cart.currency,
+    items: cart.items.map(({ sku, qty }) => ({ sku, qty })),
+    promoCodes: codes,
+  };
+  const res = await fetch("/api/checkout", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}`],m:[["Cart","type"],["CheckoutRequest","type"],["handleCheckout","call","both","http-route"]]},
+{id:"useCart",g:"web",file:"apps/web/src/useCart.ts",kind:"hook",change:"body",
+ iface:same(`export function useCart(): [Cart, CartActions]`),body:[`{
+  const [cart, setCart] = useState<Cart>({ items: [], promos: [] });
+  return [cart, bindActions(setCart)];
+}`,`{
+  const [cart, setCart] = useState<Cart>({
+    currency: localeCurrency(),
+    items: [],
+    promos: [],
+  });
+  return [cart, bindActions(setCart)];
+}`],m:[["Cart","type"],["localeCurrency","call","h"]]},
+{id:"localeCurrency",g:"web",file:"apps/web/src/useCart.ts",kind:"function",change:"added",
+ iface:[null,`function localeCurrency(): Currency`],body:[null,`{
+  const region = new Intl.Locale(navigator.language).maximize().region;
+  if (region === "GB") return "GBP";
+  return EURO_REGIONS.has(region ?? "") ? "EUR" : "USD";
+}`],m:[["Currency","type"]]},
+
+{id:"t1",name:"applies stacked promos",g:"cart",file:"services/cart/cart.test.ts",kind:"test",change:"body",
+ iface:same(`test("applies stacked promos", () => …)`),body:[`{
+  const cart: Cart = {
+    items: [{ sku: "mug", unitPrice: 1200, qty: 2 }],
+    promos: [tenPercentOff, fiveOffStackable],
+  };
+  expect(cartTotal(cart)).toBe(1660);
+}`,`{
+  const cart: Cart = {
+    currency: "USD",
+    items: [{ sku: "mug", unitPrice: money(1200, "USD"), qty: 2 }],
+    promos: [tenPercentOff, fiveOffStackable],
+  };
+  expect(cartTotal(cart)).toEqual(money(1660, "USD"));
+}`],m:[["Cart","type"],["cartTotal","call"],["money","call","h"]]},
+{id:"t2",name:"rejects mixed currencies",g:"cart",file:"services/cart/cart.test.ts",kind:"test",change:"added",
+ iface:[null,`test("rejects mixed currencies", () => …)`],body:[null,`{
+  const cart: Cart = {
+    currency: "USD",
+    items: [{ sku: "mug", unitPrice: money(1200, "EUR"), qty: 1 }],
+    promos: [],
+  };
+  expect(() => cartTotal(cart)).toThrow(CurrencyMismatchError);
+}`],m:[["Cart","type"],["cartTotal","call"],["money","call"],["CurrencyMismatchError","value"]]},
+];
+
+
+
+/* ================= Model =================
+   Two primitives:
+   - containment: package ⊃ file ⊃ definition (a tree: text lives in one place)
+   - reference:   an identifier in A's text resolves to B
+   One attribute of a reference: which facet of A holds it (interface = A's .d.ts form, or body).
+   Resolver is provenance. Everything else is derived. */
+const DEF = Object.fromEntries(DEFS.map(d => [d.id, d]));
+const dname = d => d.name || d.id;
+const EDGES = [];
+DEFS.forEach(d => d.m.forEach(([to, _role, when, res]) => {
+  const itext = (d.iface?.[0] || "") + "\n" + (d.iface?.[1] || "");
+  const facet = new RegExp("\\b" + to + "\\b").test(itext) ? "iface" : "body";
+  EDGES.push({from:d.id, to, facet, when:when || "both", resolver:res || "tsc"});
+}));
+const RESOLVERS = [["tsc","compiler"],["http-route","http routes"]];
+
+// Derived: a definition's contract changes if its interface references something whose contract changed.
+const textChanged = id => DEF[id].change !== "none";
+const affected = new Set();
+for (let grew = true; grew;){
+  grew = false;
+  DEFS.forEach(d => {
+    if (textChanged(d.id) || affected.has(d.id)) return;
+    if (EDGES.some(e => e.from === d.id && e.facet === "iface" && (["iface","removed"].includes(DEF[e.to].change) || affected.has(e.to)))){ affected.add(d.id); grew = true; }
+  });
+}
+const status = id => textChanged(id) ? DEF[id].change : affected.has(id) ? "affected" : "none";
+const inGraph = id => status(id) !== "none";
+const VIS = DEFS.filter(d => inGraph(d.id)).map(d => d.id);
+const CR = {iface:0, added:1, body:2, removed:3, affected:4, none:5};
+const CH = {iface:"≠", body:"~", added:"+", removed:"−", affected:"≠", none:"·"};
+const CC = {iface:"chg", body:"chg", added:"add", removed:"del", affected:"aff", none:"aff"};
+const cmp = (a, b) => { for (let i=0;i<a.length;i++){ if (a[i]<b[i]) return -1; if (a[i]>b[i]) return 1; } return 0; };
+const FILEPKG = {}; DEFS.forEach(d => FILEPKG[d.file] = d.g);
+const base = f => f.split("/").pop();
+
+let reviewed = new Set();
+try { reviewed = new Set(JSON.parse(localStorage.getItem("storyline-4812-v3") || "[]")); } catch(e) {}
+const saveReviewed = () => { try { localStorage.setItem("storyline-4812-v3", JSON.stringify([...reviewed])); } catch(e) {} };
+
+const FACETS = [["iface","interface"],["body","body"]];
+const state = {level:"def", ov:new Map(), facets:new Set(FACETS.map(f => f[0])), res:new Set(RESOLVERS.map(r => r[0])),
+  selected:null, sheet:"closed", edgesOpen:false};
+
+/* Project references onto the definitions in the graph, remembering what was passed through. */
+const PE = (() => {
+  const out = {}; DEFS.forEach(d => out[d.id] = []); EDGES.forEach(e => { if (e.from !== e.to) out[e.from].push(e); });
+  const P = new Map();
+  for (const c of VIS){
+    const seen = new Set([c + "|true"]), q = [{n:c, via:[], allI:true}];
+    while (q.length){
+      const {n, via, allI} = q.shift();
+      for (const e of out[n]){
+        const t = e.to; if (t === c) continue;
+        const fI = allI && e.facet === "iface";
+        if (inGraph(t)){
+          const k = c + ">" + t; let p = P.get(k);
+          if (!p){ p = {from:c, to:t, via, iface:false, body:false, res:new Set()}; P.set(k, p); }
+          p.iface ||= fI; p.body ||= !fI; p.res.add(e.resolver);
+        } else if (!seen.has(t + "|" + fI)){ seen.add(t + "|" + fI); q.push({n:t, via:[...via, t], allI:fI}); }
+      }
+    }
+  }
+  return [...P.values()];
+})();
+
+/* Generic: cycles (Tarjan) → order each knot (Eades–Lin–Smyth) → back edges. Works at any containment level. */
+function els(nodes, edges, prio){
+  const rem = new Set(nodes), s1 = [], s2 = [];
+  const od = n => edges.filter(e => e.from===n && rem.has(e.to)).length;
+  const idg = n => edges.filter(e => e.to===n && rem.has(e.from)).length;
+  while (rem.size){
+    let ch = true;
+    while (ch){
+      ch = false;
+      for (const n of [...rem]) if (rem.has(n) && od(n)===0){ s2.unshift(n); rem.delete(n); ch = true; }
+      for (const n of [...rem]) if (rem.has(n) && idg(n)===0){ s1.push(n); rem.delete(n); ch = true; }
+    }
+    if (rem.size){
+      let best = null, bs = -Infinity;
+      for (const n of rem){ const s = (od(n)-idg(n))*1000 + prio(n); if (s > bs){ bs = s; best = n; } }
+      s1.push(best); rem.delete(best);
+    }
+  }
+  return s1.concat(s2);
+}
+function backEdges(nodes, edges, prio){
+  const adj = {}; nodes.forEach(n => adj[n] = []); edges.forEach(e => adj[e.from].push(e.to));
+  let idx = 0; const index = {}, low = {}, on = new Set(), st = [], sccs = [];
+  function sc(v){
+    index[v] = low[v] = idx++; st.push(v); on.add(v);
+    for (const w of adj[v]){
+      if (index[w] === undefined){ sc(w); low[v] = Math.min(low[v], low[w]); }
+      else if (on.has(w)) low[v] = Math.min(low[v], index[w]);
+    }
+    if (low[v] === index[v]){ const comp = []; let w; do { w = st.pop(); on.delete(w); comp.push(w); } while (w !== v); sccs.push(comp); }
+  }
+  nodes.forEach(v => { if (index[v] === undefined) sc(v); });
+  const back = new Set();
+  for (const comp of sccs.filter(c => c.length > 1)){
+    const inC = new Set(comp), inner = edges.filter(e => inC.has(e.from) && inC.has(e.to));
+    const ext = n => edges.filter(e => e.to===n && !inC.has(e.from)).length;
+    const order = els(comp, inner, n => ext(n)*10 - prio(n));
+    const pos = Object.fromEntries(order.map((n,i) => [n,i]));
+    inner.forEach(e => { if (pos[e.from] > pos[e.to]) back.add(e); });
+  }
+  return back;
+}
+function reduce(edges){
+  const adj = {}; edges.forEach(e => (adj[e.from] ??= []).push(e));
+  const reach = (u, v, skip) => {
+    const seen = new Set(), s = (adj[u] || []).filter(e => e !== skip).map(e => e.to);
+    while (s.length){ const x = s.pop(); if (x === v) return true; if (seen.has(x)) continue; seen.add(x); (adj[x] || []).forEach(e => s.push(e.to)); }
+    return false;
+  };
+  return edges.filter(e => !reach(e.from, e.to, e));
+}
+
+/* ================= Layout: foundations on top ================= */
+const NH = 28, RG = 22, BG = 34, UG = 14, PADX = 12, PADT = 28, PADB = 12, GAP = 10, MARG = 16;
+const textW = s => Math.round(s.length * 7.3);
+const count = (pred) => VIS.filter(pred).length;
+const labelOf = r => r.startsWith("pkg:") ? `${G[r.slice(4)].label} ${count(n => DEF[n].g === r.slice(4))}`
+  : r.startsWith("file:") ? `${base(r.slice(5))} ${count(n => DEF[n].file === r.slice(5))}` : dname(DEF[r]);
+const wOf = r => textW(labelOf(r)) + (r.includes(":") && !DEF[r] ? 44 : 34);
+const prioOf = r => DEF[r] ? CR[status(r)] : 0;
+
+function layout(cfg){
+  const pkgOpen = g => cfg.ov.has("p:" + g) ? cfg.ov.get("p:" + g) : cfg.level !== "pkg";
+  const fileOpen = f => cfg.ov.has("f:" + f) ? cfg.ov.get("f:" + f) : cfg.level === "def";
+  const rep = n => { const d = DEF[n]; return !pkgOpen(d.g) ? "pkg:" + d.g : !fileOpen(d.file) ? "file:" + d.file : n; };
+  const pkgOf = r => r.startsWith("pkg:") ? r.slice(4) : r.startsWith("file:") ? FILEPKG[r.slice(5)] : DEF[r].g;
+  // The same reference graph, seen at the chosen level of containment.
+  const M = new Map();
+  PE.forEach(e => {
+    const a = rep(e.from), b = rep(e.to); if (a === b) return;
+    const k = a + ">" + b; let r = M.get(k);
+    if (!r){ r = {from:a, to:b, iface:false, body:false, res:new Set(), src:[]}; M.set(k, r); }
+    r.iface ||= e.iface; r.body ||= e.body; e.res.forEach(x => r.res.add(x)); r.src.push(e);
+  });
+  const nodes = [...new Set(VIS.map(rep))], edges = [...M.values()];
+  const back = backEdges(nodes, edges, prioOf);
+  const dag = edges.filter(e => !back.has(e));
+  const deps = {}; nodes.forEach(n => deps[n] = []); dag.forEach(e => deps[e.from].push(e.to));
+
+  const present = [...new Set(VIS.map(n => DEF[n].g))], band = {};
+  const fb = g => band[g] ?? (band[g] = (() => {
+    const ds = GROUP_DEPS.filter(([a,b]) => a === g && present.includes(b)).map(([,b]) => b);
+    return ds.length ? 1 + Math.max(...ds.map(fb)) : 0;
+  })());
+  const units = present.map(g => ({id:g, band:fb(g), box:pkgOpen(g), items:nodes.filter(r => pkgOf(r) === g)}));
+  units.forEach(u => {
+    const L = {}, inU = new Set(u.items);
+    const f = n => L[n] ?? (L[n] = (() => { const ds = deps[n].filter(d => inU.has(d)); return ds.length ? 1 + Math.max(...ds.map(f)) : 0; })());
+    u.items.forEach(f);
+    const rows = []; u.items.forEach(n => (rows[L[n]] ??= []).push(n));
+    u.rows = rows.filter(Boolean);
+    u.rw = r => r.reduce((s, id) => s + wOf(id), 0) + GAP*(r.length - 1);
+    u.innerW = Math.max(...u.rows.map(u.rw));
+    u.px = u.box ? PADX : 0; u.pt = u.box ? PADT : 0;
+    u.W = u.innerW + 2*u.px;
+    u.H = u.rows.length*NH + (u.rows.length - 1)*RG + (u.box ? PADT + PADB : 0);
+  });
+  const bands = []; units.forEach(u => (bands[u.band] ??= []).push(u));
+  const B = bands.filter(Boolean).map(us => us.sort((a,b) => a.id.localeCompare(b.id)));
+  const bw = us => us.reduce((s, u) => s + u.W, 0) + UG*(us.length - 1);
+  const maxW = Math.max(...B.map(bw));
+  const tie = r => DEF[r] ? [CR[status(r)], dname(DEF[r]).toLowerCase()] : [0, r];
+  const pos = {}, order = [], rowOf = {};
+  let y = MARG;
+  B.forEach(us => {
+    let x = MARG + (maxW - bw(us))/2;
+    us.forEach(u => {
+      u.x = x; u.y = y;
+      u.rows.forEach((r, i) => {
+        const bc = n => { const xs = deps[n].map(d => pos[d]).filter(Boolean).map(p => p.x + p.w/2); return xs.length ? xs.reduce((a, b) => a + b, 0)/xs.length : 1e9; };
+        const row = r.map(n => ({n, b:bc(n)})).sort((a, b) => a.b - b.b || cmp(tie(a.n), tie(b.n)));
+        let cx = u.x + u.px + (u.innerW - u.rw(r))/2;
+        const ry = u.y + u.pt + i*(NH + RG);
+        row.forEach(({n}) => {
+          const w = wOf(n); pos[n] = {x:cx, y:ry, w}; cx += w + GAP;
+          if (DEF[n]){ order.push(n); rowOf[n] = u.id + "/" + i; }
+        });
+      });
+      x += u.W + UG;
+    });
+    y += Math.max(...us.map(u => u.H)) + BG;
+  });
+  return {pos, units, W:maxW + 2*MARG + 24, H:y - BG + MARG, order, rowOf, rep, edges, back, dag};
+}
+
+/* ================= Rendering ================= */
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let LAY = null, ORDER = [];
+const cfg = () => ({level:state.level, ov:state.ov});
+
+function readingOrder(){ return layout({level:"def", ov:new Map()}).order; }
+function vpath(a, b){
+  const [up, dn] = a.y <= b.y ? [a, b] : [b, a];
+  const x1 = up.x + up.w/2, y1 = up.y + NH, x2 = dn.x + dn.w/2, y2 = dn.y, my = (y1 + y2)/2;
+  return `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
+}
+const visible = e => ((state.facets.has("iface") && e.iface) || (state.facets.has("body") && e.body)) && [...e.res].some(r => state.res.has(r));
+
+function drawGraph(){
+  const L = LAY = layout(cfg()), {pos, rep} = L;
+  const sel = state.selected, nb = new Set();
+  if (sel){
+    nb.add(rep(sel));
+    PE.forEach(e => { if (!visible(e)) return; if (e.from === sel) nb.add(rep(e.to)); if (e.to === sel) nb.add(rep(e.from)); });
+  }
+  let boxes = "", edges = "", hi = "", cyc = "", nodes = "";
+  L.units.forEach(u => {
+    if (u.box) boxes += `<g class="pk"><rect x="${u.x}" y="${u.y}" width="${u.W}" height="${u.H}" rx="8"/><text x="${u.x + 10}" y="${u.y + 17}" data-pkg="${u.id}">▾ ${esc(G[u.id].label)}</text></g>`;
+  });
+  reduce(L.dag.filter(visible)).forEach(e => { edges += `<path class="eg" d="${vpath(pos[e.to], pos[e.from])}"/>`; });
+  if (sel){
+    const seen = new Set();
+    PE.forEach(e => {
+      if (!visible(e) || (e.from !== sel && e.to !== sel)) return;
+      const a = rep(e.to), b = rep(e.from), k = a + ">" + b;
+      if (a === b || seen.has(k) || [...L.back].some(x => x.from === b && x.to === a)) return; seen.add(k);
+      hi += `<path class="eh" d="${vpath(pos[a], pos[b])}"/>`;
+    });
+  }
+  L.back.forEach(e => {
+    if (!visible(e)) return;
+    const a = pos[e.from], b = pos[e.to];
+    const x1 = a.x + a.w, y1 = a.y + NH/2, x2 = b.x + b.w + 3, y2 = b.y + NH/2, bl = 36 + Math.abs(y2 - y1)*0.25;
+    const on = sel && e.src.some(s => s.from === sel || s.to === sel);
+    cyc += `<path class="ec${on ? " on" : ""}" d="M${x1},${y1} C${x1 + bl},${y1} ${x2 + bl},${y2} ${x2},${y2}" marker-end="url(#${on ? "ahon" : "ah"})"/>`;
+  });
+  Object.entries(pos).forEach(([id, p]) => {
+    const dim = nb.size && !nb.has(id) ? " dim" : "";
+    if (!DEF[id]){
+      const [kind, key] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
+      const lab = kind === "pkg" ? G[key].label : base(key), n = kind === "pkg" ? count(x => DEF[x].g === key) : count(x => DEF[x].file === key);
+      nodes += `<g class="nd ps${dim}" data-${kind === "pkg" ? "pkg" : "file"}="${key}" transform="translate(${p.x},${p.y})" tabindex="0" role="button" aria-label="Expand ${esc(lab)}">
+        <rect width="${p.w}" height="${NH}" rx="5"/><text x="10" y="18.5"><tspan style="fill:var(--muted)">▸ </tspan>${esc(lab)}<tspan style="fill:var(--muted)"> ${n}</tspan></text></g>`;
+      return;
+    }
+    const d = DEF[id], s = status(id);
+    nodes += `<g class="nd${id === sel ? " sel" : ""}${reviewed.has(id) ? " done" : ""}${dim}" data-open="${id}" transform="translate(${p.x},${p.y})" tabindex="0" role="button" aria-label="${esc(dname(d))}">
+      <rect width="${p.w}" height="${NH}" rx="5"/><text x="10" y="18.5"><tspan style="fill:var(--${CC[s] === "aff" ? "muted" : CC[s]})" font-weight="700">${CH[s]}</tspan><tspan class="nm" dx="6">${esc(dname(d))}</tspan></text></g>`;
+  });
+  const size = `width="${L.W}" height="${L.H}" style="width:100%;max-width:${L.W}px;height:auto;margin:0 auto"`;
+  $("#graph").innerHTML = `<svg class="${nb.size ? "focus" : ""}" viewBox="0 0 ${L.W} ${L.H}" ${size} role="img" aria-label="Changed definitions, foundations on top">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--faint)"/></marker><marker id="ahon" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink)"/></marker></defs>
+    ${boxes}${edges}${hi}${nodes}${cyc}</svg>`;
+}
+
+function hl(line){
+  let out = "", m;
+  const re = /(\/\/.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|([A-Za-z_$][\w$]*)|([\s\S])/g;
+  while ((m = re.exec(line))){
+    if (m[1] || m[2]) out += `<span class="tq">${esc(m[1] || m[2])}</span>`;
+    else if (m[3]) out += DEF[m[3]] && m[3] !== state.selected ? `<span class="lnk" data-open="${m[3]}">${m[3]}</span>` : m[3];
+    else out += esc(m[4]);
+  }
+  return out;
+}
+function diffLines(a, b){
+  const A = a == null ? [] : a.split("\n"), B = b == null ? [] : b.split("\n");
+  const n = A.length, mm = B.length, dp = Array.from({length:n + 1}, () => new Array(mm + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = mm - 1; j >= 0; j--) dp[i][j] = A[i] === B[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const res = []; let i = 0, j = 0;
+  while (i < n && j < mm){
+    if (A[i] === B[j]){ res.push([" ", A[i]]); i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) res.push(["−", A[i++]]);
+    else res.push(["+", B[j++]]);
+  }
+  while (i < n) res.push(["−", A[i++]]);
+  while (j < mm) res.push(["+", B[j++]]);
+  return res;
+}
+function code(pair){
+  if (!pair) return "";
+  const [a, b] = pair;
+  if (a == null && b == null) return "";
+  if (a === b) return `<pre class="code same">${a.split("\n").map(l => `<span class="ln">${hl(l)}</span>`).join("")}</pre>`;
+  return `<pre class="code">${diffLines(a, b).map(([t, s]) => `<span class="ln ${t === "+" ? "a" : t === "−" ? "r" : ""}"><i>${t === " " ? "" : t}</i>${hl(s)}</span>`).join("")}</pre>`;
+}
+function chips(ids){
+  return [...new Set(ids)].sort((a, b) => cmp([CR[status(a)], dname(DEF[a])], [CR[status(b)], dname(DEF[b])]))
+    .map(id => { const s = status(id); return `<button class="c" data-open="${id}"><b class="ch ${CC[s]}">${CH[s]}</b>${esc(dname(DEF[id]))}</button>`; }).join("");
+}
+
+function drawSheet(){
+  const el = $("#sheet"), id = state.selected;
+  el.classList.toggle("open", state.sheet !== "closed");
+  el.classList.toggle("full", state.sheet === "full");
+  $("#graph").classList.toggle("pad", state.sheet !== "closed");
+  if (!id){ el.innerHTML = ""; return; }
+  const d = DEF[id], s = status(id), i = ORDER.indexOf(id), done = reviewed.has(id);
+  const uses = EDGES.filter(e => e.from === id).map(e => e.to), by = EDGES.filter(e => e.to === id).map(e => e.from);
+  const through = s === "affected" ? EDGES.filter(e => e.from === id && e.facet === "iface" && ["iface","removed","affected"].includes(status(e.to))).map(e => e.to) : [];
+  el.innerHTML = `
+    <div class="sh"><b class="ch ${CC[s]}">${CH[s]}</b><h2>${esc(dname(d))}</h2>
+      <button class="ib" id="expBtn" aria-label="${state.sheet === "full" ? "Shrink" : "Expand"}">${state.sheet === "full" ? "⌄" : "⌃"}</button>
+      <button class="ib" id="closeBtn" aria-label="Close">×</button></div>
+    <div class="sb">
+      <p class="file">${d.file}</p>
+      ${through.length ? `<div class="rel" style="margin:0 0 10px"><span class="lbl">interface changes through</span>${chips(through)}</div>` : ""}
+      ${code(d.iface)}${code(d.body)}
+      ${uses.length ? `<div class="rel"><span class="lbl">references</span>${chips(uses)}</div>` : ""}
+      ${by.length ? `<div class="rel"><span class="lbl">referenced by</span>${chips(by)}</div>` : ""}
+    </div>
+    <div class="nav">
+      <button class="nb" id="prevBtn" aria-label="Previous" ${i <= 0 ? "disabled" : ""}>‹</button>
+      <button class="nb" id="nextBtn" aria-label="Skip to next" ${i >= ORDER.length - 1 ? "disabled" : ""}>›</button>
+      <button class="pos${done ? " done" : ""}" id="posBtn" aria-label="${done ? "Read. Tap to mark unread" : "Not read yet"}">${done ? "✓ " : ""}${i >= 0 ? `${i + 1}/${ORDER.length}` : ""}</button>
+      <button class="go" id="goBtn">✓ next</button>
+    </div>`;
+  el.querySelector(".sb").scrollTop = 0;
+}
+
+function drawChrome(){
+  $("#edgeBtn").setAttribute("aria-expanded", state.edgesOpen);
+  const filtered = state.facets.size < FACETS.length || state.res.size < RESOLVERS.length;
+  $("#edgeBtn").textContent = filtered ? "references •" : "references";
+  $("#edges").hidden = !state.edgesOpen;
+  $("#edges").innerHTML = `<span class="gl">in</span>`
+    + FACETS.map(([k, l]) => `<button class="chip" data-facet="${k}" aria-pressed="${state.facets.has(k)}">${l}<small>${EDGES.filter(e => e.facet === k).length}</small></button>`).join("")
+    + `<span class="gl">found by</span>`
+    + RESOLVERS.map(([k, l]) => `<button class="chip" data-res="${k}" aria-pressed="${state.res.has(k)}">${l}<small>${EDGES.filter(e => e.resolver === k).length}</small></button>`).join("");
+  $("#prog").textContent = `${VIS.filter(n => reviewed.has(n)).length}/${VIS.length}`;
+}
+
+const wide = () => matchMedia("(min-width:900px)").matches;
+function render(){
+  ORDER = readingOrder();
+  if (wide() && !state.selected){ state.selected = ORDER[0]; state.sheet = "half"; }
+  drawChrome();
+  drawGraph();
+  drawSheet();
+}
+function visibleH(el){
+  const r = el.getBoundingClientRect();
+  if (state.sheet === "closed" || wide()) return r.height;
+  return Math.max(80, window.innerHeight * 0.42 - r.top);
+}
+function reveal(id){
+  requestAnimationFrame(() => {
+    if (!LAY) return;
+    const p = LAY.pos[LAY.rep(id)]; if (!p) return;
+    const g = $("#graph"), s = g.querySelector("svg").getBoundingClientRect().width / LAY.W;
+    g.scrollTo({left:(p.x + p.w/2)*s - g.clientWidth/2, top:(p.y + NH/2)*s - visibleH(g)/2, behavior:"smooth"});
+  });
+}
+function select(id){
+  state.selected = id;
+  if (state.sheet === "closed") state.sheet = "half";
+  if (inGraph(id)){ state.ov.set("p:" + DEF[id].g, true); state.ov.set("f:" + DEF[id].file, true); }
+  render(); reveal(id);
+}
+
+document.addEventListener("click", e => {
+  const t = e.target;
+  const pk = t.closest("[data-pkg]"); if (pk){ const k = "p:" + pk.dataset.pkg, open = LAY.units.find(u => u.id === pk.dataset.pkg)?.box; state.ov.set(k, !open); render(); return; }
+  const fl = t.closest("[data-file]"); if (fl){ state.ov.set("p:" + FILEPKG[fl.dataset.file], true); state.ov.set("f:" + fl.dataset.file, true); render(); return; }
+  const op = t.closest("[data-open]"); if (op){ select(op.dataset.open); return; }
+  const rs = t.closest("[data-res]"); if (rs){ const k = rs.dataset.res; state.res.has(k) ? state.res.delete(k) : state.res.add(k); render(); return; }
+  const fc = t.closest("[data-facet]"); if (fc){ const k = fc.dataset.facet; state.facets.has(k) ? state.facets.delete(k) : state.facets.add(k); render(); return; }
+  if (t.closest("#edgeBtn")){ state.edgesOpen = !state.edgesOpen; render(); return; }
+  if (t.closest("#closeBtn")){ state.sheet = "closed"; state.selected = null; render(); return; }
+  if (t.closest("#expBtn")){ state.sheet = state.sheet === "full" ? "half" : "full"; drawSheet(); return; }
+  if (t.closest("#prevBtn")){ const i = ORDER.indexOf(state.selected); if (i > 0) select(ORDER[i - 1]); return; }
+  if (t.closest("#nextBtn")){ const i = ORDER.indexOf(state.selected); select(ORDER[Math.min(ORDER.length - 1, i + 1)]); return; }
+  if (t.closest("#posBtn")){ const id = state.selected; if (reviewed.has(id)){ reviewed.delete(id); saveReviewed(); render(); } return; }
+  if (t.closest("#goBtn")){
+    const id = state.selected; reviewed.add(id); saveReviewed();
+    const i = ORDER.indexOf(id);
+    if (i < ORDER.length - 1) select(ORDER[i + 1]); else render();
+    return;
+  }
+  if (t.closest("#graph") && !t.closest(".nd") && state.selected && !wide()){ state.selected = null; state.sheet = "closed"; render(); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && state.selected && !wide()){ state.selected = null; state.sheet = "closed"; render(); }
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches(".nd")){ e.preventDefault(); e.target.dispatchEvent(new MouseEvent("click", {bubbles:true})); }
+  if (e.key === "ArrowRight" && state.selected) $("#nextBtn")?.click();
+  if (e.key === "ArrowLeft" && state.selected) $("#prevBtn")?.click();
+  if (e.key === "Enter" && state.selected && !e.target.matches("button, .nd")) $("#goBtn")?.click();
+});
+/* Default folding: show the most detail that stays readable at this screen width.
+   Open everything, then fold the widest package until the graph fits at ≥ 50% scale. */
+function autoFold(){
+  const ov = new Map(), avail = $("#graph").clientWidth || window.innerWidth;
+  for (;;){
+    const L = layout({level:"def", ov});
+    if (avail / L.W >= 0.5) return ov;
+    const open = L.units.filter(u => u.box).sort((a, b) => b.W - a.W);
+    if (!open.length) return ov;
+    ov.set("p:" + open[0].id, false);
+  }
+}
+state.ov = autoFold();
+render();
+</script>
+</body>
+</html>
