@@ -126,6 +126,18 @@ pub fn module(
     let (name, scope) = path.split_last()?;
     let (contract, workings) = imports(items);
 
+    // Prose reaches whatever it introduces, so the blank line under it isn't a hole.
+    let told = docs(attrs);
+    let first = contract
+        .iter()
+        .chain(workings.iter())
+        .map(|span| span.start)
+        .min();
+    let told = match (told.first(), first) {
+        (Some(prose), Some(first)) if first > prose.end => one(prose.start..first),
+        _ => told,
+    };
+
     Some(Found {
         scope: scope.to_vec(),
         name: name.clone(),
@@ -136,7 +148,7 @@ pub fn module(
         parts: parts([
             (Part::Type, contract),
             (Part::Body, workings),
-            (Part::Docs, docs(attrs)),
+            (Part::Docs, told),
         ]),
     })
 }
@@ -144,26 +156,43 @@ pub fn module(
 /// What a module says about what it brings in and passes on. A `mod` declaration counts
 /// too: making one public is publishing whatever is inside it.
 fn imports(items: &[Item]) -> (Vec<Range<usize>>, Vec<Range<usize>>) {
-    let mut contract = Vec::new();
-    let mut workings = Vec::new();
+    let mut found: Vec<(usize, bool, Range<usize>)> = Vec::new();
 
-    for item in items {
+    for (at, item) in items.iter().enumerate() {
         let (visibility, span) = match item {
             Item::Use(item) => (&item.vis, range(item.span())),
             Item::ExternCrate(item) => (&item.vis, range(item.span())),
-            // Only the declaration, not everything inside it: what's inside has its own
-            // definitions, and its own module.
-            Item::Mod(item) => (&item.vis, range(item.ident.span())),
+            // The header, not everything inside it: what's inside has its own definitions,
+            // and its own module.
+            Item::Mod(item) => {
+                let whole = range(item.span());
+                let header = match &item.content {
+                    Some(_) => whole.start..range(item.ident.span()).end,
+                    None => whole,
+                };
+                (&item.vis, header)
+            }
             _ => continue,
         };
 
-        match visibility {
-            syn::Visibility::Public(_) => contract.push(span),
-            _ => workings.push(span),
+        found.push((at, matches!(visibility, syn::Visibility::Public(_)), span));
+    }
+
+    // A run of declarations is one stretch of the file, so each reaches the next rather than
+    // stopping at its own semicolon. Left tight, the line ending between two of them belongs
+    // to nothing, and a reader is told something was left out between every pair of imports.
+    // Only a run: anything else in between is somebody else's, and the gap there is real.
+    for at in 0..found.len().saturating_sub(1) {
+        let (here, next) = (found[at].0, found[at + 1].0);
+        let (ends, starts) = (found[at].2.end, found[at + 1].2.start);
+        if next == here + 1 && starts > ends {
+            found[at].2.end = starts;
         }
     }
 
-    (contract, workings)
+    let (public, private): (Vec<_>, Vec<_>) = found.into_iter().partition(|(_, public, _)| *public);
+    let spans = |of: Vec<(usize, bool, Range<usize>)>| of.into_iter().map(|(_, _, span)| span);
+    (spans(public).collect(), spans(private).collect())
 }
 
 fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
@@ -275,6 +304,7 @@ fn implementation(block: &syn::ItemImpl, scope: &[String]) -> Found {
         .map(|clause| range(clause.span()))
         .unwrap_or_else(|| range(block.self_ty.span()));
     let full = range(block.span());
+    let told = docs(&block.attrs);
 
     Found {
         scope: scope.to_vec(),
@@ -287,7 +317,12 @@ fn implementation(block: &syn::ItemImpl, scope: &[String]) -> Found {
                 vec![header..signed.end, full.end.saturating_sub(1)..full.end],
             ),
             (Part::Body, Vec::new()),
-            (Part::Docs, docs(&block.attrs)),
+            (
+                Part::Docs,
+                told.first()
+                    .map(|first| one(first.start..header))
+                    .unwrap_or_default(),
+            ),
         ]),
     }
 }
@@ -310,6 +345,12 @@ fn implementing(block: &syn::ItemImpl) -> String {
 }
 
 /// Something with a signature and, usually, a body behind it.
+///
+/// The parts are butted up against each other rather than each being as tight as it could
+/// be. A tight range leaves the newline between a doc comment and the signature belonging to
+/// nothing, and a reader shown the definition afterwards is told there's something missing
+/// in the gap. There isn't: it's a line ending. Parts divide a definition up; they aren't
+/// supposed to leave crumbs between them.
 fn callable(
     signature: &syn::Signature,
     attrs: &[Attribute],
@@ -317,19 +358,29 @@ fn callable(
     kind: &'static str,
     scope: &[String],
 ) -> Found {
+    let prose = docs(attrs);
+    let signed = range(signature.span());
+    let workings = body.map(|block| range(block.span()));
+
+    let starts = signed.start;
+    let told = prose
+        .first()
+        .map(|first| one(first.start..starts))
+        .unwrap_or_default();
+    let declared = match &workings {
+        Some(workings) => starts..workings.start,
+        None => signed.clone(),
+    };
+
     Found {
         scope: scope.to_vec(),
         name: signature.ident.to_string(),
         name_at: range(signature.ident.span()),
         kind,
         parts: parts([
-            (Part::Type, one(range(signature.span()))),
-            (
-                Part::Body,
-                body.map(|block| one(range(block.span())))
-                    .unwrap_or_default(),
-            ),
-            (Part::Docs, docs(attrs)),
+            (Part::Type, one(declared)),
+            (Part::Body, workings.map(one).unwrap_or_default()),
+            (Part::Docs, told),
         ]),
     }
 }

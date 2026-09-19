@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Opens the window on a repository, building whatever is out of date first.
+#
+#   ./window                 read this repository
+#   ./window ../redo         read another one
+#
+# The window shells out to dagger, so the tool built here is put on PATH ahead of any
+# installed one: a window built from this repository should read with the tool from it.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+repo="$(cd "${1:-.}" && pwd)"
+
+cargo build --workspace --quiet
+(cd ui && npx --no-install vite build >/dev/null)
+
+# The webview and its plumbing come from the dev shell, so the window has to run inside it.
+inside="PATH=$PWD/target/debug:\$PATH exec ./ui/src-tauri/target/debug/dagger-ui --repo '$repo'"
+if [ -n "${IN_NIX_SHELL:-}" ]; then
+  eval "$inside"
+else
+  exec nix develop --command bash -c "cd ui/src-tauri && cargo build --quiet && cd ../.. && $inside"
+fi

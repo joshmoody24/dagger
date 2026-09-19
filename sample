@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# The review the page shows in a browser, where there's no window to ask dagger for one.
+# Run after anything that changes what dagger emits, or the page shows yesterday's answer.
+set -euo pipefail
+cd "$(dirname "$0")"
+./build
+./dagger --json "${1:-HEAD~4}" "${2:-HEAD}" > ui/public/sample.json
+echo "sample.json: $(python3 -c 'import json;d=json.load(open("ui/public/sample.json"));print(len(d["ordering"]["steps"]),"steps")')"

@@ -1,0 +1,201 @@
+/* Colours come from theme.js. What's here is only what a theme has no opinion about. */
+:root {
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--paper); color: var(--ink); font: 16px/1.5 var(--sans);
+  display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;
+}
+#root { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.add { color: var(--add); } .del { color: var(--del); } .chg { color: var(--chg); } .aff { color: var(--muted); }
+.ch { font: 700 13px/1 var(--mono); display: inline-block; width: 1ch; text-align: center; }
+.waiting { margin: 24px; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+
+header { padding: 12px 16px 8px; flex: none; position: relative; }
+.t { font-weight: 600; font-size: 16px; line-height: 1.3; }
+.prog { float: right; padding-left: 12px; font: 500 12.5px/1.6 var(--mono); color: var(--muted); }
+.d { color: var(--muted); font-size: 13.5px; margin-top: 2px; font-family: var(--mono); }
+.lg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.lg span { display: inline-flex; gap: 5px; align-items: baseline; }
+
+/* Whatever dagger couldn't work out: out of the way until there's something to say. */
+.worry {
+  position: absolute; top: 10px; right: 14px; width: 32px; height: 32px;
+  border-radius: 8px; color: var(--chg); font-size: 16px; line-height: 1;
+}
+.worry:hover { background: var(--raised); }
+.notes {
+  position: fixed; right: 16px; bottom: 16px; z-index: 20;
+  width: min(560px, calc(100vw - 32px)); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 10px; padding: 12px 34px 12px 14px;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 12%);
+}
+.notes h2 { margin: 0 0 8px; font-size: 14px; }
+.notes ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--muted); max-height: 40dvh; overflow: auto; }
+.notes li { margin-bottom: 5px; }
+.notes .ib { position: absolute; top: 6px; right: 8px; }
+
+main { flex: 1; min-height: 0; display: flex; }
+.stage { flex: 1; min-width: 0; position: relative; }
+
+/* The graph has a view of its own rather than being an image scaled to the pane: the reader
+ * moves it about, and how far away it is has nothing to do with how big the window is. */
+.canvas { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }
+.canvas:active { cursor: grabbing; }
+.canvas svg { display: block; width: 100%; height: 100%; }
+.viewkeys {
+  position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: var(--muted);
+  pointer-events: none; display: flex; align-items: center; gap: 4px;
+}
+svg text { font-family: var(--mono); font-size: 14px; fill: var(--ink); }
+
+/* What happened to a definition is the first thing about it, so it colours the node's edge
+ * and the mark it wears. The body of the node stays plain: a wall of tinted boxes says the
+ * same thing as no tint at all. */
+.nd { cursor: pointer; color: var(--muted); }
+.nd rect { fill: var(--raised); stroke: currentColor; stroke-width: 1.2; }
+.nd.add { color: var(--add); } .nd.del { color: var(--del); }
+.nd.chg { color: var(--chg); } .nd.aff { color: var(--muted); }
+.nd .mk { fill: currentColor; }
+.nd .nm { fill: var(--ink); }
+.nd.sel rect { stroke: var(--lean); stroke-width: 2; }
+.nd.sel .nm { fill: var(--lean); }
+
+/* Under the pointer a node lifts out of whatever it was doing — read, dimmed or both. It
+ * gets brighter and sharper against the page rather than paler: filling the box lighter
+ * would close the gap between the box and the name written on it, which is backwards. */
+.nd rect { transition: stroke-width 0.12s ease; }
+.nd:hover { opacity: 1; filter: brightness(1.35); }
+.nd:hover rect { stroke-width: 2; }
+.nd:hover .nm { fill: var(--ink); }
+
+/* Two different ways of being in the background, and they have to stay apart: read is
+ * finished with, dim is just not what's being looked at right now. They stack — a node is
+ * often both — so read drains the colour and dim lowers it, rather than the two trading
+ * opacities and cancelling each other out. Neither may go so faint that the name stops
+ * being readable: knowing what a node says is the whole point. */
+.nd.done { opacity: 0.6; filter: saturate(0.55); }
+.nd.done .nm { fill: var(--muted); }
+.nd.dim { opacity: 0.55; }
+.nd.done.dim { opacity: 0.42; }
+.nd.sel { opacity: 1; filter: none; }
+
+.box rect { fill: none; stroke: var(--rule); }
+/* Takes a click anywhere in the box, and says so by tinting the ground it sits on. */
+.box rect.hit {
+  fill: var(--raised); fill-opacity: 0; stroke: none; cursor: pointer;
+  transition: fill-opacity 0.12s ease;
+  pointer-events: all;
+}
+.box rect.hit.on { fill-opacity: 0.55; }
+.box.file rect { stroke-dasharray: 3 3; }
+.box text { fill: var(--muted); font-size: 12.5px; cursor: pointer; }
+.box .mk { fill: currentColor; }
+.box.add { color: var(--add); } .box.del { color: var(--del); }
+.box.chg { color: var(--chg); } .box.aff { color: var(--muted); }
+.box.here rect { stroke: var(--lean); }
+/* Lines are there to be read, never pressed: left alive they sit over the boxes and
+ * swallow the pointer on its way to one. */
+.eg, .ec, .eh { pointer-events: none; }
+.eg { fill: none; stroke: var(--faint); stroke-width: 1; opacity: 0.85; }
+svg.focus .eg { opacity: 0.3; }
+.eh { fill: none; stroke: var(--lean); stroke-width: 1.5; }
+.ec { fill: none; stroke: var(--faint); stroke-width: 1.2; opacity: 0.8; stroke-dasharray: 4 3; }
+.ec.on { stroke: var(--lean); opacity: 1; }
+
+/* A drawer, until there's room for it to sit beside the graph. Three heights: away, half
+ * the window, and all of it. Sliding rather than appearing is most of what makes it feel
+ * like something you pulled up rather than something that happened to you. */
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; height: 58dvh;
+  background: var(--surface); border-top: 1px solid var(--rule);
+  border-radius: 12px 12px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / 28%);
+  transform: translateY(105%); transition: transform 0.2s ease, height 0.2s ease;
+  display: flex; flex-direction: column;
+}
+.sheet.half, .sheet.full { transform: none; }
+.sheet.full { height: 100dvh; border-radius: 0; }
+/* The graph keeps clear of the drawer so what's being read isn't hidden behind it. */
+main.has-sheet.half .canvas { bottom: 58dvh; }
+.sh { display: flex; align-items: center; gap: 10px; padding: 10px 8px 6px 16px; flex: none; }
+.sh h2 { margin: 0; font: 500 16px/1.3 var(--mono); word-break: break-all; flex: 1; min-width: 0; }
+.sb { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 0 16px 12px; }
+.file {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font: 13px var(--mono); color: var(--muted); margin: 0 0 10px;
+}
+.kind {
+  border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px;
+  font-size: 12px; line-height: 1.5; color: var(--muted);
+}
+.why { font-size: 13.5px; color: var(--muted); margin: 0 0 8px; }
+.why b { color: var(--ink); font-weight: 600; font-family: var(--mono); }
+.why b.soon { color: var(--chg); }
+
+pre.code {
+  margin: 0 0 10px; background: var(--paper); border-radius: 6px;
+  overflow-x: auto; font: 13px/1.6 var(--mono); padding: 6px 0;
+}
+pre.code .ln { display: block; padding: 0 12px 0 24px; position: relative; white-space: pre; min-width: max-content; }
+pre.code .ln i { position: absolute; left: 9px; font-style: normal; font-weight: 700; }
+pre.code .ln.a { background: var(--addbg); } pre.code .ln.a i { color: var(--add); }
+pre.code .ln.r { background: var(--delbg); } pre.code .ln.r i { color: var(--del); }
+pre.code .ln.gap { color: var(--muted); padding-left: 24px; }
+pre.code.same { color: var(--muted); }
+pre.code .tq { color: var(--quiet); }
+pre.code .lnk { color: var(--lean); }
+
+/* Anything that takes you to another definition looks the same wherever it turns up, and
+ * says so under the pointer rather than all the time. */
+.why b, pre.code .lnk { cursor: pointer; text-underline-offset: 3px; }
+.why b:hover, pre.code .lnk:hover { text-decoration: underline dotted; }
+
+/* 44px is the smallest a finger can be relied on to hit. The bottom padding clears the
+ * home indicator on a phone, where the drawer sits against the very bottom of the screen. */
+.nav {
+  flex: none; display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule);
+}
+.nav .pair { display: flex; align-items: stretch; gap: 6px; flex: none; margin-left: auto; }
+.nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.nav .nb { width: 50px; height: 50px; border: 1px solid var(--rule); border-radius: 8px; color: var(--muted); }
+.nav .nb .gl { font-size: 20px; line-height: 1; }
+.nav .nb:disabled { opacity: 0.35; cursor: default; }
+.nav .pos {
+  height: 50px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 8px;
+  font: 14px var(--mono); color: var(--muted);
+}
+.nav .pos.done { color: var(--add); border-color: var(--add); }
+.nav .go { height: 50px; padding: 0 18px; border-radius: 8px; background: var(--lean); color: var(--paper); font-weight: 600; font-size: 14.5px; }
+
+/* The key that does what the button does, worn by the button. */
+kbd {
+  font: 10.5px/1.4 var(--mono); border: 1px solid currentColor; border-radius: 3px;
+  padding: 0 3px; opacity: 0.6; font-weight: 400;
+}
+/* The solid button's text is already dark on bright, which is as much contrast as there is
+ * to have. Anything behind the key can only eat into it, so nothing goes behind it. */
+.nav .go kbd { opacity: 1; border-color: currentColor; background: none; }
+.ib { width: 38px; height: 38px; border-radius: 8px; color: var(--muted); font-size: 18px; flex: none; }
+
+/* Room enough for the sheet to stop being a drawer and just sit there. */
+@media (min-width: 900px) {
+  .sheet {
+    position: relative; transform: none; height: auto; width: 46%; max-width: 660px;
+    flex: none; border-radius: 0; border-top: 0; border-left: 1px solid var(--rule);
+    box-shadow: none; transition: none;
+  }
+  .sheet.full { height: auto; }
+  .grip { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet { transition: none; }
+}
