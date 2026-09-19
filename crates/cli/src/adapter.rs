@@ -87,6 +87,7 @@ pub struct Snapshot {
 pub fn materialize(repo: &Path, snapshots: &Adapter, rev: &str) -> Result<Snapshot> {
     let request = Request::Materialize {
         rev: rev.to_string(),
+        settings: json(&snapshots.settings),
     };
     match ask(repo, &snapshots.adapter, &snapshots.args, &request)? {
         Response::Materialized {

@@ -11,4 +11,5 @@ path = "src/main.rs"
 [dependencies]
 dagger-protocol = { path = "../../crates/protocol" }
 anyhow.workspace = true
+serde.workspace = true
 serde_json.workspace = true

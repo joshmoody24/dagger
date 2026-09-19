@@ -26,7 +26,11 @@ pub enum Request {
         settings: serde_json::Value,
     },
     /// Put this revision somewhere on disk and say where.
-    Materialize { rev: String },
+    Materialize {
+        rev: String,
+        #[serde(default)]
+        settings: serde_json::Value,
+    },
     /// Read a snapshot and report what's defined in the files handed over.
     ///
     /// These are every file the adapter owns, not just the ones that changed: an

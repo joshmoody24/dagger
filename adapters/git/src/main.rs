@@ -10,6 +10,7 @@
 
 use anyhow::{Context, Result, bail};
 use dagger_protocol::{Request, Response, Revisions};
+use serde::Deserialize;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -31,15 +32,34 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// What a repo can tell this adapter.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct Settings {
+    /// Point the snapshot at the repository's ignored files — build output, installed
+    /// packages — instead of leaving them out. On by default: without them, tooling that
+    /// reads generated declarations has to compile everything from source instead.
+    carry_ignored: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            carry_ignored: true,
+        }
+    }
+}
+
 fn answer(request: Request) -> Result<Response> {
     match request {
-        Request::Materialize { rev } if rev == CURRENT => Ok(Response::Materialized {
+        Request::Materialize { rev, .. } if rev == CURRENT => Ok(Response::Materialized {
             dir: std::env::current_dir()?.to_string_lossy().into_owned(),
             temporary: false,
             files: Some(current_files()?),
         }),
-        Request::Materialize { rev } => {
-            let dir = materialize(&rev)?;
+        Request::Materialize { rev, settings } => {
+            let settings: Settings = serde_json::from_value(settings).unwrap_or_default();
+            let dir = materialize(&rev, settings.carry_ignored)?;
             let files = Some(listing(&["ls-tree", "-r", "--name-only", "-z", &rev])?);
             Ok(Response::Materialized {
                 dir: dir.to_string_lossy().into_owned(),
@@ -107,12 +127,50 @@ fn listing(args: &[&str]) -> Result<Vec<String>> {
         .collect())
 }
 
-fn materialize(rev: &str) -> Result<PathBuf> {
+fn materialize(rev: &str, carry_ignored: bool) -> Result<PathBuf> {
     let commit = rev_parse(rev)?;
     let dir = std::env::temp_dir().join(format!("dagger-{}-{}", std::process::id(), commit));
     fs::create_dir_all(&dir).with_context(|| format!("couldn't make {}", dir.display()))?;
     export(&commit, &dir)?;
+    if carry_ignored {
+        carry(&dir)?;
+    }
     Ok(dir)
+}
+
+/// Points the snapshot at whatever the repository ignores: build output, installed
+/// packages, caches.
+///
+/// None of it is part of a review — it isn't tracked, so it can't have changed — but
+/// leaving it out is the difference between a language server reading one small generated
+/// declaration per package and compiling every package from source. On a monorepo that is
+/// the difference between seconds and never finishing.
+///
+/// Links rather than copies, so nothing is duplicated and nothing is written to. What's
+/// there belongs to whenever the repository was last built rather than to this revision,
+/// which can make a neighbouring package's types slightly out of date. The files being
+/// reviewed are read from the snapshot itself and aren't affected.
+fn carry(dir: &Path) -> Result<()> {
+    let repo = std::env::current_dir()?;
+
+    for entry in listing(&["status", "--porcelain", "--ignored", "-z"])? {
+        let Some(path) = entry.strip_prefix("!! ") else {
+            continue;
+        };
+        let path = path.trim_end_matches('/');
+        let (target, link) = (repo.join(path), dir.join(path));
+
+        if link.exists() || !target.exists() {
+            continue;
+        }
+        if let Some(parent) = link.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        std::os::unix::fs::symlink(&target, &link)
+            .with_context(|| format!("couldn't point {path} at the real one"))?;
+    }
+
+    Ok(())
 }
 
 fn rev_parse(rev: &str) -> Result<String> {
