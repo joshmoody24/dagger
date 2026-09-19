@@ -66,40 +66,87 @@ fn pair_up(before: &[Occurrence], after: &[Occurrence]) -> Vec<Option<usize>> {
     pairs
 }
 
-/// Anything left over that reads exactly the same on both sides is the same thing
-/// under a new name or in a new place. We only take the offer when it's unambiguous,
-/// because two definitions with identical text give us no way to tell which is which.
+/// Pairs up what's left over by how alike it reads.
+///
+/// Whatever the locators didn't match is either something that arrived, something that
+/// left, or the same thing under a new name or in a new place. Text is the only evidence
+/// left, so the most alike pair goes together, then the next, until nothing left is alike
+/// enough to be worth claiming.
+///
+/// Insisting on identical text, which is what this did first, turned out to catch almost
+/// nothing: people rename a thing and adjust it in the same breath, and a definition that
+/// moved to another module usually picked up an edit on the way. Every rename in this
+/// project's own history read as an arrival and a departure.
 fn rescue_renames(
     before: &[Occurrence],
     after: &[Occurrence],
     pairs: &mut [Option<usize>],
     taken: &mut [bool],
 ) {
-    let leftovers = |occurrences: &[Occurrence], used: &[bool]| {
-        let mut by_text: BTreeMap<Vec<(Part, String)>, Vec<usize>> = BTreeMap::new();
-        for (index, occurrence) in occurrences.iter().enumerate() {
-            if !used[index] {
-                by_text.entry(text_of(occurrence)).or_default().push(index);
+    let leftovers = |count: usize, used: &dyn Fn(usize) -> bool| {
+        (0..count).filter(|index| !used(*index)).collect::<Vec<_>>()
+    };
+    let earlier = leftovers(before.len(), &|index| pairs[index].is_some());
+    let later = leftovers(after.len(), &|index| taken[index]);
+
+    let mut candidates: Vec<(usize, usize, usize)> = Vec::new();
+    for &was in &earlier {
+        for &is in &later {
+            let alike = likeness(&before[was], &after[is]);
+            if alike >= ALIKE_ENOUGH {
+                // Scaled to an integer so pairs sort without comparing floats.
+                candidates.push(((alike * 1000.0) as usize, was, is));
             }
         }
-        by_text
-    };
+    }
 
-    let before_used: Vec<bool> = pairs.iter().map(|p| p.is_some()).collect();
-    let before_leftovers = leftovers(before, &before_used);
-    let after_leftovers = leftovers(after, taken);
-
-    for (text, befores) in &before_leftovers {
-        let Some(afters) = after_leftovers.get(text) else {
-            continue;
-        };
-        if befores.len() != 1 || afters.len() != 1 {
-            continue;
+    // Best first, so the most convincing pair claims its halves before a weaker one can.
+    candidates.sort_by(|a, b| b.cmp(a));
+    for (_, was, is) in candidates {
+        if pairs[was].is_none() && !taken[is] {
+            pairs[was] = Some(is);
+            taken[is] = true;
         }
-        pairs[befores[0]] = Some(afters[0]);
-        taken[afters[0]] = true;
     }
 }
+
+/// How alike two definitions read, from nothing in common to word for word.
+///
+/// Lines shared over lines held, which is the same shape of measure version control uses
+/// to spot a renamed file. Counting lines rather than characters keeps a reformatting from
+/// looking like a rewrite, and keeps this cheap enough to run over every leftover pair.
+fn likeness(before: &Occurrence, after: &Occurrence) -> f64 {
+    let lines = |occurrence: &Occurrence| {
+        let mut counted: BTreeMap<String, usize> = BTreeMap::new();
+        for (_, text) in text_of(occurrence) {
+            for line in text.lines() {
+                let line = line.trim();
+                if !line.is_empty() {
+                    *counted.entry(line.to_string()).or_default() += 1;
+                }
+            }
+        }
+        counted
+    };
+
+    let (was, is) = (lines(before), lines(after));
+    let held: usize = was.values().sum::<usize>() + is.values().sum::<usize>();
+    if held == 0 {
+        return 0.0;
+    }
+
+    let shared: usize = was
+        .iter()
+        .map(|(line, count)| *count.min(is.get(line).unwrap_or(&0)))
+        .sum();
+
+    2.0 * shared as f64 / held as f64
+}
+
+/// Half the lines in common. The one number in dagger that is a matter of taste rather
+/// than a consequence of something: the same one git settled on for spotting a renamed
+/// file, and for the same reason — below it, two things being related is a guess.
+const ALIKE_ENOUGH: f64 = 0.5;
 
 fn text_of(occurrence: &Occurrence) -> Vec<(Part, String)> {
     occurrence
@@ -278,20 +325,43 @@ mod tests {
         assert!(!edits.worth_reading());
     }
 
-    /// Editing while renaming puts it beyond what we're willing to guess at.
+    /// Renaming and editing in the same breath is the usual way it happens, so this has to
+    /// land as one definition that changed rather than two that came and went.
     #[test]
-    fn a_rename_with_an_edit_reads_as_add_and_remove() {
+    fn a_rename_with_an_edit_is_still_one_definition() {
+        let before = "let sum = a + b;\nlog(sum);\nreturn sum;";
+        let after = "let sum = a + b;\nlog(sum);\nreturn round(sum);";
+
+        let changed = changes(
+            vec![occurrence("addMoney", &[(Part::Body, before)])],
+            vec![occurrence("plusMoney", &[(Part::Body, after)])],
+        );
+        let [Change::Kept(edits)] = changed.as_slice() else {
+            panic!("expected the rename to be paired up, got {changed:?}");
+        };
+
+        assert!(edits.contract, "a new name is a new contract");
+        assert!(edits.changed(Part::Body));
+    }
+
+    /// Two things sharing no lines are two things, however tempting a pair they make.
+    #[test]
+    fn leftovers_that_read_nothing_alike_stay_apart() {
         let changes = changes(
-            vec![occurrence("addMoney", &[(Part::Body, "a + b")])],
-            vec![occurrence("plusMoney", &[(Part::Body, "a + b + 1")])],
+            vec![occurrence(
+                "parse",
+                &[(Part::Body, "read(); decode(); done();")],
+            )],
+            vec![occurrence("render", &[(Part::Body, "paint(); flush();")])],
         );
 
         assert_eq!(changes, vec![Change::Removed, Change::Added]);
     }
 
-    /// Two identical leftovers give us no way to tell which became which.
+    /// Identical leftovers could pair up either way round, and it makes no difference: each
+    /// pairing reads as the same two renames, with the same text on both sides.
     #[test]
-    fn identical_leftovers_are_left_alone() {
+    fn identical_leftovers_pair_up_rather_than_being_given_up_on() {
         let changes = changes(
             vec![
                 occurrence("one", &[(Part::Body, "noop")]),
@@ -303,14 +373,11 @@ mod tests {
             ],
         );
 
-        assert_eq!(
-            changes,
-            vec![
-                Change::Removed,
-                Change::Removed,
-                Change::Added,
-                Change::Added
-            ]
+        assert!(
+            changes
+                .iter()
+                .all(|change| matches!(change, Change::Kept(_))),
+            "expected two renames, got {changes:?}"
         );
     }
 }
