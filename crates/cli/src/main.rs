@@ -9,11 +9,13 @@ mod completeness;
 mod config;
 mod diff;
 mod fallback;
+mod grouping;
 mod report;
 mod walk;
 
 use anyhow::{Result, bail};
 use config::Config;
+use dagger_core::group::Grouping;
 use dagger_core::matching::{Extraction, match_snapshots};
 use dagger_core::order::order;
 use dagger_core::review::review;
@@ -204,7 +206,14 @@ fn compare(
 
     let matched = match_snapshots(before, after);
     let mut review = review(&matched.definitions, &matched.references);
-    let ordering = order(&review, &matched.definitions);
+
+    // One grouping at a time, and for now the first one written down. The reading order
+    // leans on it to know whether the next definition takes the reader somewhere else.
+    let grouping = match config.groupings.first() {
+        Some(wanted) => grouping::of(wanted, &after_dir, &matched.definitions),
+        None => Grouping::default(),
+    };
+    let ordering = order(&review, &matched.definitions, &grouping);
 
     review.diagnostics.extend(completeness::check(
         &before_dir,
@@ -234,6 +243,7 @@ fn compare(
                 "definitions": worth_reading,
                 "review": review,
                 "ordering": ordering,
+                "grouping": grouping,
                 "notes": notes,
             }))?
         );

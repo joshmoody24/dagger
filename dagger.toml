@@ -6,3 +6,7 @@ adapter = "target/debug/dagger-rust"
 
 [review]
 ignore = ["Cargo.lock", "flake.lock", "dagger-demo.html"]
+
+[[groupings]]
+name = "crate"
+marker = "Cargo.toml"

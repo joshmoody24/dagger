@@ -12,8 +12,22 @@ pub struct Config {
     pub snapshots: Option<Adapter>,
     #[serde(default)]
     pub extractors: Vec<Extractor>,
+    /// Ways of grouping the files, of which one is used at a time. Boxes have to nest to be
+    /// drawn, and two groupings of the same code rarely nest inside one another.
+    #[serde(default)]
+    pub groupings: Vec<GroupingConfig>,
     #[serde(default)]
     pub review: ReviewConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GroupingConfig {
+    /// What a reader would call it: "package", "crate", "service".
+    pub name: String,
+    /// A file whose nearest containing directory is the group. `BUILD.bazel` for a bazel
+    /// package, `Cargo.toml` for a crate, `package.json` for a workspace package.
+    pub marker: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

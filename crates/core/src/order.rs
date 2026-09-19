@@ -9,10 +9,11 @@
 //! the opposite, a promise held about code not yet seen, which only happens when
 //! definitions depend on each other in a circle and there's no honest place to start.
 //!
-//! Candidates are compared in order — faith first, then how much is left open, then
-//! whether it drags the reader into another file — rather than scored and added up,
-//! so there are no weights to argue about.
+//! Candidates are compared in order — faith first, then how much is left open, then whether
+//! it drags the reader somewhere else — rather than scored and added up, so there are no
+//! weights to argue about.
 
+use crate::group::Grouping;
 use crate::model::{Definition, Identity};
 use crate::review::Review;
 use serde::{Deserialize, Serialize};
@@ -42,11 +43,12 @@ pub struct Cost {
     /// short deep one.
     pub total_open: usize,
     pub taken_on_faith: usize,
-    /// Steps that landed in a different file than the one before.
+    /// Steps that landed somewhere other than the one before: another package, or failing
+    /// a grouping, another file.
     pub jumps: usize,
 }
 
-pub fn order(review: &Review, definitions: &[Definition]) -> Ordering {
+pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -> Ordering {
     let members: Vec<Identity> = review.members.iter().copied().collect();
     let places: BTreeMap<Identity, usize> = members
         .iter()
@@ -54,14 +56,26 @@ pub fn order(review: &Review, definitions: &[Definition]) -> Ordering {
         .map(|(place, identity)| (*identity, place))
         .collect();
 
-    let files: Vec<&str> = {
-        let known: BTreeMap<Identity, &str> = definitions
+    // Where each one sits, for judging whether reading the next takes the reader somewhere
+    // else. A grouping says where if it has an opinion; failing that, the file it's in.
+    let wheres: Vec<&[String]> = {
+        let files: BTreeMap<Identity, &String> = definitions
             .iter()
-            .map(|definition| (definition.identity, definition.sides.latest().file.as_str()))
+            .map(|definition| (definition.identity, &definition.sides.latest().file))
             .collect();
         members
             .iter()
-            .map(|identity| known.get(identity).copied().unwrap_or(""))
+            .map(|identity| {
+                let grouped = grouping.path_of(*identity);
+                if grouped.is_empty() {
+                    files
+                        .get(identity)
+                        .map(|file| std::slice::from_ref(*file))
+                        .unwrap_or_default()
+                } else {
+                    grouped
+                }
+            })
             .collect()
     };
 
@@ -74,7 +88,7 @@ pub fn order(review: &Review, definitions: &[Definition]) -> Ordering {
     let mut steps = Vec::with_capacity(members.len());
     let mut cost = Cost::default();
     let mut open = 0usize;
-    let mut last_file: Option<&str> = None;
+    let mut last_where: Option<&[String]> = None;
 
     for _ in 0..members.len() {
         let Some(next) = pick(
@@ -82,8 +96,8 @@ pub fn order(review: &Review, definitions: &[Definition]) -> Ordering {
             &unread_leans,
             &unread_holds,
             &leans_on,
-            &files,
-            last_file,
+            &wheres,
+            last_where,
         ) else {
             break;
         };
@@ -108,10 +122,10 @@ pub fn order(review: &Review, definitions: &[Definition]) -> Ordering {
             unread_leans[holder] -= 1;
         }
 
-        if last_file.is_some_and(|file| file != files[next]) {
+        if last_where.is_some_and(|was| was != wheres[next]) {
             cost.jumps += 1;
         }
-        last_file = Some(files[next]);
+        last_where = Some(wheres[next]);
         cost.peak_open = cost.peak_open.max(open);
         cost.total_open += open;
         cost.taken_on_faith += on_faith.len();
@@ -146,16 +160,16 @@ fn relations(
     (leans_on, holds_up)
 }
 
-/// The next one to read, judged on each count in turn: how much has to be taken on
-/// faith, then how much is left in the reader's head, then whether it means moving to
-/// another file. Position settles the rest so the same change always reads the same.
+/// The next one to read, judged on each count in turn: how much has to be taken on faith,
+/// then how much is left in the reader's head, then whether it means moving somewhere else.
+/// Position settles the rest so the same change always reads the same.
 fn pick(
     read: &[bool],
     unread_leans: &[usize],
     unread_holds: &[usize],
     leans_on: &[BTreeSet<usize>],
-    files: &[&str],
-    last_file: Option<&str>,
+    wheres: &[&[String]],
+    last_where: Option<&[String]>,
 ) -> Option<usize> {
     (0..read.len())
         .filter(|&candidate| !read[candidate])
@@ -169,7 +183,7 @@ fn pick(
             (
                 unread_leans[candidate],
                 opens as isize - closes as isize,
-                usize::from(last_file.is_some_and(|file| file != files[candidate])),
+                usize::from(last_where.is_some_and(|was| was != wheres[candidate])),
                 candidate,
             )
         })
@@ -230,7 +244,7 @@ mod tests {
 
     fn reading(count: u32, leans: &[(u32, u32)]) -> Vec<u32> {
         let (review, definitions) = built(count, leans, &[]);
-        order(&review, &definitions)
+        order(&review, &definitions, &Grouping::default())
             .steps
             .iter()
             .map(|step| step.definition.0)
@@ -285,7 +299,7 @@ mod tests {
     #[test]
     fn a_circle_is_read_with_one_thing_taken_on_faith() {
         let (review, definitions) = built(3, &[(0, 1), (1, 2), (2, 0)], &[]);
-        let ordering = order(&review, &definitions);
+        let ordering = order(&review, &definitions, &Grouping::default());
 
         assert_eq!(ordering.steps.len(), 3);
         assert_eq!(ordering.cost.taken_on_faith, 1);
@@ -295,7 +309,12 @@ mod tests {
     fn nothing_is_taken_on_faith_when_it_doesnt_have_to_be() {
         let (review, definitions) = built(4, &[(0, 1), (1, 2), (2, 3)], &[]);
 
-        assert_eq!(order(&review, &definitions).cost.taken_on_faith, 0);
+        assert_eq!(
+            order(&review, &definitions, &Grouping::default())
+                .cost
+                .taken_on_faith,
+            0
+        );
     }
 
     /// Same graph, but 1 sits in another file. Since either order is otherwise equal,
@@ -303,7 +322,7 @@ mod tests {
     #[test]
     fn a_reading_would_rather_stay_in_one_file() {
         let (review, definitions) = built(3, &[(0, 1), (0, 2)], &["a.rs", "b.rs", "a.rs"]);
-        let ordering = order(&review, &definitions);
+        let ordering = order(&review, &definitions, &Grouping::default());
 
         assert_eq!(ordering.cost.jumps, 1);
     }
@@ -312,13 +331,23 @@ mod tests {
     fn a_chain_keeps_only_one_thing_in_mind_at_a_time() {
         let (review, definitions) = built(5, &[(0, 1), (1, 2), (2, 3), (3, 4)], &[]);
 
-        assert_eq!(order(&review, &definitions).cost.peak_open, 1);
+        assert_eq!(
+            order(&review, &definitions, &Grouping::default())
+                .cost
+                .peak_open,
+            1
+        );
     }
 
     #[test]
     fn unrelated_definitions_leave_nothing_open() {
         let (review, definitions) = built(4, &[], &[]);
 
-        assert_eq!(order(&review, &definitions).cost.peak_open, 0);
+        assert_eq!(
+            order(&review, &definitions, &Grouping::default())
+                .cost
+                .peak_open,
+            0
+        );
     }
 }
