@@ -1,7 +1,7 @@
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { Graph } from "./Graph.jsx";
-import { Reading } from "./Reading.jsx";
-import { digest, layout, namesIn } from "./review.js";
+import { Graph } from "./Graph.tsx";
+import { Reading } from "./Reading.tsx";
+import { digest, layout, namesIn } from "./review.ts";
 
 export function App(props) {
   const review = createMemo(() => digest(props.raw));
@@ -81,8 +81,20 @@ export function App(props) {
     <>
       <header>
         <div class="t">
+          <span class="what">{steps().length} to read, grouped by {review().grouping || "module"}</span>
           <span class="prog">{at() + 1} of {steps().length}</span>
-          <span>{steps().length} to read, grouped by {review().grouping || "file"}</span>
+          {/* Only there when there's something to say. Nothing went wrong most of the
+            * time, and a permanent badge reading nought is just something to ignore. */}
+          <Show when={review().worries.length}>
+            <button
+              class="worry"
+              onClick={() => setWorriesOpen((was) => !was)}
+              title={`${review().worries.length} dagger couldn't work out`}
+              aria-label={`${review().worries.length} dagger couldn't work out`}
+            >
+              ⚠
+            </button>
+          </Show>
         </div>
         <div class="d">
           {review().cost.peak_open} definitions in mind at once
@@ -90,18 +102,6 @@ export function App(props) {
           {" · "}{review().cost.jumps} module jumps
         </div>
         <Legend />
-        {/* Only there when there's something to say. Nothing went wrong most of the time,
-          * and a permanent badge reading nought is just something to learn to ignore. */}
-        <Show when={review().worries.length}>
-          <button
-            class="worry"
-            onClick={() => setWorriesOpen((was) => !was)}
-            title={`${review().worries.length} dagger couldn't work out`}
-            aria-label={`${review().worries.length} dagger couldn't work out`}
-          >
-            ⚠
-          </button>
-        </Show>
       </header>
 
       <main class={showing() ? `has-sheet ${sheet()}` : ""}>

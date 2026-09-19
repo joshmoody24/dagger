@@ -9,5 +9,5 @@ cargo test --workspace
 # The page that reads a review. Skipped when nobody has installed it, since the tool itself
 # doesn't need it to work.
 if [ -d ui/node_modules ]; then
-  (cd ui && node --test test/*.test.js && npx --no-install vite build)
+  (cd ui && node --test test/*.test.ts && tsc --noEmit && npx --no-install vite build)
 fi

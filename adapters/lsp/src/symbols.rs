@@ -74,9 +74,7 @@ fn collect(symbols: &Value, scope: &[String], lines: &Lines, found: &mut Vec<Sym
             name_at,
         });
 
-        // What lives inside a body is a local, not something anyone reviews on its own.
-        // A class's methods are worth descending into; a function's variables aren't.
-        if splits(kind) {
+        if !holds_definitions(kind) {
             continue;
         }
 
@@ -119,6 +117,25 @@ fn signature(whole: &Range<usize>, name_at: &Range<usize>, lines: &Lines) -> Opt
 /// all contract, so a change anywhere in one can break a caller.
 fn splits(kind: &str) -> bool {
     matches!(kind, "function" | "method" | "constructor")
+}
+
+/// Whether what a server reports inside this are definitions of their own, or parts of it.
+///
+/// A class holds methods, and a method is a thing somebody reviews. An interface holds
+/// fields, and a field is not: it's part of what the interface promises, so changing one
+/// changes the interface's contract and breaks whoever relied on it. Reported separately,
+/// a field becomes a node with no visible connection to the callers it just broke, and
+/// they arrive by the hundred — an interface of a dozen fields is a dozen nodes saying
+/// nothing that the interface doesn't say better.
+///
+/// The extractor for Rust has always worked this way: a struct is one definition covering
+/// its whole declaration. This is the same rule, said to a language server.
+///
+/// It catches a subtler case too. `const faces = (box) => [{ x, y }]` is a variable rather
+/// than a function as far as the protocol is concerned, so descending into it turned the
+/// keys of the object it returns into definitions.
+fn holds_definitions(kind: &str) -> bool {
+    matches!(kind, "class" | "namespace" | "module" | "package" | "file")
 }
 
 fn span(range: &Value, lines: &Lines) -> Option<Range<usize>> {
@@ -232,6 +249,21 @@ export function addMoney(a: Money, b: Money): Money {
             lines.slice(&symbols[0].declaration()),
             "export interface Money {\n  amount: number;\n}"
         );
+    }
+
+    /* A field is part of what its interface promises, not a definition beside it. Reported
+     * separately, a dozen fields become a dozen nodes that say nothing the interface
+     * doesn't say better — and none of them show the callers the change just broke. */
+    #[test]
+    fn what_an_interface_holds_is_part_of_it() {
+        let lines = Lines::new(SOURCE);
+        let mut interface = reported("Money", 11, (0, 0, 2, 1), (0, 17, 22));
+        interface["children"] = json!([reported("amount", 7, (1, 2, 1, 17), (1, 2, 8))]);
+
+        let symbols = read(&json!([interface]), &lines);
+
+        assert_eq!(symbols.len(), 1);
+        assert_eq!(symbols[0].name, "Money");
     }
 
     #[test]

@@ -1,8 +1,27 @@
 #!/usr/bin/env bash
-# The review the page shows in a browser, where there's no window to ask dagger for one.
-# Run after anything that changes what dagger emits, or the page shows yesterday's answer.
+# The pinned review the UI tests run against. The page never reads this — it asks dagger,
+# through the window or through the dev server — so this changes only when we mean it to.
+#
+#   ./sample                 the working changes
+#   ./sample HEAD~4 HEAD     some other pair
 set -euo pipefail
 cd "$(dirname "$0")"
+
+fixture="ui/test/review.json"
+
+# Written beside it and moved into place only once dagger has finished. Redirecting straight
+# at the fixture empties it the moment the shell opens the file, so a run that fails for any
+# reason — a language server that won't start, a revision that doesn't exist — leaves
+# nothing behind and takes the tests down with it.
+written="$(mktemp "${TMPDIR:-/tmp}/dagger-sample.XXXXXX")"
+trap 'rm -f "$written"' EXIT
+
 ./build
-./dagger --json "${1:-HEAD~4}" "${2:-HEAD}" > ui/public/sample.json
-echo "sample.json: $(python3 -c 'import json;d=json.load(open("ui/public/sample.json"));print(len(d["ordering"]["steps"]),"steps")')"
+./dagger --json "$@" > "$written"
+mv "$written" "$fixture"
+
+python3 - "$fixture" <<'PY'
+import json, sys
+review = json.load(open(sys.argv[1]))
+print(f'{sys.argv[1]}: {len(review["definitions"])} definitions, {len(review["ordering"]["steps"])} steps')
+PY

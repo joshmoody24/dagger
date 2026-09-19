@@ -1,21 +1,32 @@
 import { render } from "solid-js/web";
 import { createResource, Match, Switch } from "solid-js";
-import { App } from "./App.jsx";
-import { paint } from "./theme.js";
+import { App } from "./App.tsx";
+import { paint } from "./theme.ts";
 import "./style.css";
 
 paint();
 
+/* Tauri puts this on the window when the page is running inside one; in a browser it
+ * simply isn't there, which is how the page tells where it is. */
+declare global {
+  interface Window {
+    __TAURI__?: { core: { invoke: (command: string, args?: unknown) => Promise<any> } };
+  }
+}
+
 /* Where the review comes from.
  *
- * In a window, dagger is asked for one. In a browser — which is how this gets worked on —
- * a saved one is read from disk, so the page can be looked at without a repository or a
- * language server anywhere in sight.
+ * Either way it's dagger that's asked, and asked for the same thing: the working changes.
+ * In a window that goes through Tauri; in a browser it goes to the dev server, which runs
+ * the same command. Nothing here reads a saved review — one that's written down is out of
+ * date as soon as anything changes, and the page can't tell.
  */
 async function load() {
   const tauri = window.__TAURI__;
   if (!tauri) {
-    return (await fetch("/sample.json")).json();
+    const said = await fetch("/review");
+    if (!said.ok) throw new Error(await said.text());
+    return said.json();
   }
 
   const said = await tauri.core.invoke("review", {

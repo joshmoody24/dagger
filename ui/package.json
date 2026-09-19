@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "node --test test/*.test.js"
+    "check": "node --test test/*.test.ts && tsc --noEmit"
   },
   "dependencies": {
     "@shikijs/themes": "^4.4.3",
@@ -16,6 +16,7 @@
     "solid-js": "^1.9.15"
   },
   "devDependencies": {
+    "@types/node": "^26.6.2",
     "vite": "^7.1.0",
     "vite-plugin-solid": "^2.11.0"
   }

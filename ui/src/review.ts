@@ -1,3 +1,18 @@
+import type {
+  Box,
+  Change,
+  Cost,
+  Definition,
+  Diagnostic,
+  Edge,
+  Identity,
+  Laid,
+  Occurrence,
+  Raw,
+  Review,
+  Spot,
+} from "./dagger.ts";
+
 /* Reads what dagger says about a change and works out where to draw it.
  *
  * Nothing here decides anything about the code. Which definitions are worth reading, what
@@ -41,24 +56,24 @@ export const RADIUS = { node: 5, box: 9, step: 2 };
 /* A box wears its name along the top, so it can't be narrower than the name. Smaller than
  * the nodes' font, and it has to agree with style.css the same way. */
 const BOX_FONT = 12.5;
-const labelWidth = (text) => Math.ceil(text.length * BOX_FONT * 0.6) + 22;
+const labelWidth = (text: string) => Math.ceil(text.length * BOX_FONT * 0.6) + 22;
 
 /** A name as the graph shows it: long ones lose their tail rather than their box. */
-export const shorten = (name) =>
+export const shorten = (name: string) =>
   name.length > LONGEST ? `${name.slice(0, LONGEST - 1)}…` : name;
 
 /* Rounded up, never down: a box half a pixel too small is a name poking out of it. The 34
  * is the space either side plus the mark and the gap after it. */
-export const widthOf = (text) => Math.ceil(shorten(text).length * CHAR) + 34;
+export const widthOf = (text: string) => Math.ceil(shorten(text).length * CHAR) + 34;
 
 /* What to call a module whose own definition isn't in this review, so its name never got
  * reported. The file it lives in is the best guess left, minus the extension — which is
  * about the file on disk, not about the code. */
-const guessed = (path) => path.split("/").pop().replace(/\.[^.]+$/, "");
+const guessed = (path: string) => path.split("/").pop().replace(/\.[^.]+$/, "");
 
 /* ---------------- what dagger said, in the shapes a page wants ---------------- */
 
-export function digest(raw) {
+export function digest(raw: Raw): Review {
   const definitions = new Map();
   for (const definition of raw.definitions) {
     const sides = definition.sides;
@@ -88,14 +103,14 @@ export function digest(raw) {
     cost: raw.ordering.cost,
     grouping: raw.grouping.name,
     worries: [
-      ...raw.review.diagnostics.map(told),
+      ...raw.review.diagnostics.map((diagnostic) => told(diagnostic, definitions)),
       ...raw.notes.map((note) => (note.file ? `${note.file}: ${note.message}` : note.message)),
     ],
   };
 }
 
 /* One word for what happened, which is all a node has room for. */
-function marking(review, id) {
+function marking(review: Raw["review"], id: Identity) {
   const change = review.changes[id];
   if (change === "added") return "added";
   if (change === "removed") return "removed";
@@ -108,7 +123,7 @@ function marking(review, id) {
 }
 
 /** Whether a change to this one means its callers have to change too. */
-export function broke(review, id) {
+export function broke(review: Review, id: Identity) {
   const change = review.changes[id];
   if (change === "removed") return true;
   if (change === "added") return false;
@@ -117,19 +132,26 @@ export function broke(review, id) {
 
 /* Dagger's diagnostics say what it had to work around. A reader deserves them in words
  * rather than as a shape of JSON. */
-function told(diagnostic) {
-  const [[kind, what]] = Object.entries(diagnostic);
+function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): string {
+  const [[kind, what]] = Object.entries(diagnostic) as [string, any][];
+  /* Every one of these is about a particular definition, and five copies of the same
+   * sentence with nothing to tell them apart is no use to anybody. */
+  const named = (id: Identity) => {
+    const definition = definitions.get(id);
+    return definition ? `${definition.path} (${definition.file})` : `definition ${id}`;
+  };
+
   switch (kind) {
     case "unattributed":
       return `${what.file}: ${what.lines} changed line${what.lines === 1 ? "" : "s"} belong to no definition, around line ${what.at.join(", ")}`;
     case "lopsided_contract":
-      return "one side of a definition had a compiler's word on it and the other didn't, so the signature as written was compared instead";
+      return `${named(what.definition)}: the compiler described one side of this and not the other, so the signature as written was compared instead`;
     case "unbound_in_contract":
-      return `${what.symbol} appears where callers can see it, but nothing could say what it refers to`;
+      return `${what.symbol} appears where callers of ${named(what.definition)} can see it, but nothing could say what it refers to`;
     case "mention_from_nowhere":
-      return `a mention came from ${what.from.name}, which was never reported`;
+      return `a mention of ${named(what.to)} came from ${what.from.name}, which was never reported`;
     default:
-      return kind;
+      return `${kind}: ${JSON.stringify(what)}`;
   }
 }
 
@@ -145,7 +167,7 @@ function told(diagnostic) {
  * A module is its place, so it gives its box a name rather than taking a node inside the
  * box that stands for the box.
  */
-export function layout(review) {
+export function layout(review: Review): Laid {
   const nodes = [...review.definitions.values()].filter((d) => d.kind !== "module");
   const modules = new Map();
   for (const definition of review.definitions.values()) {
@@ -226,7 +248,7 @@ export function layout(review) {
 /* The module a box answers to: the one nothing else in it encloses, whose file holds
  * nothing but the module itself. Anything less certain than that — two of them, or one with
  * definitions of its own to show — keeps a box of its own. */
-function rootOf(paths, byPlace, modules) {
+function rootOf(paths: string[], byPlace: Map<string, Definition[]>, modules: Map<string, Definition>) {
   const roots = paths
     .map((path) => modules.get(path))
     .filter((module) => module && module.scope.length === 0 && !byPlace.get(module.file).length);
@@ -235,7 +257,7 @@ function rootOf(paths, byPlace, modules) {
 
 /* Room for whatever a box holds — boxes in lanes, nodes in rows — and never narrower than
  * its own name. A box with a module wears its mark too, which is two more characters. */
-function sized(box) {
+function sized(box: Omit<Box, "boxes" | "w" | "h">): Box {
   const across = Math.max(
     box.lanes.length ? Math.max(...box.lanes.map(laneWidth)) : 0,
     box.rows.length ? Math.max(...box.rows.map(rowWidth)) : 0,
@@ -258,7 +280,7 @@ function sized(box) {
 
 /* Placing a box is placing what it holds, which is boxes and nodes, which is the same job
  * one level in. */
-function place(box, x, y, at) {
+function place(box: Box, x: number, y: number, at: Map<Identity, Spot>) {
   box.x = x;
   box.y = y;
   let down = y + PAD_TOP;
@@ -283,13 +305,13 @@ function place(box, x, y, at) {
 }
 
 /** Every node a box holds, however deep. */
-export function* inside(box) {
+export function* inside(box: Box): Generator<Definition> {
   for (const row of box.rows) yield* row;
   for (const child of box.boxes) yield* inside(child);
 }
 
 /* Rows within a box: something sits below everything it leans on. */
-function layer(nodes, leansOn) {
+function layer(nodes: Definition[], leansOn: Map<Identity, Identity[]>) {
   const here = new Set(nodes.map((n) => n.id));
   const rows = [];
   for (const node of nodes) {
@@ -306,7 +328,7 @@ function layer(nodes, leansOn) {
  * tests in it grows downwards instead of off the side of the page. Nothing in a row leans
  * on anything else in it — an edge would have put one of them a row lower — so they can be
  * split across lines without a line ever pointing the wrong way. */
-function folded(row) {
+function folded(row: Definition[]) {
   const across = Math.ceil(Math.sqrt(row.length));
   const lines = [];
   for (let at = 0; at < row.length; at += across) lines.push(row.slice(at, at + across));
@@ -316,7 +338,7 @@ function folded(row) {
 /* Files stack in a group the same way nodes stack in a file and groups stack on the page:
  * whatever holds another file up sits above it. Without this the files in a group land in
  * whatever order they turned up in, and half the lines between them run the wrong way. */
-function stacking(byPlace, edges) {
+function stacking(byPlace: Map<string, Definition[]>, edges: Edge[]) {
   const placeOf = new Map();
   for (const [path, held] of byPlace) for (const node of held) placeOf.set(node.id, path);
 
@@ -340,7 +362,7 @@ function stacking(byPlace, edges) {
 }
 
 /* Bands of boxes: whatever holds another box up is drawn in an earlier band. */
-function bands(boxes, review) {
+function bands(boxes: Box[], review: Review) {
   const groupOf = new Map();
   for (const box of boxes) for (const node of inside(box)) groupOf.set(node.id, box.key);
 
@@ -363,7 +385,7 @@ function bands(boxes, review) {
 /* How far above the bottom something sits: one more than the furthest thing it leans on.
  * A circle is settled by whoever is asked first, which is enough — being in a circle means
  * there is no right answer, only a readable one. */
-function depth(id, within, leansOn, seen) {
+function depth<K>(id: K, within: Set<K>, leansOn: Map<K, K[]>, seen: Map<K, number>): number {
   if (seen.has(id)) return seen.get(id);
   seen.set(id, 0);
   const below = (leansOn.get(id) || []).filter((other) => within.has(other) && other !== id);
@@ -380,7 +402,7 @@ const rowWidth = (row) => row.reduce((sum, n) => sum + widthOf(n.name), 0) + NOD
 const laneWidth = (lane) => lane.reduce((sum, f) => sum + f.w, 0) + BOX_GAP * (lane.length - 1);
 const laneHeight = (lane) => Math.max(...lane.map((f) => f.h));
 
-function collect(items, by) {
+function collect<T, K>(items: T[], by: (item: T) => K) {
   const out = new Map();
   for (const item of items) {
     const key = by(item);
@@ -396,7 +418,7 @@ function collect(items, by) {
  * anybody reads code. Where a part's pieces aren't next to each other in the file — a
  * module's imports, an implementation's braces — a gap stands in rather than pretending the
  * lines met. */
-export function stitch(occurrence) {
+export function stitch(occurrence: Occurrence | null): string | null {
   if (!occurrence) return null;
 
   const pieces = Object.values(occurrence.parts)
@@ -420,7 +442,7 @@ export function stitch(occurrence) {
 /* A definition starts at its name rather than at the margin, so its first line turns up
  * without the indentation every line beneath it still carries. Taking that much off the
  * rest lines them up the way the file has them. */
-function straighten(text) {
+function straighten(text: string) {
   const lines = text.split("\n");
   const under = lines.slice(1).filter((line) => line.trim() && line !== "…");
   if (!under.length) return text;
@@ -436,7 +458,7 @@ function straighten(text) {
  * What a highlighter can't know: which words in this code are things the reader is about to
  * read, or has just read. A name appearing twice is left alone — pointing at the wrong one
  * is worse than pointing at nothing. */
-export function namesIn(review) {
+export function namesIn(review: Review) {
   const seen = new Map();
   for (const definition of review.definitions.values()) {
     seen.set(definition.name, seen.has(definition.name) ? null : definition.id);
@@ -448,7 +470,7 @@ export function namesIn(review) {
 const TOKENS = /(\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|("(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|`(?:[^`\\]|\\.)*`?)|([A-Za-z_$][\w$]*)|([\s\S])/g;
 
 /** One line of code, split into what it's made of. */
-export function tokens(line) {
+export function tokens(line: string) {
   const out = [];
   let match;
   TOKENS.lastIndex = 0;
@@ -466,7 +488,7 @@ export function tokens(line) {
 }
 
 /** Line by line, marked as kept, gone, or new. */
-export function compare(before, after) {
+export function compare(before: string | null, after: string | null) {
   const a = before === null ? [] : before.split("\n");
   const b = after === null ? [] : after.split("\n");
   const same = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));

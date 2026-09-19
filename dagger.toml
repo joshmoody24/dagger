@@ -3,6 +3,18 @@ adapter = "target/debug/dagger-git"
 
 [[extractors]]
 adapter = "target/debug/dagger-rust"
+# The window is kept out of the workspace so a build of the tool doesn't drag a webview in
+# with it. Rust-analyzer still has to be told about it, or every definition in there comes
+# back with no contract and no callers.
+settings = { linked = ["Cargo.toml", "ui/src-tauri/Cargo.toml"] }
+
+# The page is TypeScript so the same server that reads a real TypeScript repository can
+# read dagger's own UI. Without it every file here is one opaque blob, and a review of the
+# UI says nothing about what depends on what.
+[[extractors]]
+adapter = "target/debug/dagger-lsp"
+include = ["**/*.ts", "**/*.tsx"]
+settings = { server = ["tsc", "--lsp", "--stdio"] }
 
 [review]
 ignore = ["Cargo.lock", "flake.lock", "dagger-demo.html"]

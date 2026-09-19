@@ -6,9 +6,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import { NODE_H, digest, layout, shorten, stitch, widthOf } from "../src/review.js";
+import { NODE_H, digest, layout, shorten, stitch, widthOf } from "../src/review.ts";
 
-const raw = JSON.parse(fs.readFileSync(new URL("../public/sample.json", import.meta.url)));
+const raw = JSON.parse(fs.readFileSync(new URL("./review.json", import.meta.url), "utf8"));
 const review = digest(raw);
 const laid = layout(review);
 const nodes = [...review.definitions.values()].filter((d) => d.kind !== "module");

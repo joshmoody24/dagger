@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "types": [
+      "vite/client",
+      "node"
+    ],
+    "strict": false
+  },
+  "include": [
+    "src",
+    "test"
+  ]
+}

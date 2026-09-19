@@ -1,5 +1,5 @@
 import { For, Show } from "solid-js";
-import { MARK, TINT, broke, compare, stitch, tokens } from "./review.js";
+import { MARK, TINT, broke, compare, stitch, tokens } from "./review.ts";
 
 /* The definition in front of the reader: what it is, why it's here, and how it changed. */
 export function Reading(props) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Opens the window on a repository, building whatever is out of date first.
 #
-#   ./window                 read this repository
+#   ./window                 read this repository's working changes
 #   ./window ../redo         read another one
 #
 # The window shells out to dagger, so the tool built here is put on PATH ahead of any
@@ -10,14 +10,32 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 repo="$(cd "${1:-.}" && pwd)"
+port=1420
 
 cargo build --workspace --quiet
-(cd ui && npx --no-install vite build >/dev/null)
+
+# A debug build of the window asks for the page over http, whatever sits in dist, so one
+# has to be there to answer. Somebody already running `npm run dev` gets reused — starting
+# a second would only fail on the port — and anything started here is cleaned up on the way
+# out rather than left behind holding it.
+serving() { (exec 3<>"/dev/tcp/127.0.0.1/$port") >/dev/null 2>&1; }
+
+if ! serving; then
+  (cd ui && npx --no-install vite --port "$port" --strictPort >/dev/null 2>&1) &
+  page=$!
+  trap 'kill "$page" 2>/dev/null || true' EXIT
+
+  for _ in $(seq 50); do
+    serving && break
+    sleep 0.1
+  done
+  serving || { echo "the page never came up on $port" >&2; exit 1; }
+fi
 
 # The webview and its plumbing come from the dev shell, so the window has to run inside it.
-inside="PATH=$PWD/target/debug:\$PATH exec ./ui/src-tauri/target/debug/dagger-ui --repo '$repo'"
+inside="PATH=$PWD/target/debug:\$PATH ./ui/src-tauri/target/debug/dagger-ui --repo '$repo'"
 if [ -n "${IN_NIX_SHELL:-}" ]; then
   eval "$inside"
 else
-  exec nix develop --command bash -c "cd ui/src-tauri && cargo build --quiet && cd ../.. && $inside"
+  nix develop --command bash -c "cd ui/src-tauri && cargo build --quiet && cd ../.. && $inside"
 fi

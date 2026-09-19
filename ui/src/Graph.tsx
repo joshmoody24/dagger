@@ -1,7 +1,7 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { select } from "d3-selection";
 import { zoom as zooming, zoomIdentity, zoomTransform } from "d3-zoom";
-import { MARK, NODE_H, RADIUS, TINT, inside, shorten } from "./review.js";
+import { MARK, NODE_H, RADIUS, TINT, inside, shorten } from "./review.ts";
 
 /* Breathing room around the whole drawing when it's sat in the window. */
 const EDGE = 24;

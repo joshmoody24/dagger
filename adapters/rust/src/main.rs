@@ -17,6 +17,7 @@ use dagger_core::model::{Locator, Occurrence, Piece, Span};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
 use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Note, Request, Response};
+use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{self, Read};
@@ -44,12 +45,31 @@ fn answer(request: Request) -> Result<Response> {
             include: vec!["**/*.rs".to_string()],
             revisions: None,
         }),
-        Request::Extract { dir, files, .. } => {
-            let (extraction, notes) = extract(Path::new(&dir), &files)?;
+        Request::Extract {
+            dir,
+            files,
+            settings,
+            ..
+        } => {
+            let settings: Settings =
+                serde_json::from_value(settings).context("that isn't this adapter's settings")?;
+            let (extraction, notes) = extract(Path::new(&dir), &files, &settings)?;
             Ok(Response::Extracted { extraction, notes })
         }
         Request::Materialize { .. } => bail!("this only reads snapshots, it doesn't lay them out"),
     }
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct Settings {
+    /// Cargo manifests to load besides the one at the root.
+    ///
+    /// A workspace can leave a crate out — dagger's own window is kept out of its workspace
+    /// so a build of the tool doesn't drag a webview in with it — and rust-analyzer then
+    /// knows nothing about the files in it. Every definition there comes back with no
+    /// contract and no callers, which is worse than slow.
+    linked: Vec<String>,
 }
 
 struct Parsed {
@@ -58,7 +78,7 @@ struct Parsed {
     found: Vec<items::Found>,
 }
 
-fn extract(dir: &Path, files: &[String]) -> Result<(Extraction, Vec<Note>)> {
+fn extract(dir: &Path, files: &[String], settings: &Settings) -> Result<(Extraction, Vec<Note>)> {
     let mut modules = modules::Modules::default();
     let mut notes = Vec::new();
 
@@ -82,7 +102,7 @@ fn extract(dir: &Path, files: &[String]) -> Result<(Extraction, Vec<Note>)> {
         .flat_map(|file| file.found.iter().map(|found| occurrence(file, found)))
         .collect();
 
-    let mentions = bind(dir, &parsed, &mut occurrences, &mut notes)?;
+    let mentions = bind(dir, &parsed, &mut occurrences, &mut notes, settings)?;
     notes.append(&mut modules.notes);
 
     Ok((
@@ -158,19 +178,20 @@ fn bind(
     parsed: &[Parsed],
     occurrences: &mut [Occurrence],
     notes: &mut Vec<Note>,
+    settings: &Settings,
 ) -> Result<Vec<Mention>> {
     // Indexing is the slow part by a wide margin, so it's worth admitting to.
     eprintln!("  waiting for rust-analyzer to index");
-    let mut server = Server::start(
-        &["rust-analyzer".to_string()],
-        dir,
+    let mut options = json!({
         // Nothing here needs macros expanded or build scripts run, and both cost real
         // time on a cold tree.
-        json!({
-            "cargo": { "buildScripts": { "enable": false } },
-            "procMacro": { "enable": false },
-        }),
-    )?;
+        "cargo": { "buildScripts": { "enable": false } },
+        "procMacro": { "enable": false },
+    });
+    if !settings.linked.is_empty() {
+        options["linkedProjects"] = json!(settings.linked);
+    }
+    let mut server = Server::start(&["rust-analyzer".to_string()], dir, options)?;
     server.wait_until(|message| {
         message["method"] == "experimental/serverStatus"
             && message["params"]["quiescent"] == serde_json::Value::Bool(true)
