@@ -95,10 +95,14 @@ fn collect(symbols: &Value, scope: &[String], lines: &Lines, found: &mut Vec<Sym
 /// to the same one can't be told apart between snapshots, so they read as a wall of
 /// arrivals and departures that nobody wrote.
 ///
-/// Nothing is lost by leaving them out. A reader gets to them through the definition that
+/// Nothing is lost by leaving those out. A reader gets to them through the definition that
 /// contains them, which is named.
+///
+/// Spaces are fine, though. A test is named by the sentence it was given — `applies stacked
+/// promos` — and an implementation by what it implements, like `impl Display for Money`.
+/// Both are as addressable as any identifier, and both are worth reading.
 fn nameable(name: &str) -> bool {
-    !name.is_empty() && !name.starts_with('<') && !name.contains(['(', ')', ' ', '='])
+    !name.is_empty() && !name.starts_with('<') && !name.contains(['(', ')'])
 }
 
 /// Where the signature ends: at the brace that opens the body. Fine for the C-like
@@ -243,6 +247,24 @@ export function addMoney(a: Money, b: Money): Money {
         let symbols = read(&reported, &lines);
         let names: Vec<&str> = symbols.iter().map(|symbol| symbol.name.as_str()).collect();
         assert_eq!(names, vec!["addMoney"]);
+    }
+
+    /// A test is named by its sentence and an implementation by what it implements. Both
+    /// have spaces in them, and both are things a reader came to look at.
+    #[test]
+    fn a_name_with_spaces_in_it_is_still_a_name() {
+        let lines = Lines::new(SOURCE);
+        let reported = json!([
+            reported("applies stacked promos", 12, (4, 0, 6, 1), (4, 0, 1)),
+            reported("impl Display for Money", 5, (0, 0, 2, 1), (0, 0, 1)),
+        ]);
+
+        let symbols = read(&reported, &lines);
+        let names: Vec<&str> = symbols.iter().map(|symbol| symbol.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["applies stacked promos", "impl Display for Money"]
+        );
     }
 
     /// Locals belong to whoever contains them, not to a reader's list.
