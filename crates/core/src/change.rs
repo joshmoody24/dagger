@@ -1,4 +1,5 @@
-use crate::model::{Definition, Occurrence, Part};
+use crate::diagnostic::Diagnostic;
+use crate::model::{Definition, Occurrence, Part, Sides};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -56,18 +57,6 @@ fn part_text(occ: &Occurrence, part: Part) -> Option<&str> {
     occ.parts.get(&part).map(|p| p.text.as_str())
 }
 
-/// The compiler's word on how a definition looks from outside, falling back to the
-/// signature as written when no extractor could supply one.
-fn contracts<'a>(
-    before: &'a Occurrence,
-    after: &'a Occurrence,
-) -> (Option<&'a str>, Option<&'a str>) {
-    match (before.contract.as_deref(), after.contract.as_deref()) {
-        (Some(b), Some(a)) => (Some(b), Some(a)),
-        _ => (part_text(before, Part::Type), part_text(after, Part::Type)),
-    }
-}
-
 fn changed_parts(before: &Occurrence, after: &Occurrence) -> BTreeSet<Part> {
     before
         .parts
@@ -78,19 +67,35 @@ fn changed_parts(before: &Occurrence, after: &Occurrence) -> BTreeSet<Part> {
         .collect()
 }
 
-pub fn classify(def: &Definition) -> Change {
-    match (&def.before, &def.after) {
-        (None, Some(_)) => Change::Added,
-        (Some(_), None) => Change::Removed,
-        (Some(before), Some(after)) => {
-            let (before_contract, after_contract) = contracts(before, after);
-            Change::Kept(Edits {
-                contract: before_contract != after_contract
-                    || before.locator.name != after.locator.name,
+/// Whether callers see something different, preferring the compiler's view of the
+/// definition and falling back to the signature as written.
+fn contract_changed(before: &Occurrence, after: &Occurrence) -> bool {
+    let text = match (before.contract.as_deref(), after.contract.as_deref()) {
+        (Some(b), Some(a)) => b != a,
+        _ => part_text(before, Part::Type) != part_text(after, Part::Type),
+    };
+    text || before.locator.name != after.locator.name
+}
+
+pub fn classify(def: &Definition) -> (Change, Vec<Diagnostic>) {
+    match &def.sides {
+        Sides::Added(_) => (Change::Added, Vec::new()),
+        Sides::Removed(_) => (Change::Removed, Vec::new()),
+        Sides::Kept { before, after } => {
+            let lopsided = before.contract.is_some() != after.contract.is_some();
+            let change = Change::Kept(Edits {
+                contract: contract_changed(before, after),
                 moved: before.file != after.file || before.locator.scope != after.locator.scope,
                 parts: changed_parts(before, after),
-            })
+            });
+            let diagnostics = if lopsided {
+                vec![Diagnostic::LopsidedContract {
+                    definition: def.identity,
+                }]
+            } else {
+                Vec::new()
+            };
+            (change, diagnostics)
         }
-        (None, None) => unreachable!("a definition exists in at least one snapshot"),
     }
 }

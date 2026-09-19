@@ -59,11 +59,45 @@ pub struct Occurrence {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Identity(pub u32);
 
-/// One definition across both snapshots. Missing on one side is the only thing
-/// that makes adding and removing different from any other change.
+/// Which snapshots a definition showed up in. Being missing on one side is the only
+/// thing that makes adding and removing different from any other change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Sides {
+    Added(Occurrence),
+    Removed(Occurrence),
+    Kept {
+        before: Occurrence,
+        after: Occurrence,
+    },
+}
+
+impl Sides {
+    pub fn before(&self) -> Option<&Occurrence> {
+        match self {
+            Sides::Added(_) => None,
+            Sides::Removed(occ) | Sides::Kept { before: occ, .. } => Some(occ),
+        }
+    }
+
+    pub fn after(&self) -> Option<&Occurrence> {
+        match self {
+            Sides::Removed(_) => None,
+            Sides::Added(occ) | Sides::Kept { after: occ, .. } => Some(occ),
+        }
+    }
+
+    /// The newest version we have, for anything that just needs a name to show.
+    pub fn latest(&self) -> &Occurrence {
+        match self {
+            Sides::Added(occ) | Sides::Removed(occ) | Sides::Kept { after: occ, .. } => occ,
+        }
+    }
+}
+
+/// One definition across both snapshots.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Definition {
     pub identity: Identity,
-    pub before: Option<Occurrence>,
-    pub after: Option<Occurrence>,
+    pub sides: Sides,
 }
