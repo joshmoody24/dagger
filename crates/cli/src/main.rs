@@ -205,12 +205,27 @@ fn compare(
     let ordering = order(&review, &matched.definitions);
 
     if args.json {
+        // The definitions belong in the output too: everything else talks in identities,
+        // and without these there's nothing to turn one back into a name, a file, or the
+        // text a reader came to see.
+        //
+        // Only the ones in the review, though. Handing over every definition means handing
+        // over the whole repository twice, since the fallback reading holds a copy of each
+        // file it covers whether anything changed in it or not.
+        let worth_reading: Vec<_> = matched
+            .definitions
+            .iter()
+            .filter(|definition| review.members.contains(&definition.identity))
+            .collect();
+
         let _ = writeln!(
             std::io::stdout().lock(),
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
+                "definitions": worth_reading,
                 "review": review,
                 "ordering": ordering,
+                "notes": notes,
             }))?
         );
     } else {

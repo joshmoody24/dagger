@@ -245,3 +245,52 @@ impl Lines {
         offset
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Lines;
+
+    const SOURCE: &str = "export function zero() {\n  return 0;\n}\n";
+
+    #[test]
+    fn a_position_and_an_offset_mean_the_same_spot() {
+        let lines = Lines::new(SOURCE);
+
+        for (line, column) in [(0, 0), (0, 16), (1, 2), (2, 0)] {
+            let offset = lines.offset(line, column);
+            assert_eq!(
+                lines.position(offset),
+                (line, column),
+                "{line}:{column} didn't survive the round trip"
+            );
+        }
+    }
+
+    #[test]
+    fn an_offset_lands_where_the_name_starts() {
+        let lines = Lines::new(SOURCE);
+        let at = lines.offset(0, 16);
+
+        assert!(SOURCE[at..].starts_with("zero"));
+    }
+
+    /// Columns in the protocol count UTF-16 units, so anything outside the basic plane
+    /// counts twice. Getting this wrong shifts every position after it on the line.
+    #[test]
+    fn columns_count_the_way_the_protocol_counts() {
+        let source = "const 🎉 = \"party\";\nconst after = 1;\n";
+        let lines = Lines::new(source);
+
+        // The emoji is two UTF-16 units, so `=` sits at column 9 rather than 8.
+        let equals = lines.offset(0, 9);
+        assert_eq!(&source[equals..equals + 1], "=");
+        assert_eq!(lines.position(equals), (0, 9));
+    }
+
+    #[test]
+    fn a_line_past_the_end_lands_at_the_end() {
+        let lines = Lines::new(SOURCE);
+
+        assert_eq!(lines.offset(99, 0), SOURCE.len());
+    }
+}

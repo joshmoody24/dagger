@@ -50,6 +50,9 @@ fn collect(symbols: &Value, scope: &[String], lines: &Lines, found: &mut Vec<Sym
         let Some(name) = symbol["name"].as_str() else {
             continue;
         };
+        if !nameable(name) {
+            continue;
+        }
         // Servers that don't do the nested form send a flat list instead, where the range
         // hangs off a location and there's nothing saying where the name itself is.
         let whole =
@@ -81,6 +84,21 @@ fn collect(symbols: &Value, scope: &[String], lines: &Lines, found: &mut Vec<Sym
         inner.push(name.to_string());
         collect(&symbol["children"], &inner, lines, found);
     }
+}
+
+/// Whether this is a thing with a name, rather than something a server described in
+/// passing.
+///
+/// Servers report anonymous functions too, under invented labels: `lazyRouter() callback`,
+/// `() => {}`, `<anonymous>`. A file wiring up a web server has dozens, all sharing a
+/// label, and dagger needs a definition to be addressable by name — two things answering
+/// to the same one can't be told apart between snapshots, so they read as a wall of
+/// arrivals and departures that nobody wrote.
+///
+/// Nothing is lost by leaving them out. A reader gets to them through the definition that
+/// contains them, which is named.
+fn nameable(name: &str) -> bool {
+    !name.is_empty() && !name.starts_with('<') && !name.contains(['(', ')', ' ', '='])
 }
 
 /// Where the signature ends: at the brace that opens the body. Fine for the C-like
@@ -142,5 +160,132 @@ fn kind_of(kind: u64) -> &'static str {
         25 => "operator",
         26 => "type parameter",
         _ => "definition",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    const SOURCE: &str = "\
+export interface Money {
+  amount: number;
+}
+
+export function addMoney(a: Money, b: Money): Money {
+  return a;
+}
+";
+
+    /// One symbol as a server reports it: `line`/`character` pairs for the whole thing
+    /// and for the name.
+    fn reported(name: &str, kind: u64, whole: (u32, u32, u32, u32), at: (u32, u32, u32)) -> Value {
+        json!({
+            "name": name,
+            "kind": kind,
+            "range": {
+                "start": { "line": whole.0, "character": whole.1 },
+                "end": { "line": whole.2, "character": whole.3 },
+            },
+            "selectionRange": {
+                "start": { "line": at.0, "character": at.1 },
+                "end": { "line": at.0, "character": at.2 },
+            },
+        })
+    }
+
+    #[test]
+    fn a_function_splits_at_the_brace() {
+        let lines = Lines::new(SOURCE);
+        let symbols = read(
+            &json!([reported("addMoney", 12, (4, 0, 6, 1), (4, 16, 24))]),
+            &lines,
+        );
+
+        let symbol = &symbols[0];
+        assert_eq!(
+            lines.slice(&symbol.declaration()),
+            "export function addMoney(a: Money, b: Money): Money "
+        );
+        assert_eq!(
+            lines.slice(&symbol.body().expect("a function has a body")),
+            "{\n  return a;\n}"
+        );
+    }
+
+    /// A type is contract all the way through, so there's nothing to split off.
+    #[test]
+    fn an_interface_is_all_declaration() {
+        let lines = Lines::new(SOURCE);
+        let symbols = read(
+            &json!([reported("Money", 11, (0, 0, 2, 1), (0, 17, 22))]),
+            &lines,
+        );
+
+        assert!(symbols[0].body().is_none());
+        assert_eq!(
+            lines.slice(&symbols[0].declaration()),
+            "export interface Money {\n  amount: number;\n}"
+        );
+    }
+
+    #[test]
+    fn anonymous_things_are_left_out() {
+        let lines = Lines::new(SOURCE);
+        let reported = json!([
+            reported("lazyRouter() callback", 12, (4, 0, 6, 1), (4, 0, 1)),
+            reported("() => {}", 12, (4, 0, 6, 1), (4, 0, 1)),
+            reported("<anonymous>", 12, (4, 0, 6, 1), (4, 0, 1)),
+            reported("addMoney", 12, (4, 0, 6, 1), (4, 16, 24)),
+        ]);
+
+        let symbols = read(&reported, &lines);
+        let names: Vec<&str> = symbols.iter().map(|symbol| symbol.name.as_str()).collect();
+        assert_eq!(names, vec!["addMoney"]);
+    }
+
+    /// Locals belong to whoever contains them, not to a reader's list.
+    #[test]
+    fn what_lives_inside_a_function_is_not_reported() {
+        let lines = Lines::new(SOURCE);
+        let mut outer = reported("addMoney", 12, (4, 0, 6, 1), (4, 16, 24));
+        outer["children"] = json!([reported("total", 13, (5, 2, 5, 12), (5, 8, 13))]);
+
+        assert_eq!(read(&json!([outer]), &lines).len(), 1);
+    }
+
+    /// A class's methods are worth listing, unlike a function's variables.
+    #[test]
+    fn what_lives_inside_a_class_is_reported_with_its_scope() {
+        let lines = Lines::new(SOURCE);
+        let mut outer = reported("Repo", 5, (0, 0, 2, 1), (0, 17, 21));
+        outer["children"] = json!([reported("find", 6, (1, 2, 1, 16), (1, 2, 6))]);
+
+        let symbols = read(&json!([outer]), &lines);
+        assert_eq!(symbols.len(), 2);
+        assert_eq!(symbols[1].name, "find");
+        assert_eq!(symbols[1].scope, vec!["Repo".to_string()]);
+    }
+
+    /// Servers that don't do the nested form hang the range off a location instead.
+    #[test]
+    fn the_flat_form_is_understood_too() {
+        let lines = Lines::new(SOURCE);
+        let flat = json!([{
+            "name": "Money",
+            "kind": 11,
+            "location": {
+                "uri": "file:///money.ts",
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 2, "character": 1 },
+                },
+            },
+        }]);
+
+        let symbols = read(&flat, &lines);
+        assert_eq!(symbols.len(), 1);
+        assert_eq!(lines.slice(&symbols[0].whole).lines().count(), 3);
     }
 }

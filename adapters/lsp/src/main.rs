@@ -37,6 +37,15 @@ struct Settings {
     /// Files this adapter speaks for, when the repo hasn't said.
     #[serde(default)]
     include: Vec<String>,
+    /// How many files to read before giving up and saying so. A change to something the
+    /// whole repository leans on genuinely does affect everything, and at some point
+    /// telling the reader that is more use than carrying on.
+    #[serde(default = "a_few_hundred")]
+    max_files: usize,
+}
+
+fn a_few_hundred() -> usize {
+    300
 }
 
 fn main() -> Result<()> {
@@ -101,97 +110,222 @@ fn extract(
             .unwrap_or_else(|| "lsp".to_string()),
     );
     let root = dir.canonicalize()?;
-    let ours: BTreeSet<&str> = files.iter().map(String::as_str).collect();
+    let ours: BTreeSet<String> = files.iter().cloned().collect();
 
     eprintln!("  starting {}", binder.0);
-    let mut server = Server::start(&settings.server, dir, settings.options.clone())?;
+    let server = Server::start(&settings.server, dir, settings.options.clone())?;
 
-    let mut notes = Vec::new();
-    let mut seen: BTreeMap<String, Opened> = BTreeMap::new();
-    let mut mentions = Vec::new();
-    let mut contracts: BTreeMap<Locator, String> = BTreeMap::new();
+    let mut walk = Walk {
+        server,
+        root,
+        binder,
+        ours,
+        seen: BTreeMap::new(),
+        mentions: Vec::new(),
+        contracts: BTreeMap::new(),
+        notes: Vec::new(),
+        limit: settings.max_files,
+    };
+    walk.spread(changed);
 
-    // Start from what changed. Anything referring to it joins the queue, and so on, until
-    // the trail goes cold.
-    let mut queue: VecDeque<String> = changed
-        .iter()
-        .filter(|path| ours.contains(path.as_str()))
-        .cloned()
-        .collect();
-    let mut queued: BTreeSet<String> = queue.iter().cloned().collect();
-
-    while let Some(path) = queue.pop_front() {
-        let file = match open(&mut server, &root, &path) {
-            Ok(file) => file,
-            Err(error) => {
-                notes.push(Note {
-                    message: format!("skipped it: {error:#}"),
-                    file: Some(path.clone()),
-                });
-                continue;
-            }
-        };
-
-        for symbol in &file.symbols {
-            let at = position(&root, &file, symbol);
-
-            // Hover is a summary written for a person, not a statement of what callers
-            // can see, so it's worth having but not worth trusting on its own. Dagger
-            // takes it alongside the written declaration rather than instead of it.
-            if let Ok(hover) = server.request("textDocument/hover", at.clone())
-                && let Some(contract) = fenced(&hover)
-            {
-                contracts.insert(locator(&file, symbol), contract);
-            }
-
-            let mut question = at;
-            question["context"] = json!({ "includeDeclaration": false });
-            let referrers = match server.request("textDocument/references", question) {
-                Ok(referrers) => referrers,
-                Err(error) => {
-                    notes.push(Note {
-                        message: format!("couldn't find what uses {}: {error:#}", symbol.name),
-                        file: Some(path.clone()),
-                    });
-                    continue;
-                }
-            };
-
-            for place in referrers.as_array().unwrap_or(&Vec::new()) {
-                let Some(referring) = relative(place["uri"].as_str().unwrap_or(""), &root) else {
-                    continue;
-                };
-                if !ours.contains(referring.as_str()) {
-                    continue;
-                }
-                if queued.insert(referring.clone()) {
-                    queue.push_back(referring.clone());
-                }
-            }
-
-            mentions.extend(pending(&referrers, &root, symbol, &file, &binder));
-        }
-
-        seen.insert(path, file);
-    }
-
-    let occurrences = definitions(&seen, &contracts);
-    let mentions = settle(mentions, &seen);
+    let occurrences = definitions(&walk.seen, &walk.contracts);
     eprintln!(
         "  read {} files, found {} definitions",
-        seen.len(),
+        walk.seen.len(),
         occurrences.len()
     );
 
     Ok((
         Extraction {
             occurrences,
-            mentions,
+            mentions: walk.mentions,
         },
-        notes,
+        walk.notes,
     ))
 }
 
+struct Walk {
+    server: Server,
+    root: PathBuf,
+    binder: BinderId,
+    ours: BTreeSet<String>,
+    seen: BTreeMap<String, Opened>,
+    mentions: Vec<Mention>,
+    contracts: BTreeMap<Locator, String>,
+    notes: Vec<Note>,
+    limit: usize,
+}
+
+impl Walk {
+    /// Starts at the files that differ and spreads to whatever a break could reach.
+    ///
+    /// A file is asked who uses it only if something can travel onward from it: because it
+    /// changed, or because it mentions a changed definition somewhere its own callers can
+    /// see. A file that merely calls a changed definition from inside a body is opened far
+    /// enough to say which definition the call sits in, and no further.
+    ///
+    /// Spreading through every reference instead is what made a nine file change
+    /// unreadable. One widely used name answers with a thousand places; each of those
+    /// files holds dozens of definitions; asking all of theirs in turn walks the monorepo.
+    fn spread(&mut self, changed: &[String]) {
+        let mut queue: VecDeque<String> = changed
+            .iter()
+            .filter(|path| self.ours.contains(path.as_str()))
+            .cloned()
+            .collect();
+        let mut asked: BTreeSet<String> = BTreeSet::new();
+
+        // Open every changed file before asking anything about any of them. A server
+        // answers "who uses this" out of the projects it has loaded, and telling it about
+        // a file is what loads that file's project. Asking one package's question while
+        // the package that calls it is still unknown gets a truthful answer about a
+        // smaller world: the change looks self-contained when it isn't.
+        for path in queue.clone() {
+            self.look(&path);
+        }
+
+        while let Some(path) = queue.pop_front() {
+            if !asked.insert(path.clone()) {
+                continue;
+            }
+            if self.seen.len() >= self.limit {
+                self.notes.push(Note {
+                    message: format!(
+                        "stopped after {} files. This change reaches further than that, so \
+                         some of what it affects is missing",
+                        self.limit
+                    ),
+                    file: None,
+                });
+                return;
+            }
+            if !self.look(&path) {
+                continue;
+            }
+
+            for onward in self.ask_about(&path) {
+                queue.push_back(onward);
+            }
+        }
+    }
+
+    /// Opens a file once, keeping what was found. Whether it worked.
+    fn look(&mut self, path: &str) -> bool {
+        if self.seen.contains_key(path) {
+            return true;
+        }
+        match open(&mut self.server, &self.root, path) {
+            Ok(file) => {
+                self.seen.insert(path.to_string(), file);
+                true
+            }
+            Err(error) => {
+                self.notes.push(Note {
+                    message: format!("skipped it: {error:#}"),
+                    file: Some(path.to_string()),
+                });
+                false
+            }
+        }
+    }
+
+    /// Asks what each definition in this file looks like from outside and who uses it,
+    /// recording the mentions. Returns the files a break can travel on to.
+    fn ask_about(&mut self, path: &str) -> Vec<String> {
+        let questions: Vec<(Value, Locator)> = {
+            let file = &self.seen[path];
+            file.symbols
+                .iter()
+                .map(|symbol| (position(&self.root, file, symbol), locator(file, symbol)))
+                .collect()
+        };
+
+        let mut onward = Vec::new();
+        for (at, to) in questions {
+            // Hover is a summary written for a person, not a statement of what callers can
+            // see, so it's worth having but not worth trusting on its own. Dagger takes it
+            // alongside the written declaration rather than instead of it.
+            if let Ok(hover) = self.server.request("textDocument/hover", at.clone())
+                && let Some(contract) = fenced(&hover)
+            {
+                self.contracts.insert(to.clone(), contract);
+            }
+
+            let mut question = at;
+            question["context"] = json!({ "includeDeclaration": false });
+            let referrers = match self.server.request("textDocument/references", question) {
+                Ok(referrers) => referrers,
+                Err(error) => {
+                    self.notes.push(Note {
+                        message: format!("couldn't find what uses {}: {error:#}", to.name),
+                        file: Some(path.to_string()),
+                    });
+                    continue;
+                }
+            };
+
+            onward.extend(self.record(&referrers, &to));
+        }
+
+        onward
+    }
+
+    /// Turns each place a definition is used into a mention, and says which of those
+    /// places can carry a break onward.
+    fn record(&mut self, referrers: &Value, to: &Locator) -> Vec<String> {
+        let places: Vec<(String, u32, u32)> = referrers
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|place| {
+                Some((
+                    relative(place["uri"].as_str()?, &self.root)?,
+                    place["range"]["start"]["line"].as_u64()? as u32,
+                    place["range"]["start"]["character"].as_u64()? as u32,
+                ))
+            })
+            .filter(|(path, _, _)| self.ours.contains(path.as_str()))
+            .collect();
+
+        let mut onward = Vec::new();
+        for (path, line, column) in places {
+            if self.seen.len() >= self.limit || !self.look(&path) {
+                continue;
+            }
+
+            let file = &self.seen[&path];
+            let at = file.lines.offset(line, column);
+            let Some(from) = innermost(file, at) else {
+                continue;
+            };
+            let Some(part) = part_at(from, at) else {
+                continue;
+            };
+
+            self.mentions.push(Mention {
+                from: locator(file, from),
+                to: Target::Known(to.clone()),
+                site: Site {
+                    part,
+                    span: Span {
+                        start: at as u32,
+                        end: at as u32,
+                    },
+                    found_by: self.binder.clone(),
+                },
+            });
+
+            // Callers of this one can be broken by what broke it, so the trail carries on.
+            // A mention inside a body stops here: nobody outside can tell it changed.
+            if part == Part::Type {
+                onward.push(path);
+            }
+        }
+
+        onward
+    }
+}
 /// Whether this name belongs to something defined elsewhere. An import is reported as a
 /// symbol like any other, but it's a mention of a definition rather than one itself, and
 /// counting it would put the same thing in the review twice under two names.
@@ -251,6 +385,13 @@ fn open(server: &mut Server, root: &Path, path: &str) -> Result<Opened> {
     let mut keep = ours.iter();
     file.symbols.retain(|_| *keep.next().unwrap_or(&true));
 
+    // A definition has to be addressable by name. Two answering to the same one can't be
+    // told apart between snapshots, so the first keeps the name and the rest are dropped
+    // rather than left to read as things arriving and departing that nobody wrote.
+    let mut taken = BTreeSet::new();
+    file.symbols
+        .retain(|symbol| taken.insert((symbol.scope.clone(), symbol.name.clone())));
+
     Ok(file)
 }
 
@@ -276,66 +417,6 @@ fn locator(file: &Opened, symbol: &symbols::Symbol) -> Locator {
         scope,
         name: symbol.name.clone(),
     }
-}
-
-/// A mention we know the target of, but not yet who it came from: that depends on which
-/// definition encloses the spot, in a file we may not have looked at yet. Positions stay
-/// as the server gave them, since turning one into an offset needs that file's text.
-struct Pending {
-    file: String,
-    line: u32,
-    column: u32,
-    to: Locator,
-    binder: BinderId,
-}
-
-fn pending(
-    referrers: &Value,
-    root: &Path,
-    symbol: &symbols::Symbol,
-    file: &Opened,
-    binder: &BinderId,
-) -> Vec<Pending> {
-    let to = locator(file, symbol);
-    referrers
-        .as_array()
-        .unwrap_or(&Vec::new())
-        .iter()
-        .filter_map(|place| {
-            Some(Pending {
-                file: relative(place["uri"].as_str()?, root)?,
-                line: place["range"]["start"]["line"].as_u64()? as u32,
-                column: place["range"]["start"]["character"].as_u64()? as u32,
-                to: to.clone(),
-                binder: binder.clone(),
-            })
-        })
-        .collect()
-}
-
-/// Mentions from files the walk never reached are dropped. Whoever they came from isn't
-/// in the review either, so an edge from them would hang off nothing.
-fn settle(pending: Vec<Pending>, seen: &BTreeMap<String, Opened>) -> Vec<Mention> {
-    pending
-        .into_iter()
-        .filter_map(|mention| {
-            let file = seen.get(&mention.file)?;
-            let at = file.lines.offset(mention.line, mention.column);
-            let from = innermost(file, at)?;
-            Some(Mention {
-                from: locator(file, from),
-                to: Target::Known(mention.to),
-                site: Site {
-                    part: part_at(from, at)?,
-                    span: Span {
-                        start: at as u32,
-                        end: at as u32,
-                    },
-                    found_by: mention.binder,
-                },
-            })
-        })
-        .collect()
 }
 
 fn definitions(
