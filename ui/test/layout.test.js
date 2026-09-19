@@ -44,13 +44,27 @@ test("nothing is drawn on top of anything else", () => {
   }
 });
 
-test("a file stays inside its group, and a node inside its file", () => {
-  for (const box of laid.boxes) {
-    for (const file of box.files) {
-      assert.ok(file.x >= box.x && file.x + file.w <= box.x + box.w, `${file.key} escapes ${box.key}`);
-      assert.ok(file.y >= box.y && file.y + file.h <= box.y + box.h, `${file.key} escapes ${box.key}`);
+/* Boxes nest to whatever depth the grouping has, so this checks the rule rather than two
+ * named levels of it: nothing is ever drawn outside the box that holds it. */
+test("nothing escapes the box that holds it", () => {
+  const within = (child, box) =>
+    child.x >= box.x && child.x + child.w <= box.x + box.w &&
+    child.y >= box.y && child.y + child.h <= box.y + box.h;
+
+  const walk = (box) => {
+    for (const child of box.boxes) {
+      assert.ok(within(child, box), `${child.key} escapes ${box.key}`);
+      walk(child);
     }
-  }
+    for (const row of box.rows) {
+      for (const node of row) {
+        const spot = laid.at.get(node.id);
+        assert.ok(within({ ...spot, h: NODE_H }, box), `${node.name} escapes ${box.key}`);
+      }
+    }
+  };
+
+  laid.boxes.forEach(walk);
 });
 
 /* Whatever holds something up is drawn above it, and the only lines allowed to point the

@@ -24,6 +24,9 @@ const ROLES = {
   faint: ["editorLineNumber.foreground", "editorIndentGuide.activeBackground1"],
   rule: ["editorBracketMatch.border", "panelTitle.inactiveForeground", "diffEditor.diagonalFill"],
   lean: ["terminal.ansiBlue", "textLink.foreground"],
+  /* Kept apart from lean on purpose: one says where you are, the other where you're going,
+   * and they're side by side on screen. */
+  path: ["terminal.ansiMagenta", "textLink.activeForeground"],
   add: ["terminal.ansiGreen", "gitDecoration.addedResourceForeground"],
   del: ["terminal.ansiRed", "gitDecoration.deletedResourceForeground"],
   chg: ["terminal.ansiYellow", "gitDecoration.modifiedResourceForeground"],

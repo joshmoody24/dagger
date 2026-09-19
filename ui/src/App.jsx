@@ -32,6 +32,7 @@ export function App(props) {
 
   const steps = () => review().steps;
   const here = () => (steps()[at()] || {}).definition;
+  const next = () => (steps()[at() + 1] || {}).definition;
 
   const step = (by) => {
     setAt((was) => Math.min(Math.max(was + by, 0), steps().length - 1));
@@ -106,7 +107,7 @@ export function App(props) {
       <main class={showing() ? `has-sheet ${sheet()}` : ""}>
         {/* Tapping past the graph puts the drawer away, the way tapping off any sheet does. */}
         <div class="stage" onClick={(event) => !event.target.closest(".nd, .box text") && shut()}>
-          <Graph review={review()} laid={laid()} here={here()} read={read()} onOpen={goTo} />
+          <Graph review={review()} laid={laid()} here={here()} next={next()} read={read()} onOpen={goTo} />
         </div>
         <Reading
           review={review()}

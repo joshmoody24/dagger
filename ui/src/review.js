@@ -9,7 +9,7 @@
  */
 
 export const NODE_H = 28;
-const ROW_GAP = 22, GROUP_GAP = 30, FILE_GAP = 14;
+const ROW_GAP = 22, BAND_GAP = 30, BOX_GAP = 14;
 const PAD_X = 12, PAD_TOP = 24, PAD_BOTTOM = 10, NODE_GAP = 10, MARGIN = 16;
 
 export const MARK = {
@@ -29,6 +29,14 @@ const CHAR = FONT * 0.6;
 /* Past this a name is cut short. A test is a sentence with underscores in it, and one of
  * them is as wide as a dozen ordinary definitions put together — which buries them. */
 const LONGEST = 22;
+
+/* Kept in one place so a node and the boxes around it can't drift apart. Concentric
+ * corners would want each radius to be the one inside it plus the padding, which on boxes
+ * this big comes out far too round — these stay tight and merely step up. */
+/* Kept in one place so a node and the boxes around it can't drift apart. Each box inside
+ * another is a touch tighter, down to the radius a node has — concentric corners would want
+ * the padding added at every level, which on boxes this big comes out far too round. */
+export const RADIUS = { node: 5, box: 9, step: 2 };
 
 /* A box wears its name along the top, so it can't be narrower than the name. Smaller than
  * the nodes' font, and it has to agree with style.css the same way. */
@@ -61,6 +69,7 @@ export function digest(raw) {
     definitions.set(definition.identity, {
       id: definition.identity,
       name: shown.locator.name,
+      scope: shown.locator.scope,
       path: [...shown.locator.scope, shown.locator.name].join("::"),
       file: shown.file,
       kind: shown.kind,
@@ -126,11 +135,15 @@ function told(diagnostic) {
 
 /* ---------------- laying it out ---------------- */
 
-/* Boxes inside boxes: a group holds files, a file holds definitions. Whatever holds
- * something else up is drawn above it, so the page reads downwards the way the review does.
+/* Boxes inside boxes, all the way down.
  *
- * A module is its file, so it gives the file's box its name rather than taking a node inside
- * the box that stands for the box.
+ * A box is a place: it holds definitions of its own, and it holds other boxes. A group and
+ * a file are the same thing at different depths, so nothing below tells them apart — a box
+ * is sized, placed, lit and pressed the same way wherever it sits. Whatever holds something
+ * else up is drawn above it, so the page reads downwards the way the review does.
+ *
+ * A module is its place, so it gives its box a name rather than taking a node inside the
+ * box that stands for the box.
  */
 export function layout(review) {
   const nodes = [...review.definitions.values()].filter((d) => d.kind !== "module");
@@ -144,50 +157,53 @@ export function layout(review) {
     if (leansOn.has(edge.from) && leansOn.has(edge.to)) leansOn.get(edge.from).push(edge.to);
   }
 
-  const byFile = collect(nodes, (node) => node.file);
-  const byGroup = collect([...byFile.keys()], (file) => byFile.get(file)[0].group.join("/"));
-  const laning = stacking(byFile, review.edges);
+  const byPlace = collect(nodes, (node) => node.file);
+  /* A file whose only changed definition is its own module still needs a box: the module is
+   * drawn as its file, so without one there's nothing on the page to stand for it — nothing
+   * to light up when it's being read, and nothing for the arrow to point at. */
+  for (const place of modules.keys()) if (!byPlace.has(place)) byPlace.set(place, []);
 
-  const boxes = [...byGroup].map(([groupPath, filePaths]) => {
-    const stacked = laning(filePaths);
-    const files = [...filePaths].sort((a, b) => stacked(a) - stacked(b)).map((path) => {
-      const rows = layer(byFile.get(path), leansOn);
-      const inner = Math.max(...rows.map(rowWidth));
-      const module = modules.get(path) || null;
-      const label = module ? module.name : guessed(path);
-      return {
-        key: path,
-        module,
-        label,
-        rows,
-        /* A module's box also carries its mark, so there are two more characters to fit. */
-        w: Math.max(inner + 2 * PAD_X, labelWidth(module ? `${label}xx` : label)),
-        h: rows.length * NODE_H + (rows.length - 1) * ROW_GAP + PAD_TOP + PAD_BOTTOM,
-      };
-    });
+  const groupOf = (place) => {
+    const [first] = byPlace.get(place);
+    return ((first || modules.get(place)).group || []).join("/");
+  };
+  const byGroup = collect([...byPlace.keys()], groupOf);
+  const laning = stacking(byPlace, review.edges);
 
-    /* Files that hold each other up stack; files that have nothing to do with each other
-     * sit side by side. Stacking those anyway is what made a group a single tall column
-     * with the page empty either side of it. */
+  const boxes = [...byGroup].map(([groupPath, everything]) => {
+    /* A group is a module when one of its own modules sits at the top of it. Drawing that
+     * module a box inside the box would be saying the same thing twice — the same reason a
+     * module never takes a node inside its own file. */
+    const root = rootOf(everything, byPlace, modules);
+    const under = everything.filter((path) => !root || path !== root.file);
+    const stacked = laning(under);
+
+    const inner = [...under]
+      .sort((a, b) => stacked(a) - stacked(b))
+      .map((path) => {
+        const module = modules.get(path) || null;
+        return sized({
+          key: path,
+          module,
+          label: module ? module.name : guessed(path),
+          rows: layer(byPlace.get(path), leansOn),
+          lanes: [],
+        });
+      });
+
+    /* Boxes that hold each other up stack; boxes with nothing between them sit side by
+     * side. Stacking those anyway made a group a single tall column with the page empty
+     * either side of it. */
     const lanes = [];
-    for (const file of files) (lanes[stacked(file.key)] ||= []).push(file);
-    const inLanes = lanes.filter(Boolean);
+    for (const box of inner) (lanes[stacked(box.key)] ||= []).push(box);
 
-    return {
+    return sized({
       key: groupPath,
-      label: groupPath || "elsewhere",
-      files,
-      lanes: inLanes,
-      w: Math.max(
-        Math.max(...inLanes.map(laneWidth)) + 2 * PAD_X,
-        labelWidth(groupPath || "elsewhere"),
-      ),
-      h:
-        inLanes.reduce((sum, lane) => sum + laneHeight(lane), 0) +
-        FILE_GAP * (inLanes.length - 1) +
-        PAD_TOP +
-        PAD_BOTTOM,
-    };
+      module: root,
+      label: root ? root.name : groupPath || "elsewhere",
+      rows: [],
+      lanes: lanes.filter(Boolean),
+    });
   });
 
   const at = new Map();
@@ -197,37 +213,79 @@ export function layout(review) {
   for (const band of bands(boxes, review)) {
     let x = MARGIN;
     for (const box of band) {
-      box.x = x;
-      box.y = y;
-      let fileY = y + PAD_TOP;
-
-      for (const lane of box.lanes) {
-        let fileX = x + PAD_X;
-
-        for (const file of lane) {
-          file.x = fileX;
-          file.y = fileY;
-          let rowY = fileY + PAD_TOP;
-
-          for (const row of file.rows) {
-            let nodeX = file.x + PAD_X + (file.w - 2 * PAD_X - rowWidth(row)) / 2;
-            for (const node of row) {
-              at.set(node.id, { x: nodeX, y: rowY, w: widthOf(node.name) });
-              nodeX += widthOf(node.name) + NODE_GAP;
-            }
-            rowY += NODE_H + ROW_GAP;
-          }
-          fileX += file.w + FILE_GAP;
-        }
-        fileY += laneHeight(lane) + FILE_GAP;
-      }
-      x += box.w + GROUP_GAP;
+      place(box, x, y, at);
+      x += box.w + BAND_GAP;
     }
-    widest = Math.max(widest, x - GROUP_GAP + MARGIN);
-    y += Math.max(...band.map((box) => box.h)) + GROUP_GAP;
+    widest = Math.max(widest, x - BAND_GAP + MARGIN);
+    y += Math.max(...band.map((box) => box.h)) + BAND_GAP;
   }
 
-  return { at, boxes, modules, w: widest, h: y - GROUP_GAP + MARGIN };
+  return { at, boxes, modules, w: widest, h: y - BAND_GAP + MARGIN };
+}
+
+/* The module a box answers to: the one nothing else in it encloses, whose file holds
+ * nothing but the module itself. Anything less certain than that — two of them, or one with
+ * definitions of its own to show — keeps a box of its own. */
+function rootOf(paths, byPlace, modules) {
+  const roots = paths
+    .map((path) => modules.get(path))
+    .filter((module) => module && module.scope.length === 0 && !byPlace.get(module.file).length);
+  return roots.length === 1 ? roots[0] : null;
+}
+
+/* Room for whatever a box holds — boxes in lanes, nodes in rows — and never narrower than
+ * its own name. A box with a module wears its mark too, which is two more characters. */
+function sized(box) {
+  const across = Math.max(
+    box.lanes.length ? Math.max(...box.lanes.map(laneWidth)) : 0,
+    box.rows.length ? Math.max(...box.rows.map(rowWidth)) : 0,
+  );
+  const lanesDeep = box.lanes.length
+    ? box.lanes.reduce((sum, lane) => sum + laneHeight(lane), 0) + BOX_GAP * (box.lanes.length - 1)
+    : 0;
+  const rowsDeep = box.rows.length
+    ? box.rows.length * NODE_H + ROW_GAP * (box.rows.length - 1)
+    : 0;
+  const between = box.lanes.length && box.rows.length ? BOX_GAP : 0;
+
+  return {
+    ...box,
+    boxes: box.lanes.flat(),
+    w: Math.max(across + 2 * PAD_X, labelWidth(box.module ? `${box.label}xx` : box.label)),
+    h: PAD_TOP + lanesDeep + between + rowsDeep + PAD_BOTTOM,
+  };
+}
+
+/* Placing a box is placing what it holds, which is boxes and nodes, which is the same job
+ * one level in. */
+function place(box, x, y, at) {
+  box.x = x;
+  box.y = y;
+  let down = y + PAD_TOP;
+
+  for (const lane of box.lanes) {
+    let across = x + PAD_X;
+    for (const child of lane) {
+      place(child, across, down, at);
+      across += child.w + BOX_GAP;
+    }
+    down += laneHeight(lane) + BOX_GAP;
+  }
+
+  for (const row of box.rows) {
+    let across = x + PAD_X + (box.w - 2 * PAD_X - rowWidth(row)) / 2;
+    for (const node of row) {
+      at.set(node.id, { x: across, y: down, w: widthOf(node.name) });
+      across += widthOf(node.name) + NODE_GAP;
+    }
+    down += NODE_H + ROW_GAP;
+  }
+}
+
+/** Every node a box holds, however deep. */
+export function* inside(box) {
+  for (const row of box.rows) yield* row;
+  for (const child of box.boxes) yield* inside(child);
 }
 
 /* Rows within a box: something sits below everything it leans on. */
@@ -258,14 +316,14 @@ function folded(row) {
 /* Files stack in a group the same way nodes stack in a file and groups stack on the page:
  * whatever holds another file up sits above it. Without this the files in a group land in
  * whatever order they turned up in, and half the lines between them run the wrong way. */
-function stacking(byFile, edges) {
-  const fileOf = new Map();
-  for (const [path, inside] of byFile) for (const node of inside) fileOf.set(node.id, path);
+function stacking(byPlace, edges) {
+  const placeOf = new Map();
+  for (const [path, held] of byPlace) for (const node of held) placeOf.set(node.id, path);
 
-  const leansOn = new Map([...byFile.keys()].map((path) => [path, []]));
+  const leansOn = new Map([...byPlace.keys()].map((path) => [path, []]));
   for (const edge of edges) {
-    const from = fileOf.get(edge.from);
-    const to = fileOf.get(edge.to);
+    const from = placeOf.get(edge.from);
+    const to = placeOf.get(edge.to);
     if (from && to && from !== to) leansOn.get(from).push(to);
   }
 
@@ -284,11 +342,7 @@ function stacking(byFile, edges) {
 /* Bands of boxes: whatever holds another box up is drawn in an earlier band. */
 function bands(boxes, review) {
   const groupOf = new Map();
-  for (const box of boxes) {
-    for (const file of box.files) {
-      for (const row of file.rows) for (const node of row) groupOf.set(node.id, box.key);
-    }
-  }
+  for (const box of boxes) for (const node of inside(box)) groupOf.set(node.id, box.key);
 
   const leansOn = new Map(boxes.map((box) => [box.key, []]));
   for (const edge of review.edges) {
@@ -323,7 +377,7 @@ function depth(id, within, leansOn, seen) {
 const byLoudness = (a, b) =>
   LOUDNESS.indexOf(a.mark) - LOUDNESS.indexOf(b.mark) || a.name.localeCompare(b.name);
 const rowWidth = (row) => row.reduce((sum, n) => sum + widthOf(n.name), 0) + NODE_GAP * (row.length - 1);
-const laneWidth = (lane) => lane.reduce((sum, f) => sum + f.w, 0) + FILE_GAP * (lane.length - 1);
+const laneWidth = (lane) => lane.reduce((sum, f) => sum + f.w, 0) + BOX_GAP * (lane.length - 1);
 const laneHeight = (lane) => Math.max(...lane.map((f) => f.h));
 
 function collect(items, by) {

@@ -68,6 +68,27 @@ svg text { font-family: var(--mono); font-size: 14px; fill: var(--ink); }
 .nd.sel rect { stroke: var(--lean); stroke-width: 2; }
 .nd.sel .nm { fill: var(--lean); }
 
+/* A focus ring here would be a second box drawn around a box: an outline on an SVG element
+ * is a hard rectangle round its bounds, so it ignores the rounded corners and doesn't scale
+ * with the drawing — it reads as an artifact once you're zoomed in. The node says it has
+ * focus by thickening its own edge instead. */
+.nd:focus { outline: none; }
+.nd:focus-visible { outline: none; }
+.nd:focus-visible rect { stroke: var(--ink); stroke-width: 2.4; }
+
+/* Where the reading goes next: the same blue as the one being read, but dashed, so the two
+ * read as a pair — here, then there — rather than as two of the same thing. */
+.nd.next rect { stroke: var(--path); stroke-width: 1.8; stroke-dasharray: 5 3; }
+.nd.next { opacity: 1; filter: none; }
+
+/* Nothing else in the drawing has an arrowhead, because nothing else is about which way
+ * time runs. That alone tells it from the lines that only say what holds up what. */
+.up {
+  fill: none; stroke: var(--path); stroke-width: 1.8; stroke-dasharray: 5 3;
+  marker-end: url(#tip); pointer-events: none; opacity: 0.55;
+}
+#tip path { fill: var(--path); }
+
 /* Under the pointer a node lifts out of whatever it was doing — read, dimmed or both. It
  * gets brighter and sharper against the page rather than paler: filling the box lighter
  * would close the gap between the box and the name written on it, which is backwards. */
@@ -87,20 +108,30 @@ svg text { font-family: var(--mono); font-size: 14px; fill: var(--ink); }
 .nd.done.dim { opacity: 0.42; }
 .nd.sel { opacity: 1; filter: none; }
 
-.box rect { fill: none; stroke: var(--rule); }
-/* Takes a click anywhere in the box, and says so by tinting the ground it sits on. */
-.box rect.hit {
-  fill: var(--raised); fill-opacity: 0; stroke: none; cursor: pointer;
-  transition: fill-opacity 0.12s ease;
-  pointer-events: all;
-}
-.box rect.hit.on { fill-opacity: 0.55; }
-.box.file rect { stroke-dasharray: 3 3; }
-.box text { fill: var(--muted); font-size: 12.5px; cursor: pointer; }
-.box .mk { fill: currentColor; }
+/* Boxes nest, so every rule reaches its own box's parts and not its children's. A box at
+ * any depth is the same thing; the only thing depth changes is how tight the corner is and
+ * that anything inside another is drawn dashed. */
+.box > rect { fill: none; stroke: var(--rule); }
+.box.deep > rect { stroke-dasharray: 3 3; }
+.box > text { fill: var(--muted); font-size: 12.5px; cursor: pointer; }
+.box > text .mk { fill: currentColor; }
 .box.add { color: var(--add); } .box.del { color: var(--del); }
 .box.chg { color: var(--chg); } .box.aff { color: var(--muted); }
-.box.here rect { stroke: var(--lean); }
+
+/* Same weight and dash as the arrow that points at them, so the line and its target read
+ * as one thing rather than two that happen to share a colour. */
+.box.here > rect:not(.hit) { stroke: var(--lean); stroke-width: 1.8; stroke-dasharray: none; }
+.box.next > rect:not(.hit) { stroke: var(--path); stroke-width: 1.8; stroke-dasharray: 5 3; }
+
+/* Takes a click anywhere in the box, and says so by tinting the ground it sits on. Laid on
+ * with alpha rather than a flat colour, so a box inside a lit box adds to it instead of
+ * replacing it: the deepest place the pointer is in is the brightest thing on the page. */
+.box > rect.hit {
+  fill: var(--raised); fill-opacity: 0; stroke: none; cursor: pointer;
+  transition: fill-opacity 0.12s ease; pointer-events: all;
+}
+.box > rect.hit.on { fill-opacity: 0.4; }
+
 /* Lines are there to be read, never pressed: left alive they sit over the boxes and
  * swallow the pointer on its way to one. */
 .eg, .ec, .eh { pointer-events: none; }

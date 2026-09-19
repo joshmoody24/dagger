@@ -1,15 +1,15 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { select } from "d3-selection";
 import { zoom as zooming, zoomIdentity, zoomTransform } from "d3-zoom";
-import { MARK, NODE_H, TINT, shorten } from "./review.js";
+import { MARK, NODE_H, RADIUS, TINT, inside, shorten } from "./review.js";
 
 /* Breathing room around the whole drawing when it's sat in the window. */
 const EDGE = 24;
 /* How far in a reader can go. Past this the text is bigger than anything worth reading. */
 const CLOSEST = 4;
 
-/* The shape of the change: boxes for groups, boxes for files, a node for each definition,
- * and lines for what leans on what.
+/* The shape of the change: a box for every place code lives, nested as deep as the
+ * grouping goes, a node for each definition, and lines for what leans on what.
  *
  * Lines run upwards, because whatever holds something up is drawn above it. A line that has
  * to run the other way is something the reader will be asked to take on faith, so it swings
@@ -39,8 +39,11 @@ export function Graph(props) {
 
   const onPointerOver = (event) => {
     const node = event.target.closest(".nd");
-    const box = event.target.closest(".box.file");
-    setOver((node || box)?.dataset.file || null);
+    if (node) return setOver(node.dataset.file);
+    /* The innermost box wins on its own: a file's box is drawn over its group's, so this
+     * finds the file when the pointer is in one and the group when it's in the space
+     * around them. */
+    setOver(event.target.closest(".box")?.dataset.box || null);
   };
 
   const behaviour = zooming()
@@ -80,6 +83,45 @@ export function Graph(props) {
   /* The box holding whatever is being read stays lit, so a glance says where you are
    * without hunting for the one outlined node. */
   const holding = () => (props.review.definitions.get(props.here) || {}).file;
+
+  /* Where a definition sits, whether or not it has a node. A module is drawn as its file's
+   * box rather than a node of its own, so anything pointing at one has to point at the box
+   * — without this the arrow simply vanished whenever the reading passed through a module. */
+  const spotOf = (id) => {
+    const node = props.laid.at.get(id);
+    if (node) return { x: node.x, y: node.y, w: node.w, h: NODE_H };
+
+    const boxed = (box) => {
+      if (box.module && box.module.id === id) {
+        return { x: box.x, y: box.y, w: box.w, h: box.h };
+      }
+      for (const child of box.boxes) {
+        const found = boxed(child);
+        if (found) return found;
+      }
+      return null;
+    };
+    for (const box of props.laid.boxes) {
+      const found = boxed(box);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  /* Everything a box stands over: itself, its module's file, and the same again for every
+   * box inside it. A box lights for anything in any of them, which is what stacks the
+   * tints as you point deeper in. */
+  const covers = (box) =>
+    [box.key, (box.module || {}).file, ...box.boxes.flatMap(covers)].filter(Boolean);
+  const lit = (box) => covers(box).some((key) => key === over() || key === holding());
+
+  /* Where pressing a box takes you: its own module if it has one, else the first definition
+   * it holds at any depth. A place you can't point at reads as broken. */
+  const opens = (box) => {
+    if (box.module) return box.module.id;
+    for (const node of inside(box)) return node.id;
+    return null;
+  };
 
   const near = () => neighbours(props.review, props.here);
   const dimmed = (id) => near().size > 0 && !near().has(id);
@@ -142,26 +184,32 @@ export function Graph(props) {
         role="img"
         aria-label="What changed, and what holds up what"
       >
+        <defs>
+          <marker
+            id="tip"
+            viewBox="0 0 8 8"
+            refX="7"
+            refY="4"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M0,0 L8,4 L0,8 z" />
+          </marker>
+        </defs>
         <g ref={moving}>
           <For each={props.laid.boxes}>
             {(box) => (
-              <>
-                <g class="box">
-                  <rect x={box.x} y={box.y} width={box.w} height={box.h} rx="8" />
-                  <text x={box.x + 10} y={box.y + 16}>{box.label}</text>
-                </g>
-                <For each={box.files}>
-                  {(file) => (
-                    <FileBox
-                      file={file}
-                      here={props.here}
-                      over={over()}
-                      holds={holding() === file.key}
-                      onOpen={props.onOpen}
-                    />
-                  )}
-                </For>
-              </>
+              <Box
+                box={box}
+                deep={0}
+                radius={RADIUS.box}
+                here={props.here}
+                next={props.next}
+                lit={lit}
+                opens={opens}
+                onOpen={props.onOpen}
+              />
             )}
           </For>
 
@@ -175,6 +223,7 @@ export function Graph(props) {
                 definition={definition}
                 spot={props.laid.at.get(definition.id)}
                 here={props.here}
+                next={props.next}
                 read={props.read.has(definition.id)}
                 dim={dimmed(definition.id)}
                 file={definition.file}
@@ -182,6 +231,12 @@ export function Graph(props) {
               />
             )}
           </For>
+
+          {/* Where the reading goes next. The order is the whole point of the tool, and
+            * without this the graph shows where you are but not where you're being taken. */}
+          <Show when={spotOf(props.here) && spotOf(props.next)}>
+            <path class="up" d={onward(spotOf(props.here), spotOf(props.next))} />
+          </Show>
         </g>
       </svg>
 
@@ -192,39 +247,66 @@ export function Graph(props) {
   );
 }
 
-/* A file's box wears its module's name, because a module is its file: drawing a node inside
- * the box to stand for the box would be saying the same thing twice. */
-function FileBox(props) {
-  const module = () => props.file.module;
+/* A box, and whatever it holds — which is boxes, so this draws itself again one level in.
+ *
+ * There is no such thing here as a group or a file, only a place at some depth. Each takes
+ * a press, each lights when the pointer or the reading is anywhere inside it, and each that
+ * answers to a module wears that module's mark and its current-or-next outline. Because the
+ * tints are laid on with alpha, a box inside a lit box adds to it rather than replacing it,
+ * and the deepest place you're pointing is the brightest thing on the page.
+ */
+function Box(props) {
+  const module = () => props.box.module;
   const mine = () => module() && module().id === props.here;
+  const soon = () => module() && module().id === props.next;
+
+  const classes = () =>
+    ["box", props.deep ? "deep" : "", mine() ? "here" : "", soon() ? "next" : "",
+      module() ? TINT[module().mark] : ""]
+      .filter(Boolean)
+      .join(" ");
 
   return (
-    <g
-      class={`box file${mine() ? " here" : ""}${module() ? ` ${TINT[module().mark]}` : ""}`}
-      data-file={props.file.key}
-    >
-      {/* A module is the only definition with no node to press, so its whole box is the way
-        * in. This sits under everything else in the drawing, so lighting it up on hover
-        * tints the ground without touching what's drawn on top of it — and a click landing
-        * on a node inside reaches the node, never this. */}
-      <Show when={module()}>
+    <g class={classes()} data-box={props.box.key}>
+      <Show when={props.opens(props.box)}>
         <rect
-          class={`hit${props.over === props.file.key || props.holds ? " on" : ""}`}
-          x={props.file.x}
-          y={props.file.y}
-          width={props.file.w}
-          height={props.file.h}
-          rx="6"
-          onClick={() => props.onOpen(module().id)}
+          class={`hit${props.lit(props.box) ? " on" : ""}`}
+          x={props.box.x}
+          y={props.box.y}
+          width={props.box.w}
+          height={props.box.h}
+          rx={props.radius}
+          onClick={() => props.onOpen(props.opens(props.box))}
         />
       </Show>
-      <rect x={props.file.x} y={props.file.y} width={props.file.w} height={props.file.h} rx="6" />
-      <text x={props.file.x + 10} y={props.file.y + 15}>
+      <rect
+        x={props.box.x}
+        y={props.box.y}
+        width={props.box.w}
+        height={props.box.h}
+        rx={props.radius}
+      />
+      <text x={props.box.x + 10} y={props.box.y + 16}>
         <Show when={module()}>
           <tspan class="mk" font-weight="700">{MARK[module().mark]} </tspan>
         </Show>
-        {props.file.label}
+        {props.box.label}
       </text>
+
+      <For each={props.box.boxes}>
+        {(child) => (
+          <Box
+            box={child}
+            deep={props.deep + 1}
+            radius={Math.max(RADIUS.node, props.radius - RADIUS.step)}
+            here={props.here}
+            next={props.next}
+            lit={props.lit}
+            opens={props.opens}
+            onOpen={props.onOpen}
+          />
+        )}
+      </For>
     </g>
   );
 }
@@ -235,6 +317,7 @@ function Node(props) {
     ["nd",
       TINT[marking()],
       props.definition.id === props.here ? "sel" : "",
+      props.definition.id === props.next ? "next" : "",
       props.read ? "done" : "",
       props.dim ? "dim" : ""]
       .filter(Boolean)
@@ -251,7 +334,7 @@ function Node(props) {
       onClick={() => props.onOpen(props.definition.id)}
       onKeyDown={(event) => event.key === "Enter" && props.onOpen(props.definition.id)}
     >
-      <rect width={props.spot.w} height={NODE_H} rx="5" />
+      <rect width={props.spot.w} height={NODE_H} rx={RADIUS.node} />
       <text x="10" y="18.5">
         <tspan class="mk" font-weight="700">{MARK[marking()]}</tspan>
         <tspan class="nm" dx="6">{shorten(props.definition.name)}</tspan>
@@ -288,6 +371,29 @@ function neighbours(review, here) {
   }
   return near;
 }
+
+/* From the definition being read to the one after it: straight, between whichever pair of
+ * faces sits closest together. Picking a side by which way the target mostly lies gets it
+ * wrong whenever two boxes are roughly level or one wraps around the other — the line then
+ * sets off away from where it's going before crossing back. Trying all sixteen pairs and
+ * keeping the shortest is both simpler to say and always right. */
+function onward(from, to) {
+  let best = null;
+  for (const a of faces(from)) {
+    for (const b of faces(to)) {
+      const far = Math.hypot(b.x - a.x, b.y - a.y);
+      if (!best || far < best.far) best = { far, a, b };
+    }
+  }
+  return `M${best.a.x},${best.a.y} L${best.b.x},${best.b.y}`;
+}
+
+const faces = (box) => [
+  { x: box.x + box.w / 2, y: box.y },
+  { x: box.x + box.w / 2, y: box.y + box.h },
+  { x: box.x, y: box.y + box.h / 2 },
+  { x: box.x + box.w, y: box.y + box.h / 2 },
+];
 
 const bend = (up, down) => {
   const [x1, y1] = [up.x + up.w / 2, up.y + NODE_H];
