@@ -1,14 +1,15 @@
 //! Reads a Rust snapshot and reports what's defined in it.
 //!
-//! Binding is done by name alone, so a mention counts only when exactly one
-//! definition in the whole snapshot carries that name. Anything ambiguous is left
-//! out rather than guessed at, and everything it does report is stamped `naive` so
-//! nobody mistakes it for a compiler's word.
+//! Two tools, each doing what it's good at. `syn` parses the files, which is how the
+//! parts and their spans are worked out. rust-analyzer answers what refers to what,
+//! because that's a question about meaning rather than shape, and guessing it from
+//! names invents edges that aren't there.
 //!
-//! Only the files dagger hands over are reported on, though they're all parsed
-//! together so a mention can find its way to a definition in another file.
+//! rust-analyzer has to be on PATH. Without it there's nothing useful to report: a
+//! graph of made-up edges reads worse than no graph.
 
 mod items;
+mod lsp;
 mod modules;
 
 use anyhow::{Context, Result, bail};
@@ -16,8 +17,8 @@ use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, PartText, Span};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
 use dagger_protocol::{Note, Request, Response};
-use proc_macro2::TokenTree;
-use quote::ToTokens;
+use lsp::{Lines, Server};
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{self, Read};
 use std::ops::Range;
@@ -41,29 +42,28 @@ fn main() -> Result<()> {
 
 fn answer(request: Request) -> Result<Response> {
     match request {
-        Request::Extract { dir, files } => {
-            let (extraction, notes) = extract(Path::new(&dir), &files)?;
-            Ok(Response::Extracted { extraction, notes })
-        }
         Request::Describe => Ok(Response::Described {
             include: vec!["**/*.rs".to_string()],
             revisions: None,
         }),
+        Request::Extract { dir, files } => {
+            let (extraction, notes) = extract(Path::new(&dir), &files)?;
+            Ok(Response::Extracted { extraction, notes })
+        }
         Request::Materialize { .. } => bail!("this only reads snapshots, it doesn't lay them out"),
     }
 }
 
 struct Parsed {
     path: String,
-    source: String,
+    lines: Lines,
     found: Vec<items::Found>,
 }
 
-/// A file that won't parse is skipped and spoken about, rather than taking the whole
-/// snapshot down with it. Half a review beats none.
 fn extract(dir: &Path, files: &[String]) -> Result<(Extraction, Vec<Note>)> {
     let mut modules = modules::Modules::default();
     let mut notes = Vec::new();
+
     let parsed: Vec<Parsed> = files
         .iter()
         .filter(|path| path.ends_with(".rs"))
@@ -79,13 +79,14 @@ fn extract(dir: &Path, files: &[String]) -> Result<(Extraction, Vec<Note>)> {
         })
         .collect();
 
-    let occurrences: Vec<Occurrence> = parsed
+    let mut occurrences: Vec<Occurrence> = parsed
         .iter()
         .flat_map(|file| file.found.iter().map(|found| occurrence(file, found)))
         .collect();
 
-    let mentions = bind(&parsed, &occurrences);
+    let mentions = bind(dir, &parsed, &mut occurrences, &mut notes)?;
     notes.append(&mut modules.notes);
+
     Ok((
         Extraction {
             occurrences,
@@ -95,21 +96,24 @@ fn extract(dir: &Path, files: &[String]) -> Result<(Extraction, Vec<Note>)> {
     ))
 }
 
+/// A file that won't parse is skipped and spoken about, rather than taking the whole
+/// snapshot down with it. Half a review beats none.
 fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parsed> {
     let source =
         std::fs::read_to_string(dir.join(path)).with_context(|| format!("couldn't read {path}"))?;
     let file = syn::parse_file(&source).with_context(|| format!("couldn't parse {path}"))?;
     let scope = modules.path_of(dir, path);
+
     Ok(Parsed {
         path: path.to_string(),
         found: items::find(&file.items, &scope),
-        source,
+        lines: Lines::new(&source),
     })
 }
 
 fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
     let slice = |range: &Range<usize>| PartText {
-        text: file.source[range.clone()].to_string(),
+        text: file.lines.slice(range).to_string(),
         span: Span {
             start: range.start as u32,
             end: range.end as u32,
@@ -126,10 +130,7 @@ fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
     }
 
     Occurrence {
-        locator: Locator {
-            scope: found.scope.clone(),
-            name: found.name.clone(),
-        },
+        locator: locator(found),
         kind: found.kind.to_string(),
         file: file.path.clone(),
         parts,
@@ -137,65 +138,141 @@ fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
     }
 }
 
-/// Names that belong to exactly one definition. Anything shared is unbindable by
-/// name, so we say nothing rather than picking wrong.
-fn unambiguous(occurrences: &[Occurrence]) -> BTreeMap<&str, &Locator> {
-    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
-    for occurrence in occurrences {
-        *counts.entry(occurrence.locator.name.as_str()).or_default() += 1;
+fn locator(found: &items::Found) -> Locator {
+    Locator {
+        scope: found.scope.clone(),
+        name: found.name.clone(),
     }
-
-    occurrences
-        .iter()
-        .filter(|occurrence| counts[occurrence.locator.name.as_str()] == 1)
-        .map(|occurrence| (occurrence.locator.name.as_str(), &occurrence.locator))
-        .collect()
 }
 
-fn bind(parsed: &[Parsed], occurrences: &[Occurrence]) -> Vec<Mention> {
-    let known = unambiguous(occurrences);
+/// Asks rust-analyzer who refers to each definition, and what each one looks like from
+/// outside. One question per definition rather than per name mentioned, which keeps the
+/// conversation short enough to be worth having.
+fn bind(
+    dir: &Path,
+    parsed: &[Parsed],
+    occurrences: &mut [Occurrence],
+    notes: &mut Vec<Note>,
+) -> Result<Vec<Mention>> {
+    // Indexing is the slow part by a wide margin, so it's worth admitting to.
+    eprintln!("  waiting for rust-analyzer to index");
+    let mut server = Server::start(dir)?;
+    let count: usize = parsed.iter().map(|file| file.found.len()).sum();
+    eprintln!("  asking rust-analyzer about {count} definitions");
+    let root = dir.canonicalize()?;
+    let by_path: BTreeMap<&str, &Parsed> = parsed
+        .iter()
+        .map(|file| (file.path.as_str(), file))
+        .collect();
+
     let mut mentions = Vec::new();
+    let mut contracts: BTreeMap<Locator, String> = BTreeMap::new();
 
     for file in parsed {
-        let Ok(syntax) = syn::parse_file(&file.source) else {
-            continue;
-        };
-        let identifiers = idents(syntax.to_token_stream());
+        let uri = lsp::uri(&root.join(&file.path));
 
         for found in &file.found {
-            let extent = found.extent();
-            let from = Locator {
-                scope: found.scope.clone(),
-                name: found.name.clone(),
-            };
+            let (line, column) = file.lines.position(found.name_at.start);
+            let at = json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": column },
+            });
 
-            for (name, at) in &identifiers {
-                if !extent.contains(&at.start) || *name == found.name {
+            match server.request("textDocument/hover", at.clone()) {
+                Ok(hover) => {
+                    if let Some(contract) = signature(&hover) {
+                        contracts.insert(locator(found), contract);
+                    }
+                }
+                Err(error) => notes.push(Note {
+                    message: format!("couldn't ask about {}: {error:#}", found.name),
+                    file: Some(file.path.clone()),
+                }),
+            }
+
+            let mut question = at;
+            question["context"] = json!({ "includeDeclaration": false });
+            let referrers = match server.request("textDocument/references", question) {
+                Ok(referrers) => referrers,
+                Err(error) => {
+                    notes.push(Note {
+                        message: format!("couldn't find what uses {}: {error:#}", found.name),
+                        file: Some(file.path.clone()),
+                    });
                     continue;
                 }
-                let Some(to) = known.get(name.as_str()) else {
-                    continue;
-                };
-                let Some(part) = part_at(found, at.start) else {
-                    continue;
-                };
-                mentions.push(Mention {
-                    from: from.clone(),
-                    to: Target::Known((*to).clone()),
-                    site: Site {
-                        part,
-                        span: Span {
-                            start: at.start as u32,
-                            end: at.end as u32,
-                        },
-                        found_by: BinderId("naive".to_string()),
-                    },
-                });
-            }
+            };
+
+            mentions.extend(referring(&referrers, &root, &by_path, found));
         }
     }
 
-    mentions
+    for occurrence in occurrences.iter_mut() {
+        occurrence.contract = contracts.get(&occurrence.locator).cloned();
+    }
+
+    Ok(mentions)
+}
+
+/// Each place rust-analyzer found, turned into a mention from whichever definition
+/// encloses it. A reference from outside any definition we know about is dropped: there
+/// is nothing to hang it on.
+fn referring(
+    referrers: &serde_json::Value,
+    root: &Path,
+    by_path: &BTreeMap<&str, &Parsed>,
+    to: &items::Found,
+) -> Vec<Mention> {
+    let Some(places) = referrers.as_array() else {
+        return Vec::new();
+    };
+
+    places
+        .iter()
+        .filter_map(|place| {
+            let path = relative(place["uri"].as_str()?, root)?;
+            let file = by_path.get(path.as_str())?;
+            let line = place["range"]["start"]["line"].as_u64()? as u32;
+            let column = place["range"]["start"]["character"].as_u64()? as u32;
+            let at = file.lines.offset(line, column);
+
+            let from = innermost(file, at)?;
+            let part = part_at(from, at)?;
+
+            Some(Mention {
+                from: locator(from),
+                to: Target::Known(locator(to)),
+                site: Site {
+                    part,
+                    span: Span {
+                        start: at as u32,
+                        end: (at + to.name.len()) as u32,
+                    },
+                    found_by: BinderId("rust-analyzer".to_string()),
+                },
+            })
+        })
+        .collect()
+}
+
+fn relative(uri: &str, root: &Path) -> Option<String> {
+    let path = uri.strip_prefix("file://")?;
+    Some(
+        Path::new(path)
+            .strip_prefix(root)
+            .ok()?
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
+/// The tightest definition covering a spot, so a method's references land on the method
+/// rather than on whatever encloses it.
+fn innermost(file: &Parsed, at: usize) -> Option<&items::Found> {
+    file.found
+        .iter()
+        .filter(|found| found.extent().contains(&at))
+        .min_by_key(|found| found.extent().len())
 }
 
 fn part_at(found: &items::Found, at: usize) -> Option<Part> {
@@ -211,15 +288,27 @@ fn part_at(found: &items::Found, at: usize) -> Option<Part> {
     None
 }
 
-/// Every identifier in the file, with where it sits. Reading tokens rather than raw
-/// text keeps comments and string literals out of it.
-fn idents(tokens: proc_macro2::TokenStream) -> Vec<(String, Range<usize>)> {
-    tokens
-        .into_iter()
-        .flat_map(|tree| match tree {
-            TokenTree::Ident(ident) => vec![(ident.to_string(), ident.span().byte_range())],
-            TokenTree::Group(group) => idents(group.stream()),
-            _ => Vec::new(),
-        })
-        .collect()
+/// Hover is markdown with the definition fenced off in it. That block is the compiler's
+/// own account of what the thing looks like from outside, which is what a contract is.
+///
+/// The first block is the module it lives in, so the one wanted is the last: after it
+/// comes only documentation and layout trivia, neither fenced as rust.
+fn signature(hover: &serde_json::Value) -> Option<String> {
+    let markdown = hover["contents"]["value"].as_str()?;
+    let mut blocks = Vec::new();
+    let mut current: Option<Vec<&str>> = None;
+
+    for line in markdown.lines() {
+        match (&mut current, line.starts_with("```")) {
+            (None, true) if line.starts_with("```rust") => current = Some(Vec::new()),
+            (Some(code), true) => {
+                blocks.push(code.join("\n"));
+                current = None;
+            }
+            (Some(code), false) => code.push(line),
+            _ => {}
+        }
+    }
+
+    blocks.into_iter().rfind(|block| !block.is_empty())
 }

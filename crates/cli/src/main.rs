@@ -62,21 +62,40 @@ fn parse_args() -> Result<Args> {
     })
 }
 
+/// Progress goes to stderr, where it can't get mixed into the review itself. Reading two
+/// snapshots takes long enough that saying nothing looks like a hang.
+fn status(saying: &str) {
+    let mut err = std::io::stderr();
+    let _ = if err.is_terminal() {
+        writeln!(err, "\x1b[2m{saying}\x1b[0m")
+    } else {
+        writeln!(err, "{saying}")
+    };
+}
+
 fn main() -> Result<()> {
     let args = parse_args()?;
     let repo = std::env::current_dir()?;
     let config = Config::read(&repo)?;
 
     let claims = claims(&repo, &config)?;
-    let (before, after) = revisions(&repo, &config, &args)?;
+    let (before_rev, after_rev) = revisions(&repo, &config, &args)?;
+    status(&format!("comparing {before_rev} to {after_rev}"));
 
-    let before = lay_out(&repo, &config, &before)?;
-    let after = lay_out(&repo, &config, &after)?;
+    let before = lay_out(&repo, &config, &before_rev)?;
+    let after = lay_out(&repo, &config, &after_rev)?;
 
     let result = if args.explain {
         explain(&config, &claims, &after)
     } else {
-        compare(&repo, &config, &claims, &before, &after, &args)
+        compare(
+            &repo,
+            &config,
+            &claims,
+            (&before_rev, &before),
+            (&after_rev, &after),
+            &args,
+        )
     };
 
     clean_up(&before);
@@ -156,8 +175,8 @@ fn compare(
     repo: &Path,
     config: &Config,
     claims: &[Vec<String>],
-    before: &adapter::Snapshot,
-    after: &adapter::Snapshot,
+    before: (&str, &adapter::Snapshot),
+    after: (&str, &adapter::Snapshot),
     args: &Args,
 ) -> Result<()> {
     let (before, mut notes) = read(repo, config, claims, before)?;
@@ -192,7 +211,7 @@ fn read(
     repo: &Path,
     config: &Config,
     claims: &[Vec<String>],
-    snapshot: &adapter::Snapshot,
+    (rev, snapshot): (&str, &adapter::Snapshot),
 ) -> Result<(Extraction, Vec<Note>)> {
     let dir = &snapshot.dir;
     let assignment = assign::assign(
@@ -208,6 +227,11 @@ fn read(
         if files.is_empty() {
             continue;
         }
+        status(&format!(
+            "reading {} files of {rev} with {}",
+            files.len(),
+            extractor.adapter
+        ));
         let (mut extracted, mut said) = adapter::extract(repo, extractor, dir, files)?;
         merged.occurrences.append(&mut extracted.occurrences);
         merged.mentions.append(&mut extracted.mentions);

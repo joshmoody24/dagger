@@ -9,6 +9,8 @@ use syn::{Attribute, ImplItem, Item, TraitItem};
 pub struct Found {
     pub scope: Vec<String>,
     pub name: String,
+    /// Where the name itself sits, which is where rust-analyzer has to be asked about it.
+    pub name_at: Range<usize>,
     pub kind: &'static str,
     pub docs: Option<Range<usize>>,
     pub declaration: Range<usize>,
@@ -42,6 +44,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
         Item::Fn(function) => vec![Found {
             scope: scope.to_vec(),
             name: function.sig.ident.to_string(),
+            name_at: range(function.sig.ident.span()),
             kind: "fn",
             docs: docs(&function.attrs),
             declaration: range(function.sig.span()),
@@ -64,6 +67,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
             let mut found = vec![Found {
                 scope: scope.to_vec(),
                 name: item.ident.to_string(),
+                name_at: range(item.ident.span()),
                 kind: "trait",
                 docs: docs(&item.attrs),
                 declaration: range(item.ident.span()),
@@ -73,6 +77,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
                 TraitItem::Fn(function) => Some(Found {
                     scope: inner.clone(),
                     name: function.sig.ident.to_string(),
+                    name_at: range(function.sig.ident.span()),
                     kind: "trait fn",
                     docs: docs(&function.attrs),
                     declaration: range(function.sig.span()),
@@ -91,6 +96,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
                     ImplItem::Fn(function) => Some(Found {
                         scope: inner.clone(),
                         name: function.sig.ident.to_string(),
+                        name_at: range(function.sig.ident.span()),
                         kind: "method",
                         docs: docs(&function.attrs),
                         declaration: range(function.sig.span()),
@@ -99,6 +105,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
                     ImplItem::Const(constant) => Some(Found {
                         scope: inner.clone(),
                         name: constant.ident.to_string(),
+                        name_at: range(constant.ident.span()),
                         kind: "assoc const",
                         docs: docs(&constant.attrs),
                         declaration: range(constant.ident.span()),
@@ -130,6 +137,7 @@ fn whole(
     Found {
         scope: scope.to_vec(),
         name: ident.to_string(),
+        name_at: range(ident.span()),
         kind,
         docs,
         declaration: start..full.end,

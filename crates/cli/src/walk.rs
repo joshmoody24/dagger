@@ -52,7 +52,7 @@ pub fn walk(review: &Review, ordering: &Ordering, definitions: &[Definition]) ->
         }
     }
 
-    println!("\nthat's all of it.");
+    println!("\nreview complete");
     Ok(())
 }
 
