@@ -14,6 +14,7 @@
 
 mod symbols;
 
+use crate::symbols::Symbol;
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
@@ -425,11 +426,20 @@ fn definitions(
 ) -> Vec<Occurrence> {
     seen.values()
         .flat_map(|file| {
+            let wholes: Vec<Range<usize>> = file
+                .symbols
+                .iter()
+                .map(|symbol| symbol.whole.clone())
+                .collect();
+
             let symbols = file.symbols.iter().map(move |symbol| {
                 let mut parts =
                     BTreeMap::from([(Part::Type, pieces(file, &[symbol.declaration()]))]);
                 if let Some(body) = symbol.body() {
                     parts.insert(Part::Body, pieces(file, &[body]));
+                }
+                if let Some(told) = preamble(file, symbol, &wholes) {
+                    parts.insert(Part::Docs, pieces(file, &[told]));
                 }
 
                 let locator = locator(file, symbol);
@@ -480,13 +490,63 @@ fn module(file: &Opened) -> Option<Occurrence> {
     })
 }
 
+/// What was written just above a definition, which belongs to it.
+///
+/// A language server reports a definition from its declaration — `export interface Money {`
+/// — and says nothing about the comment above explaining what it's for. That comment then
+/// belongs to nothing, and falls through to the module, which ends up a pile of prose with
+/// gaps where the definitions it describes ought to be. It's documentation: the part of a
+/// definition written for whoever uses it, which the model already has a place for.
+///
+/// Told without knowing a single language's comment syntax: an unbroken run of lines
+/// directly above a definition that no other definition claims. Unclaimed is what makes it
+/// safe — a line belonging to something else stops the run, so this can never swallow the
+/// statement above. A blank line stops it too, which is how anybody writes: prose is
+/// against the thing it describes, and separated from whatever came before.
+fn preamble(file: &Opened, symbol: &Symbol, claimed: &[Range<usize>]) -> Option<Range<usize>> {
+    let text = file.lines.text();
+    let mut start = line_start(text, symbol.whole.start);
+
+    loop {
+        if start == 0 {
+            break;
+        }
+        let above = line_start(text, start - 1);
+        let line = &text[above..start];
+
+        if line.trim().is_empty() {
+            break;
+        }
+        if claimed
+            .iter()
+            .any(|range| range.start < start && range.end > above)
+        {
+            break;
+        }
+        start = above;
+    }
+
+    (start < line_start(text, symbol.whole.start)).then_some(start..symbol.whole.start)
+}
+
+fn line_start(text: &str, at: usize) -> usize {
+    text[..at].rfind('\n').map(|found| found + 1).unwrap_or(0)
+}
+
 /// The stretches of a file no definition covers, blank ones left out. A definition can't be
 /// asked to account for the space around it.
 fn leftovers(file: &Opened) -> Vec<Range<usize>> {
-    let mut claimed: Vec<Range<usize>> = file
+    let wholes: Vec<Range<usize>> = file
         .symbols
         .iter()
         .map(|symbol| symbol.whole.clone())
+        .collect();
+
+    let mut claimed: Vec<Range<usize>> = file
+        .symbols
+        .iter()
+        .flat_map(|symbol| preamble(file, symbol, &wholes))
+        .chain(wholes.iter().cloned())
         .collect();
     claimed.sort_by_key(|range| range.start);
 

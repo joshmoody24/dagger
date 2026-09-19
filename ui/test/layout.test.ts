@@ -13,8 +13,18 @@ const review = digest(raw);
 const laid = layout(review);
 const nodes = [...review.definitions.values()].filter((d) => d.kind !== "module");
 
-test("every definition worth reading is a step", () => {
-  assert.equal(review.steps.length, review.definitions.size);
+/* Two different things arrive: what there is to read, and what has to be on the page for
+ * the reading to make sense. Everything in the reading order is here to be drawn, and what
+ * isn't in it is the modules around the rest — never an ordinary definition quietly left
+ * out of the order. */
+test("everything to read is on the page, and the rest is modules", () => {
+  const ordered = new Set(review.steps.map((step) => step.definition));
+  for (const step of ordered) assert.ok(review.definitions.has(step));
+
+  for (const definition of review.definitions.values()) {
+    if (ordered.has(definition.id)) continue;
+    assert.equal(definition.kind, "module", `${definition.path} is on the page but never read`);
+  }
 });
 
 test("every definition but a module gets a place", () => {
