@@ -17,8 +17,15 @@ pub struct Assignment {
 }
 
 /// `claims` is one set of globs per extractor, already settled: whatever the repo
-/// asked for, or what the adapter said it reads.
-pub fn assign(ignore: &[String], claims: &[Vec<String>], dir: &Path) -> Result<Assignment> {
+/// asked for, or what the adapter said it reads. `listed` is what the snapshot adapter
+/// said is in there, which we trust over looking ourselves, since it's the only thing
+/// that knows a build directory from a source one.
+pub fn assign(
+    ignore: &[String],
+    claims: &[Vec<String>],
+    dir: &Path,
+    listed: Option<&[String]>,
+) -> Result<Assignment> {
     let ignore = patterns(ignore)?;
     let claims: Vec<Vec<Pattern>> = claims
         .iter()
@@ -30,7 +37,12 @@ pub fn assign(ignore: &[String], claims: &[Vec<String>], dir: &Path) -> Result<A
         ..Assignment::default()
     };
 
-    for file in files(dir)? {
+    let files = match listed {
+        Some(listed) => listed.to_vec(),
+        None => walked(dir)?,
+    };
+
+    for file in files {
         if ignore.iter().any(|pattern| pattern.matches(&file)) {
             assignment.ignored += 1;
             continue;
@@ -55,7 +67,7 @@ fn patterns(globs: &[String]) -> Result<Vec<Pattern>> {
         .collect()
 }
 
-fn files(dir: &Path) -> Result<Vec<String>> {
+fn walked(dir: &Path) -> Result<Vec<String>> {
     let mut found = Vec::new();
     walk(dir, dir, &mut found)?;
     found.sort();

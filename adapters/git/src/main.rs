@@ -3,6 +3,10 @@
 //! Runs in the repository it's reading, since a request only names a revision. Uses
 //! `git archive` rather than a checkout, so the user's working tree and index are
 //! never touched.
+//!
+//! The revision `current` means the files as they are right now, uncommitted edits
+//! and new files included. That one needs no copying: the repository is already the
+//! snapshot, and we just say which files count so that build output stays out.
 
 use anyhow::{Context, Result, bail};
 use dagger_protocol::{Request, Response};
@@ -29,11 +33,18 @@ fn main() -> Result<()> {
 
 fn answer(request: Request) -> Result<Response> {
     match request {
+        Request::Materialize { rev } if rev == CURRENT => Ok(Response::Materialized {
+            dir: std::env::current_dir()?.to_string_lossy().into_owned(),
+            temporary: false,
+            files: Some(current_files()?),
+        }),
         Request::Materialize { rev } => {
             let dir = materialize(&rev)?;
+            let files = Some(listing(&["ls-tree", "-r", "--name-only", "-z", &rev])?);
             Ok(Response::Materialized {
                 dir: dir.to_string_lossy().into_owned(),
                 temporary: true,
+                files,
             })
         }
         Request::Describe => Ok(Response::Described {
@@ -41,6 +52,41 @@ fn answer(request: Request) -> Result<Response> {
         }),
         Request::Extract { .. } => bail!("git only lays snapshots out, it doesn't read them"),
     }
+}
+
+/// Not a revision git knows about, so we answer it ourselves.
+const CURRENT: &str = "current";
+
+/// Tracked files plus anything new that isn't ignored, which is the same set git
+/// status talks about.
+fn current_files() -> Result<Vec<String>> {
+    listing(&[
+        "ls-files",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "-z",
+    ])
+}
+
+fn listing(args: &[&str]) -> Result<Vec<String>> {
+    let output = Command::new("git")
+        .args(args)
+        .output()
+        .context("couldn't run git")?;
+    if !output.status.success() {
+        bail!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    Ok(String::from_utf8(output.stdout)?
+        .split('\0')
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect())
 }
 
 fn materialize(rev: &str) -> Result<PathBuf> {

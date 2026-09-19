@@ -53,6 +53,12 @@ pub enum Response {
         /// Whether dagger should delete the directory when it's done. An adapter that
         /// pointed at a path it doesn't own says false.
         temporary: bool,
+        /// What's in there worth reading, if the adapter knows. Left out means "have a
+        /// look yourself", which is the only option when the directory is just a
+        /// directory. A version control adapter does know, and saying so is how
+        /// ignored files stay out without every repo listing its build directory.
+        #[serde(default)]
+        files: Option<Vec<String>>,
     },
     Extracted {
         extraction: Extraction,

@@ -6,8 +6,10 @@
 mod adapter;
 mod assign;
 mod config;
+mod diff;
 mod fallback;
 mod report;
+mod walk;
 
 use anyhow::{Result, bail};
 use config::Config;
@@ -15,7 +17,7 @@ use dagger_core::matching::{Extraction, match_snapshots};
 use dagger_core::order::order;
 use dagger_core::review::review;
 use dagger_protocol::Note;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::Path;
 
 struct Args {
@@ -23,19 +25,22 @@ struct Args {
     after: String,
     json: bool,
     explain: bool,
+    list: bool,
 }
 
 fn parse_args() -> Result<Args> {
     let mut positional = Vec::new();
     let mut json = false;
     let mut explain = false;
+    let mut list = false;
 
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--json" => json = true,
             "--explain" => explain = true,
+            "--list" => list = true,
             "-h" | "--help" => {
-                println!("dagger [--json] [--explain] [<before> <after>]");
+                println!("dagger [--json] [--explain] [--list] [<before> <after>]");
                 std::process::exit(0);
             }
             flag if flag.starts_with('-') => bail!("don't know the flag {flag}"),
@@ -54,6 +59,7 @@ fn parse_args() -> Result<Args> {
         after,
         json,
         explain,
+        list,
     })
 }
 
@@ -68,9 +74,9 @@ fn main() -> Result<()> {
     let after = lay_out(&repo, &config, &args.after)?;
 
     let result = if args.explain {
-        explain(&config, &claims, &after.dir)
+        explain(&config, &claims, &after)
     } else {
-        compare(&repo, &config, &claims, &before.dir, &after.dir, args.json)
+        compare(&repo, &config, &claims, &before, &after, &args)
     };
 
     clean_up(&before);
@@ -96,8 +102,13 @@ fn claims(repo: &Path, config: &Config) -> Result<Vec<Vec<String>>> {
 
 /// Who ended up with what, so a surprising assignment can be looked at instead of
 /// guessed at.
-fn explain(config: &Config, claims: &[Vec<String>], dir: &Path) -> Result<()> {
-    let assignment = assign::assign(&config.review.ignore, claims, dir)?;
+fn explain(config: &Config, claims: &[Vec<String>], snapshot: &adapter::Snapshot) -> Result<()> {
+    let assignment = assign::assign(
+        &config.review.ignore,
+        claims,
+        &snapshot.dir,
+        snapshot.files.as_deref(),
+    )?;
 
     for ((extractor, claim), files) in config
         .extractors
@@ -127,9 +138,9 @@ fn compare(
     repo: &Path,
     config: &Config,
     claims: &[Vec<String>],
-    before: &Path,
-    after: &Path,
-    json: bool,
+    before: &adapter::Snapshot,
+    after: &adapter::Snapshot,
+    args: &Args,
 ) -> Result<()> {
     let (before, mut notes) = read(repo, config, claims, before)?;
     let (after, mut later) = read(repo, config, claims, after)?;
@@ -139,7 +150,7 @@ fn compare(
     let review = review(&matched.definitions, &matched.references);
     let ordering = order(&review, &matched.definitions);
 
-    if json {
+    if args.json {
         let _ = writeln!(
             std::io::stdout().lock(),
             "{}",
@@ -150,6 +161,9 @@ fn compare(
         );
     } else {
         report::print(&review, &ordering, &matched.definitions, &notes);
+        if !args.list && std::io::stdout().is_terminal() {
+            walk::walk(&review, &ordering, &matched.definitions)?;
+        }
     }
     Ok(())
 }
@@ -160,9 +174,15 @@ fn read(
     repo: &Path,
     config: &Config,
     claims: &[Vec<String>],
-    dir: &Path,
+    snapshot: &adapter::Snapshot,
 ) -> Result<(Extraction, Vec<Note>)> {
-    let assignment = assign::assign(&config.review.ignore, claims, dir)?;
+    let dir = &snapshot.dir;
+    let assignment = assign::assign(
+        &config.review.ignore,
+        claims,
+        dir,
+        snapshot.files.as_deref(),
+    )?;
     let mut merged = fallback::extract(dir, &assignment.fallback);
     let mut notes = Vec::new();
 
@@ -195,6 +215,7 @@ fn lay_out(repo: &Path, config: &Config, rev: &str) -> Result<adapter::Snapshot>
             Ok(adapter::Snapshot {
                 dir,
                 temporary: false,
+                files: None,
             })
         }
     }

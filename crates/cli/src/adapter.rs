@@ -65,10 +65,12 @@ pub fn describe(repo: &Path, extractor: &Extractor) -> Result<Vec<String>> {
     }
 }
 
-/// A revision sitting on disk, and whether clearing it up is our job.
+/// A revision sitting on disk, whether clearing it up is our job, and what the
+/// adapter says is in there. No listing means we have to look for ourselves.
 pub struct Snapshot {
     pub dir: PathBuf,
     pub temporary: bool,
+    pub files: Option<Vec<String>>,
 }
 
 pub fn materialize(repo: &Path, snapshots: &Adapter, rev: &str) -> Result<Snapshot> {
@@ -76,9 +78,14 @@ pub fn materialize(repo: &Path, snapshots: &Adapter, rev: &str) -> Result<Snapsh
         rev: rev.to_string(),
     };
     match ask(repo, &snapshots.adapter, &snapshots.args, &request)? {
-        Response::Materialized { dir, temporary } => Ok(Snapshot {
+        Response::Materialized {
+            dir,
+            temporary,
+            files,
+        } => Ok(Snapshot {
             dir: PathBuf::from(dir),
             temporary,
+            files,
         }),
         Response::Failed { message } => bail!("couldn't lay out {rev}: {message}"),
         other => bail!(

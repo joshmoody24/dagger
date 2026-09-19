@@ -8,7 +8,7 @@ use std::io::Write;
 
 /// A one-character shorthand for what happened, borrowed from the mock: additions and
 /// removals stand out, and a contract change is louder than a body change.
-fn glyph(change: &Change) -> char {
+pub fn glyph(change: &Change) -> char {
     match change {
         Change::Added => '+',
         Change::Removed => '-',
@@ -19,7 +19,7 @@ fn glyph(change: &Change) -> char {
     }
 }
 
-fn name(definition: &Definition) -> String {
+pub fn name(definition: &Definition) -> String {
     let occurrence = definition.sides.latest();
     let mut path = occurrence.locator.scope.clone();
     path.push(occurrence.locator.name.clone());
