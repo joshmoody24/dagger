@@ -5,6 +5,7 @@
 
 mod adapter;
 mod assign;
+mod completeness;
 mod config;
 mod diff;
 mod fallback;
@@ -196,13 +197,21 @@ fn compare(
     let changed = differing(before.1, after.1)?;
     status(&format!("{} files differ", changed.len()));
 
+    let (before_dir, after_dir) = (before.1.dir.clone(), after.1.dir.clone());
     let (before, mut notes) = read(repo, config, claims, before, &changed)?;
     let (after, mut later) = read(repo, config, claims, after, &changed)?;
     notes.append(&mut later);
 
     let matched = match_snapshots(before, after);
-    let review = review(&matched.definitions, &matched.references);
+    let mut review = review(&matched.definitions, &matched.references);
     let ordering = order(&review, &matched.definitions);
+
+    review.diagnostics.extend(completeness::check(
+        &before_dir,
+        &after_dir,
+        &changed,
+        &matched.definitions,
+    ));
 
     if args.json {
         // The definitions belong in the output too: everything else talks in identities,

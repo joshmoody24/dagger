@@ -19,4 +19,8 @@ pub enum Diagnostic {
     },
     /// An extractor reported a mention coming from a definition it never reported.
     MentionFromNowhere { from: Locator },
+    /// Lines that differ between the snapshots but sit inside no definition, so nothing
+    /// in the review accounts for them. Imports, exports, and whatever else an extractor
+    /// walked past. A reader who trusts the review would never learn these changed.
+    Unattributed { file: String, lines: usize },
 }
