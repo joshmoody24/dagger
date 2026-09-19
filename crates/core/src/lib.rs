@@ -2,6 +2,7 @@ pub mod change;
 pub mod diagnostic;
 pub mod matching;
 pub mod model;
+pub mod order;
 pub mod propagate;
 pub mod reference;
 pub mod review;

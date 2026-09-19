@@ -1,5 +1,6 @@
 use dagger_core::change::Change;
 use dagger_core::model::{Definition, Identity, Part};
+use dagger_core::order::Ordering;
 use dagger_core::review::Review;
 use dagger_protocol::Note;
 use std::collections::BTreeMap;
@@ -27,7 +28,7 @@ fn name(definition: &Definition) -> String {
 
 /// Writing rather than printing, because a reader quitting out of a pager closes the
 /// pipe, and that shouldn't look like a crash.
-pub fn print(review: &Review, definitions: &[Definition], notes: &[Note]) {
+pub fn print(review: &Review, ordering: &Ordering, definitions: &[Definition], notes: &[Note]) {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     let by_identity: BTreeMap<Identity, &Definition> = definitions
@@ -50,14 +51,20 @@ pub fn print(review: &Review, definitions: &[Definition], notes: &[Note]) {
 
     let _ = writeln!(
         out,
-        "{} definitions, {} to read ({} changed, {} knocked on)",
+        "{} definitions, {} to read ({} changed, {} affected)",
         definitions.len(),
         review.members.len(),
         changed,
         review.affected.len()
     );
+    let _ = writeln!(
+        out,
+        "at most {} to hold in mind, {} taken on faith, {} jumps between files\n",
+        ordering.cost.peak_open, ordering.cost.taken_on_faith, ordering.cost.jumps
+    );
 
-    for identity in &review.members {
+    for (step, place) in ordering.steps.iter().zip(1..) {
+        let identity = &step.definition;
         let Some(definition) = by_identity.get(identity) else {
             continue;
         };
@@ -65,14 +72,19 @@ pub fn print(review: &Review, definitions: &[Definition], notes: &[Note]) {
             Some(change) if change.worth_reading() => glyph(change),
             _ => '=',
         };
-        let knocked_on = if review.affected.contains(identity) {
-            " (knocked on)"
+        let affected = if review.affected.contains(identity) {
+            " (affected)"
         } else {
             ""
         };
+        let faith = if step.on_faith.is_empty() {
+            String::new()
+        } else {
+            format!(" (leans on {} still to come)", step.on_faith.len())
+        };
         let _ = writeln!(
             out,
-            "  {mark} {:<44} {}{knocked_on}",
+            "{place:>3}. {mark} {:<44} {}{affected}{faith}",
             name(definition),
             definition.sides.latest().file
         );

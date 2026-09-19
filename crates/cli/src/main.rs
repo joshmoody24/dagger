@@ -12,6 +12,7 @@ mod report;
 use anyhow::{Result, bail};
 use config::Config;
 use dagger_core::matching::{Extraction, match_snapshots};
+use dagger_core::order::order;
 use dagger_core::review::review;
 use dagger_protocol::Note;
 use std::io::Write;
@@ -136,15 +137,19 @@ fn compare(
 
     let matched = match_snapshots(before, after);
     let review = review(&matched.definitions, &matched.references);
+    let ordering = order(&review, &matched.definitions);
 
     if json {
         let _ = writeln!(
             std::io::stdout().lock(),
             "{}",
-            serde_json::to_string_pretty(&review)?
+            serde_json::to_string_pretty(&serde_json::json!({
+                "review": review,
+                "ordering": ordering,
+            }))?
         );
     } else {
-        report::print(&review, &matched.definitions, &notes);
+        report::print(&review, &ordering, &matched.definitions, &notes);
     }
     Ok(())
 }
