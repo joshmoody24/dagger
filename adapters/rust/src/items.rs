@@ -30,6 +30,18 @@ impl Found {
         start..end
     }
 
+    /// Whether a language server can be asked about this by name.
+    ///
+    /// A module and an implementation block are things a reader looks at, but not things
+    /// code refers to: nothing writes the name of a file, and nothing calls an `impl`.
+    /// Neither has a name written down to point at either, so asking about one lands on
+    /// whatever happens to be nearby — for an `impl` that's the type it's about, which
+    /// comes back with the type's documentation and the type's callers, both filed under
+    /// the wrong definition.
+    pub fn referenceable(&self) -> bool {
+        !matches!(self.kind, "module" | "impl")
+    }
+
     pub fn part_at(&self, at: usize) -> Option<Part> {
         // A declaration wins where parts overlap: it's the half a caller can see, and the
         // question being asked is whether a caller could be broken.

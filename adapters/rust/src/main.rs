@@ -189,7 +189,7 @@ fn bind(
     for file in parsed {
         let uri = lsp::uri(&root.join(&file.path));
 
-        for found in &file.found {
+        for found in file.found.iter().filter(|found| found.referenceable()) {
             let (line, column) = file.lines.position(found.name_at.start);
             let at = json!({
                 "textDocument": { "uri": uri },
