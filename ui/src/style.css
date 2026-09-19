@@ -58,6 +58,14 @@ main { flex: 1; min-height: 0; display: flex; }
   pointer-events: none; display: flex; align-items: center; gap: 4px;
 }
 svg text { font-family: var(--mono); font-size: 14px; fill: var(--ink); }
+/* Words are never the answer to "what is under the pointer", so they don't get asked. Left
+ * in, every letter of every name is another thing to test on each move of the mouse. */
+svg text, svg tspan, svg title { pointer-events: none; }
+
+/* The layer everything is drawn on. Held by the compositor so a drag moves it rather than
+ * redrawing it, and anchored top-left because a CSS transform on an SVG group otherwise
+ * turns about its middle. */
+.canvas svg > g { will-change: transform; transform-origin: 0 0; }
 
 /* What happened to a definition is the first thing about it, so it colours the node's edge
  * and the mark it wears. The body of the node stays plain: a wall of tinted boxes says the

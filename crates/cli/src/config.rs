@@ -25,9 +25,13 @@ pub struct Config {
 pub struct GroupingConfig {
     /// What a reader would call it: "package", "crate", "service".
     pub name: String,
-    /// A file whose nearest containing directory is the group. `BUILD.bazel` for a bazel
+    /// Files whose nearest containing directory is the group. `BUILD.bazel` for a bazel
     /// package, `Cargo.toml` for a crate, `package.json` for a workspace package.
-    pub marker: String,
+    ///
+    /// Several, because one repository is often several kinds of thing at once — this one
+    /// is Rust crates with a TypeScript package inside it — and a reader wants each drawn
+    /// as whatever it actually is. The nearest marker of any kind wins, so they still nest.
+    pub markers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

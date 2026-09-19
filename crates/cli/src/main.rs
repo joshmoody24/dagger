@@ -227,20 +227,24 @@ fn compare(
         // and without these there's nothing to turn one back into a name, a file, or the
         // text a reader came to see.
         //
-        // Only the ones in the review, though. Handing over every definition means handing
-        // over the whole repository twice, since the fallback reading holds a copy of each
-        // file it covers whether anything changed in it or not.
-        let worth_reading: Vec<_> = matched
+        // Only what the page will draw, though — the members and the modules around them.
+        // Handing over every definition means handing over the whole repository twice, since
+        // the fallback reading holds a copy of each file it covers whether anything changed
+        // in it or not.
+        let shown: Vec<_> = matched
             .definitions
             .iter()
-            .filter(|definition| review.members.contains(&definition.identity))
+            .filter(|definition| {
+                review.members.contains(&definition.identity)
+                    || review.context.contains(&definition.identity)
+            })
             .collect();
 
         let _ = writeln!(
             std::io::stdout().lock(),
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
-                "definitions": worth_reading,
+                "definitions": shown,
                 "review": review,
                 "ordering": ordering,
                 "grouping": grouping,

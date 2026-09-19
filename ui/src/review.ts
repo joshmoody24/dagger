@@ -66,6 +66,12 @@ export const shorten = (name: string) =>
  * is the space either side plus the mark and the gap after it. */
 export const widthOf = (text: string) => Math.ceil(shorten(text).length * CHAR) + 34;
 
+/* Everything with no package above it: a script at the top of the repository, a config
+ * file. They have nothing to do with each other, which is the point of keeping them in one
+ * place — a reader already looking at odds and ends may as well see the rest of them than
+ * keep coming back between packages. */
+const MISC = "misc";
+
 /* What to call a module whose own definition isn't in this review, so its name never got
  * reported. The file it lives in is the best guess left, minus the extension — which is
  * about the file on disk, not about the code. */
@@ -222,7 +228,7 @@ export function layout(review: Review): Laid {
     return sized({
       key: groupPath,
       module: root,
-      label: root ? root.name : groupPath || "elsewhere",
+      label: root ? root.name : groupPath || MISC,
       rows: [],
       lanes: lanes.filter(Boolean),
     });

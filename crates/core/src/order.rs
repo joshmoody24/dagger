@@ -228,6 +228,7 @@ mod tests {
                 .collect(),
             affected: BTreeSet::new(),
             members: (0..count).map(Identity).collect(),
+            context: BTreeSet::new(),
             edges: leans
                 .iter()
                 .map(|(from, to)| Edge {

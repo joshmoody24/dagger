@@ -1,4 +1,4 @@
-//! Working out which group each definition is in, from a marker file.
+//! Working out which group each definition is in, from marker files.
 //!
 //! Almost every real grouping turns out to be "the nearest directory above this one holding
 //! a particular file". A bazel package is the nearest `BUILD.bazel`, a crate the nearest
@@ -23,7 +23,7 @@ pub fn of(config: &GroupingConfig, dir: &Path, definitions: &[Definition]) -> Gr
             let file = &definition.sides.latest().file;
             let path = known
                 .entry(file.clone())
-                .or_insert_with(|| group_of(&config.marker, dir, file))
+                .or_insert_with(|| group_of(&config.markers, dir, file))
                 .clone();
             (definition.identity, path)
         })
@@ -35,21 +35,36 @@ pub fn of(config: &GroupingConfig, dir: &Path, definitions: &[Definition]) -> Gr
     }
 }
 
-/// The directory of the nearest marker at or above the file, as the group's path. A file
-/// with no marker above it belongs to no group, which is how the outermost odds and ends end
-/// up outside every box rather than in a pretend one.
-fn group_of(marker: &str, dir: &Path, file: &str) -> GroupPath {
+/// The directory of the nearest marker at or above the file, as the group's path.
+///
+/// Where nothing says otherwise, a file's own directory is its group. Plenty of code isn't
+/// packaged at all — a repository of C with no manifest anywhere in it — and left ungrouped
+/// every file in it would sit in one bin, which tells a reader nothing about what's near
+/// what. A directory is a weaker claim than a package, but it's the one people make when
+/// they put files beside each other.
+///
+/// The odds and ends at the top of a repository fall out of the same rule: they share the
+/// directory above them, which is nothing, so they're read together. They have nothing to
+/// do with each other, and that's the reason to see them in one sitting rather than to
+/// keep coming back to them between packages.
+fn group_of(markers: &[String], dir: &Path, file: &str) -> GroupPath {
     let mut at = Path::new(file).parent();
 
     while let Some(here) = at {
-        if dir.join(here).join(marker).exists() {
-            return here
-                .components()
-                .map(|part| part.as_os_str().to_string_lossy().into_owned())
-                .collect();
+        if markers
+            .iter()
+            .any(|marker| dir.join(here).join(marker).exists())
+        {
+            return named(here);
         }
         at = here.parent();
     }
 
-    Vec::new()
+    Path::new(file).parent().map(named).unwrap_or_default()
+}
+
+fn named(dir: &Path) -> GroupPath {
+    dir.components()
+        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+        .collect()
 }

@@ -20,5 +20,5 @@ settings = { server = ["tsc", "--lsp", "--stdio"] }
 ignore = ["Cargo.lock", "flake.lock", "dagger-demo.html"]
 
 [[groupings]]
-name = "crate"
-marker = "Cargo.toml"
+name = "package"
+markers = ["Cargo.toml", "package.json"]

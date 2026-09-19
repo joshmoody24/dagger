@@ -31,10 +31,21 @@ export function App(props) {
   const shut = () => !wide() && setSheet("closed");
 
   const steps = () => review().steps;
-  const here = () => (steps()[at()] || {}).definition;
+
+  /* What's being looked at, which isn't always a step.
+   *
+   * Most of the page is the reading order, and `at` is where in it you are. But a module
+   * that didn't itself change is on the page without being in that order — it's the box
+   * around things that did — and picking one has to show it rather than quietly show
+   * something else. So the reading has a position, and looking has a subject, and stepping
+   * puts the two back together. */
+  const [aside, setAside] = createSignal(null);
+  const here = () => aside() ?? (steps()[at()] || {}).definition;
   const next = () => (steps()[at() + 1] || {}).definition;
+  const stepping = () => aside() === null;
 
   const step = (by) => {
+    setAside(null);
     setAt((was) => Math.min(Math.max(was + by, 0), steps().length - 1));
     open();
   };
@@ -47,7 +58,12 @@ export function App(props) {
     });
   const goTo = (id) => {
     const found = steps().findIndex((step) => step.definition === id);
-    if (found >= 0) setAt(found);
+    if (found >= 0) {
+      setAside(null);
+      setAt(found);
+    } else {
+      setAside(id);
+    }
     open();
   };
 
@@ -111,7 +127,8 @@ export function App(props) {
         </div>
         <Reading
           review={review()}
-          step={steps()[at()]}
+          here={here()}
+          step={stepping() ? steps()[at()] : undefined}
           at={at()}
           onStep={step}
           onRead={() => { markRead(); step(1); }}

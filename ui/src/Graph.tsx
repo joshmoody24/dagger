@@ -48,7 +48,14 @@ export function Graph(props) {
 
   const behaviour = zooming()
     .translateExtent([[0, 0], [props.laid.w, props.laid.h]])
-    .on("zoom", (event) => moving.setAttribute("transform", event.transform));
+    /* Moved with a CSS transform rather than the SVG attribute. The attribute makes the
+     * engine redraw every element under it — a few hundred shapes and all their text,
+     * re-shaped at the new scale — for each frame of a drag. A CSS transform on a layer
+     * the compositor already holds is a blit, and only settles back to sharp text when
+     * the gesture stops. Chrome hides the difference; WebKit does not. */
+    .on("zoom", ({ transform }) => {
+      moving.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`;
+    });
 
   const pane = () => frame.getBoundingClientRect();
 

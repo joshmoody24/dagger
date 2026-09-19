@@ -29,11 +29,7 @@ async function load() {
     return said.json();
   }
 
-  const said = await tauri.core.invoke("review", {
-    repo: await tauri.core.invoke("repo"),
-    before: null,
-    after: null,
-  });
+  const said = await tauri.core.invoke("review", await tauri.core.invoke("opened"));
   return JSON.parse(said);
 }
 

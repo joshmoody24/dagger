@@ -1,14 +1,35 @@
-import { For, Show } from "solid-js";
+import { createEffect, For, Show } from "solid-js";
 import { MARK, TINT, broke, compare, stitch, tokens } from "./review.ts";
 
 /* The definition in front of the reader: what it is, why it's here, and how it changed. */
 export function Reading(props) {
-  const definition = () => props.review.definitions.get(props.step && props.step.definition);
+  const definition = () => props.review.definitions.get(props.here);
   const leans = () =>
     props.review.edges.filter((edge) => edge.from === definition().id).map((edge) => edge.to);
 
   const because = () => leans().filter((id) => broke(props.review, id));
   const uses = () => leans().filter((id) => !broke(props.review, id));
+
+  let sheet: HTMLDivElement | undefined;
+
+  /* A long definition with one line changed near the bottom opens showing none of it. The
+   * top of the sheet says what this is and why it's here, which is worth seeing, so the
+   * first changed line is brought just under that rather than to the top of the pane. */
+  createEffect(() => {
+    const here = definition();
+    if (!here || !sheet) return;
+
+    queueMicrotask(() => {
+      const changed = sheet?.querySelector(".ln.a, .ln.r");
+      if (!changed) {
+        if (sheet) sheet.scrollTop = 0;
+        return;
+      }
+      const above = sheet!.getBoundingClientRect().top;
+      const onto = changed.getBoundingClientRect().top;
+      sheet!.scrollTop += onto - above - 12;
+    });
+  });
 
   return (
     <Show when={definition()}>
@@ -22,7 +43,7 @@ export function Reading(props) {
           <button class="ib grip" onClick={props.onClose} aria-label="Close">×</button>
         </div>
 
-        <div class="sb">
+        <div class="sb" ref={sheet}>
           {/* What a definition is comes from a fixed set, so it reads as a label rather than
             * as more of the sentence the path is. */}
           <p class="file">
@@ -96,7 +117,9 @@ function Names(props) {
       .filter(Boolean)
       .map((definition) => ({
         definition,
-        soon: props.step.on_faith.includes(definition.id),
+        /* Only the reading order can say whether something is being taken on faith. Looked
+         * at on its own, out of order, there's no order for it to be out of. */
+        soon: (props.step?.on_faith || []).includes(definition.id),
       }));
 
   return (

@@ -24,7 +24,17 @@ pub struct Review {
     pub changes: BTreeMap<Identity, Change>,
     /// Didn't change, but sits downstream of something that did.
     pub affected: BTreeSet<Identity>,
+    /// Worth reading: what changed, and what a change reached.
     pub members: BTreeSet<Identity>,
+    /// Not worth reading, but the reading doesn't make sense without it on the page.
+    ///
+    /// A module is where its definitions live, and a page draws it as the box around them.
+    /// Left out when nothing about the module itself changed, that box stands for nothing —
+    /// it can't be pointed at, and an edge that ends at it has nowhere to land. Putting it
+    /// among the members instead would mean asking somebody to read a file's imports
+    /// because something else in the file changed, which is a waste of the one thing this
+    /// tool is trying to save.
+    pub context: BTreeSet<Identity>,
     pub edges: Vec<Edge>,
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -50,12 +60,17 @@ pub fn review(definitions: &[Definition], references: &[Reference]) -> Review {
         .chain(affected.iter().copied())
         .collect();
 
-    let edges = project(&members, references);
+    let context = surrounding(definitions, &members);
+    /* Edges are routed between everything the page will draw, members and context alike:
+     * a module left out of the routing loses every dependency that ran through it. */
+    let shown: BTreeSet<Identity> = members.union(&context).copied().collect();
+    let edges = project(&shown, references);
 
     Review {
         changes,
         affected,
         members,
+        context,
         edges,
         diagnostics,
     }
@@ -77,6 +92,26 @@ fn dependencies(references: &[Reference]) -> BTreeMap<Identity, Vec<Identity>> {
 
 /// Walk out from each member, stepping over anything the reader won't see, so two
 /// changed definitions joined by an untouched helper still look joined.
+/// The modules the members live in, where they aren't members already.
+///
+/// Every definition sits in a file, and a file is a module somebody wrote. Whether that
+/// module changed has nothing to do with whether it needs to be on the page.
+fn surrounding(definitions: &[Definition], members: &BTreeSet<Identity>) -> BTreeSet<Identity> {
+    let files: BTreeSet<&str> = definitions
+        .iter()
+        .filter(|def| members.contains(&def.identity))
+        .map(|def| def.sides.latest().file.as_str())
+        .collect();
+
+    definitions
+        .iter()
+        .filter(|def| def.sides.latest().kind == "module")
+        .filter(|def| !members.contains(&def.identity))
+        .filter(|def| files.contains(def.sides.latest().file.as_str()))
+        .map(|def| def.identity)
+        .collect()
+}
+
 fn project(members: &BTreeSet<Identity>, references: &[Reference]) -> Vec<Edge> {
     let dependencies = dependencies(references);
     let mut edges = Vec::new();

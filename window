@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
 # Opens the window on a repository, building whatever is out of date first.
 #
-#   ./window                 read this repository's working changes
-#   ./window ../redo         read another one
+#   ./window                       this repository's working changes
+#   ./window HEAD~1 HEAD           some other pair, as the command line takes them
+#   ./window ../redo               another repository
+#   ./window ../redo HEAD~1 HEAD   both
 #
 # The window shells out to dagger, so the tool built here is put on PATH ahead of any
 # installed one: a window built from this repository should read with the tool from it.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-repo="$(cd "${1:-.}" && pwd)"
+# A directory first means another repository; anything else is revisions, the same pair
+# dagger itself takes.
+repo="."
+if [ $# -gt 0 ] && [ -d "$1" ]; then
+  repo="$1"
+  shift
+fi
+repo="$(cd "$repo" && pwd)"
+
+reading=()
+if [ $# -eq 2 ]; then
+  reading=(--before "$1" --after "$2")
+elif [ $# -ne 0 ]; then
+  echo "name two revisions or none: ./window [<repo>] [<before> <after>]" >&2
+  exit 1
+fi
+
 port=1420
 
 cargo build --workspace --quiet
@@ -33,7 +51,7 @@ if ! serving; then
 fi
 
 # The webview and its plumbing come from the dev shell, so the window has to run inside it.
-inside="PATH=$PWD/target/debug:\$PATH ./ui/src-tauri/target/debug/dagger-ui --repo '$repo'"
+inside="PATH=$PWD/target/debug:\$PATH ./ui/src-tauri/target/debug/dagger-ui --repo '$repo' ${reading[*]}"
 if [ -n "${IN_NIX_SHELL:-}" ]; then
   eval "$inside"
 else

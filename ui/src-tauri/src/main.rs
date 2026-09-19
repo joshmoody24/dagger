@@ -15,22 +15,34 @@ use std::process::Command;
 /// `repo` is the directory to read, which is also where dagger looks for its own
 /// configuration. Revisions are left to dagger when the caller doesn't name any: it knows
 /// whether there's unfinished work worth looking at.
+/// Reading takes the better part of a minute on a cold tree, and a command that isn't
+/// asynchronous is run on the thread the window itself is drawn on — so the page couldn't
+/// paint, not even the line saying what it was waiting for. The work goes to a thread of
+/// its own and the window stays alive while it happens.
 #[tauri::command]
-fn review(repo: String, before: Option<String>, after: Option<String>) -> Result<String, String> {
-    let mut dagger = Command::new(found());
-    dagger.arg("--json").current_dir(&repo);
-    if let (Some(before), Some(after)) = (before, after) {
-        dagger.args([before, after]);
-    }
+async fn review(
+    repo: String,
+    before: Option<String>,
+    after: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut dagger = Command::new(found());
+        dagger.arg("--json").current_dir(&repo);
+        if let (Some(before), Some(after)) = (before, after) {
+            dagger.args([before, after]);
+        }
 
-    let run = dagger
-        .output()
-        .map_err(|error| format!("couldn't run dagger in {repo}: {error}"))?;
+        let run = dagger
+            .output()
+            .map_err(|error| format!("couldn't run dagger in {repo}: {error}"))?;
 
-    if !run.status.success() {
-        return Err(String::from_utf8_lossy(&run.stderr).trim().to_string());
-    }
-    String::from_utf8(run.stdout).map_err(|error| format!("dagger said something odd: {error}"))
+        if !run.status.success() {
+            return Err(String::from_utf8_lossy(&run.stderr).trim().to_string());
+        }
+        String::from_utf8(run.stdout).map_err(|error| format!("dagger said something odd: {error}"))
+    })
+    .await
+    .map_err(|error| format!("the reading didn't finish: {error}"))?
 }
 
 /// Which dagger to run.
@@ -49,23 +61,40 @@ fn found() -> PathBuf {
     }
 }
 
-/// Which repository this window was opened on: `--repo`, or wherever it was started from.
-#[tauri::command]
-fn repo() -> String {
-    let mut args = std::env::args().skip_while(|arg| arg != "--repo");
-    args.next();
+/// What this window was opened on, as the command line put it.
+///
+/// Revisions are optional in the same way they're optional on the command line: named, they
+/// are what gets read; left out, dagger decides, which means the working changes.
+#[derive(serde::Serialize)]
+struct Opened {
+    repo: String,
+    before: Option<String>,
+    after: Option<String>,
+}
 
-    args.next()
-        .unwrap_or_else(|| {
+#[tauri::command]
+fn opened() -> Opened {
+    Opened {
+        repo: said("--repo").unwrap_or_else(|| {
             std::env::current_dir()
                 .map(|here| here.to_string_lossy().into_owned())
                 .unwrap_or_else(|_| ".".to_string())
-        })
+        }),
+        before: said("--before"),
+        after: said("--after"),
+    }
+}
+
+/// What was written after a flag, when it was written at all.
+fn said(flag: &str) -> Option<String> {
+    let mut args = std::env::args().skip_while(|arg| arg != flag);
+    args.next()?;
+    args.next()
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![review, repo])
+        .invoke_handler(tauri::generate_handler![review, opened])
         .run(tauri::generate_context!())
         .expect("the window should open");
 }
