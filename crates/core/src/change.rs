@@ -99,3 +99,106 @@ pub fn classify(def: &Definition) -> (Change, Vec<Diagnostic>) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Identity;
+    use crate::testing::occurrence;
+
+    fn classify_sides(sides: Sides) -> (Change, Vec<Diagnostic>) {
+        classify(&Definition {
+            identity: Identity(0),
+            sides,
+        })
+    }
+
+    fn edits(sides: Sides) -> Edits {
+        match classify_sides(sides).0 {
+            Change::Kept(edits) => edits,
+            other => panic!("expected a kept definition, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn presence_decides_added_and_removed() {
+        let occ = occurrence("zero", &[(Part::Type, "sig")]);
+        assert_eq!(classify_sides(Sides::Added(occ.clone())).0, Change::Added);
+        assert_eq!(classify_sides(Sides::Removed(occ)).0, Change::Removed);
+    }
+
+    #[test]
+    fn a_body_edit_leaves_the_contract_alone() {
+        let before = occurrence("addMoney", &[(Part::Type, "sig"), (Part::Body, "a + b")]);
+        let after = occurrence(
+            "addMoney",
+            &[(Part::Type, "sig"), (Part::Body, "add(a, b)")],
+        );
+        let edits = edits(Sides::Kept { before, after });
+
+        assert!(!edits.contract);
+        assert!(edits.changed(Part::Body));
+        assert!(!edits.changed(Part::Type));
+        assert!(edits.worth_reading());
+    }
+
+    #[test]
+    fn a_rename_breaks_callers() {
+        let before = occurrence("addMoney", &[(Part::Type, "sig")]);
+        let after = occurrence("plusMoney", &[(Part::Type, "sig")]);
+
+        assert!(edits(Sides::Kept { before, after }).contract);
+    }
+
+    #[test]
+    fn moving_is_not_worth_reading_on_its_own() {
+        let before = occurrence("zero", &[(Part::Type, "sig")]);
+        let mut after = occurrence("zero", &[(Part::Type, "sig")]);
+        after.file = "amount.ts".to_string();
+        let edits = edits(Sides::Kept { before, after });
+
+        assert!(edits.moved);
+        assert!(!edits.worth_reading());
+    }
+
+    /// The signature is untouched, but the compiler says callers see something else.
+    #[test]
+    fn an_inferred_return_type_counts_as_a_contract_change() {
+        let mut before = occurrence("parseId", &[(Part::Type, "sig"), (Part::Body, "Number(s)")]);
+        before.contract = Some("parseId(s: string): number".to_string());
+        let mut after = occurrence("parseId", &[(Part::Type, "sig"), (Part::Body, "s.trim()")]);
+        after.contract = Some("parseId(s: string): string".to_string());
+        let edits = edits(Sides::Kept { before, after });
+
+        assert!(edits.contract);
+        assert!(!edits.changed(Part::Type));
+    }
+
+    /// The reverse: a signature reflowed by a formatter, with callers unaffected.
+    #[test]
+    fn the_contract_wins_over_the_signature_text() {
+        let mut before = occurrence("parseId", &[(Part::Type, "parseId(s: string)")]);
+        before.contract = Some("parseId(s: string): number".to_string());
+        let mut after = occurrence("parseId", &[(Part::Type, "parseId(\n  s: string,\n)")]);
+        after.contract = Some("parseId(s: string): number".to_string());
+        let edits = edits(Sides::Kept { before, after });
+
+        assert!(!edits.contract);
+        assert!(edits.changed(Part::Type));
+    }
+
+    #[test]
+    fn a_contract_on_only_one_side_is_reported() {
+        let mut before = occurrence("parseId", &[(Part::Type, "sig")]);
+        before.contract = Some("parseId(s: string): number".to_string());
+        let after = occurrence("parseId", &[(Part::Type, "sig")]);
+
+        let (_, diagnostics) = classify_sides(Sides::Kept { before, after });
+        assert_eq!(
+            diagnostics,
+            vec![Diagnostic::LopsidedContract {
+                definition: Identity(0)
+            }]
+        );
+    }
+}
