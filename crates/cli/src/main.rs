@@ -21,8 +21,8 @@ use std::io::{IsTerminal, Write};
 use std::path::Path;
 
 struct Args {
-    before: String,
-    after: String,
+    /// Left alone when the user named nothing, so the snapshot adapter gets to choose.
+    revisions: Option<(String, String)>,
     json: bool,
     explain: bool,
     list: bool,
@@ -48,15 +48,14 @@ fn parse_args() -> Result<Args> {
         }
     }
 
-    let (before, after) = match positional.as_slice() {
-        [] => ("HEAD~1".to_string(), "HEAD".to_string()),
-        [before, after] => (before.clone(), after.clone()),
+    let revisions = match positional.as_slice() {
+        [] => None,
+        [before, after] => Some((before.clone(), after.clone())),
         _ => bail!("expected two revisions, or none at all"),
     };
 
     Ok(Args {
-        before,
-        after,
+        revisions,
         json,
         explain,
         list,
@@ -69,9 +68,10 @@ fn main() -> Result<()> {
     let config = Config::read(&repo)?;
 
     let claims = claims(&repo, &config)?;
+    let (before, after) = revisions(&repo, &config, &args)?;
 
-    let before = lay_out(&repo, &config, &args.before)?;
-    let after = lay_out(&repo, &config, &args.after)?;
+    let before = lay_out(&repo, &config, &before)?;
+    let after = lay_out(&repo, &config, &after)?;
 
     let result = if args.explain {
         explain(&config, &claims, &after)
@@ -84,6 +84,24 @@ fn main() -> Result<()> {
     result
 }
 
+/// What to compare. The user's word first, then whatever the snapshot adapter thinks is
+/// worth looking at, and failing both, the last commit.
+fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, String)> {
+    if let Some(named) = &args.revisions {
+        return Ok(named.clone());
+    }
+
+    let suggested = match &config.snapshots {
+        Some(snapshots) => adapter::describe(repo, &snapshots.adapter, &snapshots.args)?.revisions,
+        None => None,
+    };
+
+    Ok(match suggested {
+        Some(revisions) => (revisions.before, revisions.after),
+        None => ("HEAD~1".to_string(), "HEAD".to_string()),
+    })
+}
+
 /// What each extractor will be given: what the repo asked for, or failing that, what
 /// the adapter says it reads.
 fn claims(repo: &Path, config: &Config) -> Result<Vec<Vec<String>>> {
@@ -92,7 +110,7 @@ fn claims(repo: &Path, config: &Config) -> Result<Vec<Vec<String>>> {
         .iter()
         .map(|extractor| {
             if extractor.include.is_empty() {
-                adapter::describe(repo, extractor)
+                Ok(adapter::describe(repo, &extractor.adapter, &extractor.args)?.include)
             } else {
                 Ok(extractor.include.clone())
             }

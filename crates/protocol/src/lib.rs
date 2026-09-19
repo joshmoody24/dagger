@@ -14,9 +14,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
-    /// What this adapter can do, asked before anything else. An extractor answers
-    /// with the files it speaks for, so a repo doesn't have to spell out that a Rust
-    /// adapter reads Rust.
+    /// What this adapter can do, asked before anything else. An extractor answers with
+    /// the files it speaks for, so a repo doesn't have to spell out that a Rust adapter
+    /// reads Rust. A snapshot adapter can also say which two revisions to compare when
+    /// the user hasn't named any.
     Describe,
     /// Put this revision somewhere on disk and say where.
     Materialize { rev: String },
@@ -29,10 +30,16 @@ pub enum Request {
     Extract { dir: String, files: Vec<String> },
 }
 
-/// Something an adapter wants the reader to know: a file it couldn't parse, a
-/// project it couldn't make sense of. Prose rather than a fixed set of cases,
-/// because dagger can't know in advance what a given language's tooling will run
-/// into.
+/// Two revisions to compare.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Revisions {
+    pub before: String,
+    pub after: String,
+}
+
+/// Something an adapter wants the reader to know: a file it couldn't parse, a project
+/// it couldn't make sense of. Prose rather than a fixed set of cases, because dagger
+/// can't know in advance what a given language's tooling will run into.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {
     pub message: String,
@@ -47,6 +54,11 @@ pub enum Response {
         /// Glob patterns this adapter claims by default. A repo that says `include`
         /// replaces this outright rather than adding to it.
         include: Vec<String>,
+        /// What to compare when the user named nothing. Only a snapshot adapter knows
+        /// what a sensible answer is, since only it knows whether there's uncommitted
+        /// work sitting around.
+        #[serde(default)]
+        revisions: Option<Revisions>,
     },
     Materialized {
         dir: String,

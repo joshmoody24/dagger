@@ -60,6 +60,13 @@ pub fn render(before: &str, after: &str, paint: &Paint) -> String {
     out
 }
 
+/// As it stands, for a definition that didn't change but has to be read anyway.
+pub fn render_unchanged(text: &str, paint: &Paint) -> String {
+    text.lines()
+        .map(|line| format!("  {}\n", paint.wrap(DIM, &format!("  {line}"))))
+        .collect()
+}
+
 /// A whole text arriving or leaving, where every line is the change.
 pub fn render_whole(text: &str, mark: char, paint: &Paint) -> String {
     let colour = if mark == '+' { GREEN } else { RED };

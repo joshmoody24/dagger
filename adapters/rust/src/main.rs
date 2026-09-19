@@ -47,6 +47,7 @@ fn answer(request: Request) -> Result<Response> {
         }
         Request::Describe => Ok(Response::Described {
             include: vec!["**/*.rs".to_string()],
+            revisions: None,
         }),
         Request::Materialize { .. } => bail!("this only reads snapshots, it doesn't lay them out"),
     }

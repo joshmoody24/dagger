@@ -9,7 +9,7 @@
 //! snapshot, and we just say which files count so that build output stays out.
 
 use anyhow::{Context, Result, bail};
-use dagger_protocol::{Request, Response};
+use dagger_protocol::{Request, Response, Revisions};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -49,6 +49,7 @@ fn answer(request: Request) -> Result<Response> {
         }
         Request::Describe => Ok(Response::Described {
             include: Vec::new(),
+            revisions: Some(worth_reviewing()?),
         }),
         Request::Extract { .. } => bail!("git only lays snapshots out, it doesn't read them"),
     }
@@ -56,6 +57,23 @@ fn answer(request: Request) -> Result<Response> {
 
 /// Not a revision git knows about, so we answer it ourselves.
 const CURRENT: &str = "current";
+
+/// Unfinished work is what someone is most likely to want to look at, so that wins
+/// when there is any. Failing that, the last thing they committed.
+fn worth_reviewing() -> Result<Revisions> {
+    let dirty = !listing(&["status", "--porcelain", "-z"])?.is_empty();
+    Ok(if dirty {
+        Revisions {
+            before: "HEAD".to_string(),
+            after: CURRENT.to_string(),
+        }
+    } else {
+        Revisions {
+            before: "HEAD~1".to_string(),
+            after: "HEAD".to_string(),
+        }
+    })
+}
 
 /// Tracked files plus anything new that isn't ignored, which is the same set git
 /// status talks about.

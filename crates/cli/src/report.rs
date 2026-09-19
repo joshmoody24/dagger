@@ -59,7 +59,8 @@ pub fn print(review: &Review, ordering: &Ordering, definitions: &[Definition], n
     );
     let _ = writeln!(
         out,
-        "at most {} to hold in mind, {} taken on faith, {} jumps between files\n",
+        "+ new   - gone   ! callers affected   ~ body   \" docs   . untouched\n\
+         at most {} held in mind at once, {} read early, {} jumps between files\n",
         ordering.cost.peak_open, ordering.cost.taken_on_faith, ordering.cost.jumps
     );
 
@@ -80,7 +81,7 @@ pub fn print(review: &Review, ordering: &Ordering, definitions: &[Definition], n
         let faith = if step.on_faith.is_empty() {
             String::new()
         } else {
-            format!(" (leans on {} still to come)", step.on_faith.len())
+            format!(" ({} not read yet)", step.on_faith.len())
         };
         let _ = writeln!(
             out,

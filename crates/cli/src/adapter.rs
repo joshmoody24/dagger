@@ -1,7 +1,7 @@
 use crate::config::{Adapter, Extractor};
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_protocol::{Note, Request, Response};
+use dagger_protocol::{Note, Request, Response, Revisions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -42,27 +42,20 @@ fn ask(repo: &Path, adapter: &str, args: &[String], request: &Request) -> Result
         .with_context(|| format!("{} said something we couldn't read", program.display()))
 }
 
-/// The files an extractor claims when the repo hasn't said. Asking beats guessing
-/// from the adapter's name, which would break the moment someone renamed theirs.
-pub fn describe(repo: &Path, extractor: &Extractor) -> Result<Vec<String>> {
-    match ask(
-        repo,
-        &extractor.adapter,
-        &extractor.args,
-        &Request::Describe,
-    )? {
-        Response::Described { include } => Ok(include),
-        Response::Failed { message } => {
-            bail!(
-                "{} wouldn't say what it reads: {message}",
-                extractor.adapter
-            )
-        }
-        other => bail!(
-            "asked {} what it reads and got {other:?}",
-            extractor.adapter
-        ),
+/// What an adapter says about itself. Asking beats guessing from its name, which would
+/// break the moment someone renamed theirs.
+pub fn describe(repo: &Path, adapter: &str, args: &[String]) -> Result<Described> {
+    match ask(repo, adapter, args, &Request::Describe)? {
+        Response::Described { include, revisions } => Ok(Described { include, revisions }),
+        Response::Failed { message } => bail!("{adapter} wouldn't say what it does: {message}"),
+        other => bail!("asked {adapter} what it does and got {other:?}"),
     }
+}
+
+pub struct Described {
+    pub include: Vec<String>,
+    /// Only a snapshot adapter fills this in.
+    pub revisions: Option<Revisions>,
 }
 
 /// A revision sitting on disk, whether clearing it up is our job, and what the

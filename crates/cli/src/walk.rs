@@ -12,7 +12,7 @@ use crate::report;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use dagger_core::model::{Definition, Identity, Occurrence, Part, Sides};
+use dagger_core::model::{Definition, Identity, Occurrence, PartText, Sides};
 use dagger_core::order::{Ordering, Step};
 use dagger_core::review::Review;
 use std::collections::BTreeMap;
@@ -83,40 +83,29 @@ fn show(
         paint.wrap(DIM, &definition.sides.latest().file),
     );
 
-    if review.affected.contains(&identity) {
-        let changed_too = review
-            .changes
-            .get(&identity)
-            .is_some_and(|change| change.worth_reading());
-        let line = if changed_too {
-            "changed, and something it leans on changed under it too"
-        } else {
-            "didn't change on its own; something it leans on did"
-        };
-        println!("  {}", paint.wrap(DIM, line));
-    }
+    let unseen = |leaned: &Identity| step.on_faith.contains(leaned);
+    let named = |leaned: &Identity| names.get(leaned).map(|name| (short(name), unseen(leaned)));
 
-    let read_already: Vec<String> = leaned_on(review, identity)
-        .into_iter()
-        .filter(|leaned| !step.on_faith.contains(leaned))
-        .filter_map(|leaned| names.get(&leaned).map(|name| short(name)))
-        .collect();
-    if !read_already.is_empty() {
+    let blamed = culprits(review, identity);
+    let because: Vec<(String, bool)> = blamed.iter().filter_map(named).collect();
+    if !because.is_empty() {
         println!(
-            "  {}",
-            paint.wrap(DIM, &format!("builds on: {}", listed(&read_already)))
+            "  {} {}",
+            paint.wrap(DIM, "because:"),
+            paint.wrap(BOLD, &listed(&because))
         );
     }
 
-    let to_come: Vec<String> = step
-        .on_faith
+    let rest: Vec<(String, bool)> = leaned_on(review, identity)
         .iter()
-        .filter_map(|leaned| names.get(leaned).map(|name| short(name)))
+        .filter(|leaned| !blamed.contains(leaned))
+        .filter_map(named)
         .collect();
-    if !to_come.is_empty() {
+    if !rest.is_empty() {
         println!(
-            "  {}",
-            paint.wrap(DIM, &format!("take on faith for now: {}", listed(&to_come)))
+            "  {} {}",
+            paint.wrap(DIM, "uses:"),
+            paint.wrap(BOLD, &listed(&rest))
         );
     }
 
@@ -129,17 +118,40 @@ fn short(name: &str) -> String {
     name.rsplit("::").next().unwrap_or(name).to_string()
 }
 
-/// Long lists stop being read, so say how many rather than all of them.
-fn listed(names: &[String]) -> String {
+/// Long lists stop being read, so say how many rather than all of them. Anything the
+/// reader hasn't got to yet is marked, since that's the bit they can't check.
+fn listed(names: &[(String, bool)]) -> String {
     const SHOWN: usize = 6;
+    let written: Vec<String> = names
+        .iter()
+        .take(SHOWN)
+        .map(|(name, unseen)| {
+            if *unseen {
+                format!("{name} (not yet seen)")
+            } else {
+                name.clone()
+            }
+        })
+        .collect();
+
     if names.len() <= SHOWN {
-        return names.join(", ");
+        return written.join(", ");
     }
-    format!(
-        "{}, and {} more",
-        names[..SHOWN].join(", "),
-        names.len() - SHOWN
-    )
+    format!("{}, and {} more", written.join(", "), names.len() - SHOWN)
+}
+
+/// What this leans on that changed shape underneath it. The whole reason an unchanged
+/// definition is worth a reader's time, so it shouldn't be left to them to work out.
+fn culprits(review: &Review, identity: Identity) -> Vec<Identity> {
+    leaned_on(review, identity)
+        .into_iter()
+        .filter(|leaned| {
+            review
+                .changes
+                .get(leaned)
+                .is_some_and(|change| change.breaks_callers())
+        })
+        .collect()
 }
 
 /// What a definition leans on, going by the review's own edges so a chain through
@@ -153,35 +165,50 @@ fn leaned_on(review: &Review, identity: Identity) -> Vec<Identity> {
         .collect()
 }
 
+/// The parts stitched back together in the order they appear in the file, which is
+/// how they were written and how they read. The split into parts is for deciding what
+/// breaks callers, not for showing people.
 fn print_parts(sides: &Sides, paint: &Paint) {
-    for part in [Part::Docs, Part::Type, Part::Body] {
-        let before = text_of(sides.before(), part);
-        let after = text_of(sides.after(), part);
+    let before = stitched(sides.before());
+    let after = stitched(sides.after());
 
-        let body = match (before, after) {
-            (None, None) => continue,
-            (Some(before), Some(after)) if before == after => continue,
-            (Some(before), Some(after)) => diff::render(before, after, paint),
-            (None, Some(after)) => diff::render_whole(after, '+', paint),
-            (Some(before), None) => diff::render_whole(before, '-', paint),
-        };
+    let body = match (before.as_deref(), after.as_deref()) {
+        (None, None) => return,
+        // Nothing of its own changed, so there's no diff to read. Show it as it stands,
+        // which is what the reader has to judge against whatever moved underneath.
+        (Some(before), Some(after)) if before == after => {
+            println!();
+            print!("{}", diff::render_unchanged(after, paint));
+            return;
+        }
+        (Some(before), Some(after)) => diff::render(before, after, paint),
+        (None, Some(after)) => diff::render_whole(after, '+', paint),
+        (Some(before), None) => diff::render_whole(before, '-', paint),
+    };
 
-        println!(
-            "\n  {}",
-            paint.wrap(DIM, &format!("{part:?}").to_lowercase())
-        );
-        print!("{body}");
-    }
+    println!();
+    print!("{body}");
 }
 
-fn text_of(occurrence: Option<&Occurrence>, part: Part) -> Option<&str> {
-    occurrence?.parts.get(&part).map(|text| text.text.as_str())
+fn stitched(occurrence: Option<&Occurrence>) -> Option<String> {
+    let occurrence = occurrence?;
+    let mut parts: Vec<&PartText> = occurrence.parts.values().collect();
+    parts.sort_by_key(|part| part.span.start);
+
+    Some(
+        parts
+            .iter()
+            .map(|part| part.text.trim_matches('\n'))
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
 }
 
 /// Raw mode only while waiting, so everything printed keeps ordinary line endings.
 fn wait() -> Result<Move> {
     print!(
-        "\n  {}",
+        "\n{}",
         Paint::new(true).wrap(DIM, "j next   k back   q quit  ")
     );
     std::io::stdout().flush()?;
