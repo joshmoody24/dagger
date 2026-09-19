@@ -1,4 +1,4 @@
-use crate::model::Identity;
+use crate::model::{Identity, Locator};
 use serde::{Deserialize, Serialize};
 
 /// Something an adapter handed us that we had to work around. We answer anyway, but
@@ -17,4 +17,6 @@ pub enum Diagnostic {
         definition: Identity,
         symbol: String,
     },
+    /// An extractor reported a mention coming from a definition it never reported.
+    MentionFromNowhere { from: Locator },
 }

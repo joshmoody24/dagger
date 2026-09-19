@@ -8,7 +8,7 @@ pub struct BinderId(pub String);
 
 /// What a mention points at. Some mentions never bind, like a dynamic call, and we
 /// keep those instead of dropping them so the reader knows we came up empty.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Target<T> {
     Known(T),

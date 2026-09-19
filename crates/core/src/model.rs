@@ -29,7 +29,7 @@ pub struct PartText {
 /// Where a definition lives in one snapshot. Extractors have to keep this unique,
 /// merging things they can't tell apart, like an overload set. The name is kept
 /// apart from the scope because renaming breaks callers and moving doesn't.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Locator {
     pub scope: Vec<String>,
     pub name: String,
