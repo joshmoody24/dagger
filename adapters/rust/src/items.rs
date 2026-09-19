@@ -57,10 +57,42 @@ fn one(range: Range<usize>) -> Vec<Range<usize>> {
 }
 
 pub fn find(items: &[Item], scope: &[String]) -> Vec<Found> {
-    items
-        .iter()
-        .flat_map(|item| from_item(item, scope))
-        .collect()
+    merged(
+        items
+            .iter()
+            .flat_map(|item| from_item(item, scope))
+            .collect(),
+    )
+}
+
+/// Anything answering to the same name becomes one definition holding both stretches.
+///
+/// A type's methods can be split across as many `impl` blocks as somebody felt like, and
+/// each one is a stretch of the same thing rather than a thing of its own. Leaving them as
+/// two definitions with one name would mean neither could be told from the other between
+/// snapshots, which is the rule extractors are asked to keep: a definition has to be
+/// addressable by name.
+fn merged(found: Vec<Found>) -> Vec<Found> {
+    let mut out: Vec<Found> = Vec::with_capacity(found.len());
+
+    for one in found {
+        match out
+            .iter_mut()
+            .find(|kept| kept.scope == one.scope && kept.name == one.name)
+        {
+            Some(kept) => {
+                for (part, mut ranges) in one.parts {
+                    kept.parts.entry(part).or_default().append(&mut ranges);
+                }
+                for ranges in kept.parts.values_mut() {
+                    ranges.sort_by_key(|range| range.start);
+                }
+            }
+            None => out.push(one),
+        }
+    }
+
+    out
 }
 
 /// The module itself, as a definition.
@@ -169,32 +201,32 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
             found
         }
         Item::Impl(block) => {
-            let inner = nest(scope, &type_name(&block.self_ty));
-            block
-                .items
-                .iter()
-                .filter_map(|member| match member {
-                    ImplItem::Fn(function) => Some(callable(
-                        &function.sig,
-                        &function.attrs,
-                        Some(&function.block),
-                        "method",
-                        &inner,
-                    )),
-                    ImplItem::Const(constant) => Some(Found {
-                        scope: inner.clone(),
-                        name: constant.ident.to_string(),
-                        name_at: range(constant.ident.span()),
-                        kind: "assoc const",
-                        parts: parts([
-                            (Part::Type, one(range(constant.ident.span()))),
-                            (Part::Body, one(range(constant.expr.span()))),
-                            (Part::Docs, docs(&constant.attrs)),
-                        ]),
-                    }),
-                    _ => None,
-                })
-                .collect()
+            let inner = nest(scope, &implementing(block));
+            let mut found = vec![implementation(block, scope)];
+
+            found.extend(block.items.iter().filter_map(|member| match member {
+                ImplItem::Fn(function) => Some(callable(
+                    &function.sig,
+                    &function.attrs,
+                    Some(&function.block),
+                    "method",
+                    &inner,
+                )),
+                ImplItem::Const(constant) => Some(Found {
+                    scope: inner.clone(),
+                    name: constant.ident.to_string(),
+                    name_at: range(constant.ident.span()),
+                    kind: "assoc const",
+                    parts: parts([
+                        (Part::Type, one(range(constant.ident.span()))),
+                        (Part::Body, one(range(constant.expr.span()))),
+                        (Part::Docs, docs(&constant.attrs)),
+                    ]),
+                }),
+                _ => None,
+            }));
+
+            found
         }
         // An inline module is a module like any other, so it gets a definition of its own
         // alongside whatever it holds.
@@ -210,6 +242,58 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
             None => Vec::new(),
         },
         _ => Vec::new(),
+    }
+}
+
+/// An implementation block, as a definition.
+///
+/// `impl Display for Money` is a claim about Money that callers rely on: it makes Money
+/// usable wherever something displayable is wanted, and taking it away breaks them. It can
+/// also sit in a different file from Money, or a different crate, so it can't just be
+/// folded into what Money says about itself.
+///
+/// The braces are claimed along with the header so that nothing in the file belongs to
+/// nobody. What's between them has definitions of its own.
+fn implementation(block: &syn::ItemImpl, scope: &[String]) -> Found {
+    let header = range(block.impl_token.span()).start;
+    let signed = block
+        .generics
+        .where_clause
+        .as_ref()
+        .map(|clause| range(clause.span()))
+        .unwrap_or_else(|| range(block.self_ty.span()));
+    let full = range(block.span());
+
+    Found {
+        scope: scope.to_vec(),
+        name: format!("impl {}", implementing(block)),
+        name_at: range(block.self_ty.span()),
+        kind: "impl",
+        parts: parts([
+            (
+                Part::Type,
+                vec![header..signed.end, full.end.saturating_sub(1)..full.end],
+            ),
+            (Part::Body, Vec::new()),
+            (Part::Docs, docs(&block.attrs)),
+        ]),
+    }
+}
+
+/// What the block implements, written the way Rust writes it when it has to say which of
+/// two implementations it means: `Money as Display`.
+///
+/// Spelling out the trait is what keeps `Display::fmt` and `Debug::fmt` apart. Scoping both
+/// under plain `Money` gives them one name between them, and two definitions answering to
+/// one name can't be told apart between snapshots.
+fn implementing(block: &syn::ItemImpl) -> String {
+    let subject = type_name(&block.self_ty);
+    match &block.trait_ {
+        Some((_, path, _)) => match path.segments.last() {
+            Some(trait_) => format!("{subject} as {}", trait_.ident),
+            None => subject,
+        },
+        None => subject,
     }
 }
 
