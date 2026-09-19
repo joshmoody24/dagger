@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import { select } from "d3-selection";
 import { zoom as zooming, zoomIdentity, zoomTransform } from "d3-zoom";
 import { MARK, NODE_H, RADIUS, TINT, inside, shorten } from "./review.ts";
@@ -7,6 +7,9 @@ import { MARK, NODE_H, RADIUS, TINT, inside, shorten } from "./review.ts";
 const EDGE = 24;
 /* How far in a reader can go. Past this the text is bigger than anything worth reading. */
 const CLOSEST = 4;
+const FONT = 14;
+const BOX_FONT = 12.5;
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 /* The shape of the change: a box for every place code lives, nested as deep as the
  * grouping goes, a node for each definition, and lines for what leans on what.
@@ -15,57 +18,53 @@ const CLOSEST = 4;
  * to run the other way is something the reader will be asked to take on faith, so it swings
  * out to the side where it can't be mistaken for the ordinary case.
  *
- * The view is the reader's to move: drag to pan, scroll to zoom, and the page keeps up with
- * the reading by bringing whatever is being read into view.
+ * Drawn on a canvas rather than as elements. As elements this was a shape and a name for
+ * every definition and a path for every line — some nine hundred things for the engine to
+ * lay out, rasterise and hit-test, all of it again at each new size. Chrome has the room to
+ * hide that. The webview the window is built on does not: measured on the same picture, ten
+ * frames a second as elements against sixty here.
+ *
+ * What that costs is what a browser gives an element for free — nothing drawn here can be
+ * tabbed to or read aloud. The list underneath makes up for it: the same definitions, in
+ * reading order, as real buttons that nobody can see.
  *
  * One thing owns where the view is, and it's the zoom behaviour. Nothing here sets the
  * transform itself — moving the view means asking the behaviour to move, so what the reader
- * is doing and what the page wants to show can't end up disagreeing. Getting that wrong is
- * what made zooming in far enough a trap: the page kept dragging the view back to the
- * definition being read, and every attempt to zoom out was overwritten.
+ * is doing and what the page wants to show can't end up disagreeing.
  */
 export function Graph(props) {
   let frame;
   let paper;
-  let moving;
+  let ink;
 
-  /* Which module's box the pointer is inside.
+  /* What the pointer is over: a definition, or the box around some.
    *
-   * Not :hover, which only reaches what's under the pointer and its ancestors. A node sits
-   * on top of its box without being inside it in the drawing, so moving across the nodes
-   * made the box flicker on and off. Asking what's under the pointer and working out which
-   * box it belongs to holds steady. */
+   * Worked out by asking where things are rather than by asking the page. That's the other
+   * half of what a canvas buys — there's no element to hit-test, and no flicker when the
+   * answer is a node sitting on top of the box it belongs to. */
   const [over, setOver] = createSignal(null);
-
-  const onPointerOver = (event) => {
-    const node = event.target.closest(".nd");
-    if (node) return setOver(node.dataset.file);
-    /* The innermost box wins on its own: a file's box is drawn over its group's, so this
-     * finds the file when the pointer is in one and the group when it's in the space
-     * around them. */
-    setOver(event.target.closest(".box")?.dataset.box || null);
-  };
 
   const behaviour = zooming()
     .translateExtent([[0, 0], [props.laid.w, props.laid.h]])
-    /* Moved with a CSS transform rather than the SVG attribute. The attribute makes the
-     * engine redraw every element under it — a few hundred shapes and all their text,
-     * re-shaped at the new scale — for each frame of a drag. A CSS transform on a layer
-     * the compositor already holds is a blit, and only settles back to sharp text when
-     * the gesture stops. Chrome hides the difference; WebKit does not. */
-    .on("zoom", ({ transform }) => {
-      moving.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`;
-    });
+    /* Wheels are handled below instead. */
+    .filter((event) => event.type !== "wheel" && !event.ctrlKey && !event.button)
+    .on("zoom", () => redraw());
 
   const pane = () => frame.getBoundingClientRect();
+  const seen = () => zoomTransform(paper);
+
+  /* ---------------- where the view is ---------------- */
 
   /* The whole drawing, in the middle, as large as it goes. Also the furthest out a reader
    * can pull: there's nothing to see beyond the edges of the drawing. */
   const whole = () => {
-    const seen = pane();
-    const k = Math.min((seen.width - 2 * EDGE) / props.laid.w, (seen.height - 2 * EDGE) / props.laid.h);
+    const room = pane();
+    const k = Math.min(
+      (room.width - 2 * EDGE) / props.laid.w,
+      (room.height - 2 * EDGE) / props.laid.h,
+    );
     return zoomIdentity
-      .translate((seen.width - props.laid.w * k) / 2, (seen.height - props.laid.h * k) / 2)
+      .translate((room.width - props.laid.w * k) / 2, (room.height - props.laid.h * k) / 2)
       .scale(k);
   };
 
@@ -80,20 +79,42 @@ export function Graph(props) {
     zoomIdentity
       .translate(pane().width / 2, pane().height / 2)
       .scale(k)
-      .translate(-(spot.x + spot.w / 2), -(spot.y + NODE_H / 2));
+      .translate(-(spot.x + spot.w / 2), -(spot.y + spot.h / 2));
 
   const closer = () => {
-    const spot = props.laid.at.get(props.here);
+    const spot = spotOf(props.here);
     if (spot) select(paper).call(behaviour.transform, onto(spot, CLOSEST / 2));
   };
 
-  /* The box holding whatever is being read stays lit, so a glance says where you are
-   * without hunting for the one outlined node. */
-  const holding = () => (props.review.definitions.get(props.here) || {}).file;
+  /* A touchpad reports a wheel far faster than anything can be drawn, and the zoom that
+   * ships with d3 works out a whole new view for each report — while holding the browser
+   * up, because it has to say whether the page should scroll before the page can move.
+   * Hundreds of those a second is the lag: not the drawing, the answering.
+   *
+   * So the reports are added up and turned into one change of size per frame, and nothing
+   * is held up in the meantime — this page doesn't scroll, so there's nothing to prevent. */
+  let wheeled = 0;
+  let towards = [0, 0];
+  let turning = 0;
 
-  /* Where a definition sits, whether or not it has a node. A module is drawn as its file's
-   * box rather than a node of its own, so anything pointing at one has to point at the box
-   * — without this the arrow simply vanished whenever the reading passed through a module. */
+  const onWheel = (event) => {
+    const room = pane();
+    towards = [event.clientX - room.left, event.clientY - room.top];
+    wheeled += event.deltaY;
+    if (turning) return;
+
+    turning = requestAnimationFrame(() => {
+      turning = 0;
+      const by = Math.pow(0.9985, wheeled);
+      wheeled = 0;
+      behaviour.scaleBy(select(paper), by, towards);
+    });
+  };
+
+  /* ---------------- what is where ---------------- */
+
+  /* Where a definition sits, whether or not it has a node. A module is drawn as its box
+   * rather than a node of its own, so anything pointing at one has to point at the box. */
   const spotOf = (id) => {
     const node = props.laid.at.get(id);
     if (node) return { x: node.x, y: node.y, w: node.w, h: NODE_H };
@@ -115,12 +136,14 @@ export function Graph(props) {
     return null;
   };
 
+  const every = (boxes) => boxes.flatMap((box) => [box, ...every(box.boxes)]);
+  const holding = () => (props.review.definitions.get(props.here) || {}).file;
+
   /* Everything a box stands over: itself, its module's file, and the same again for every
    * box inside it. A box lights for anything in any of them, which is what stacks the
    * tints as you point deeper in. */
   const covers = (box) =>
     [box.key, (box.module || {}).file, ...box.boxes.flatMap(covers)].filter(Boolean);
-  const lit = (box) => covers(box).some((key) => key === over() || key === holding());
 
   /* Where pressing a box takes you: its own module if it has one, else the first definition
    * it holds at any depth. A place you can't point at reads as broken. */
@@ -130,12 +153,259 @@ export function Graph(props) {
     return null;
   };
 
-  const near = () => neighbours(props.review, props.here);
-  const dimmed = (id) => near().size > 0 && !near().has(id);
-  const placed = () =>
-    [...props.review.definitions.values()].filter((definition) => props.laid.at.has(definition.id));
+  /* What's under a point, in the drawing's own units. A definition wins over the box it's
+   * in, and the innermost box wins over the ones around it. */
+  const at = ({ x, y }) => {
+    for (const [id, spot] of props.laid.at) {
+      if (x >= spot.x && x <= spot.x + spot.w && y >= spot.y && y <= spot.y + NODE_H) {
+        return { node: id, file: props.review.definitions.get(id).file };
+      }
+    }
 
-  /* Zoom from the keyboard as well, since that's how the rest of this is driven. */
+    let innermost = null;
+    for (const box of every(props.laid.boxes)) {
+      if (x < box.x || x > box.x + box.w || y < box.y || y > box.y + box.h) continue;
+      if (!innermost || box.w * box.h < innermost.w * innermost.h) innermost = box;
+    }
+    return innermost ? { box: innermost, file: innermost.key } : null;
+  };
+
+  const pointing = (event) => {
+    const room = pane();
+    const view = seen();
+    return {
+      x: (event.clientX - room.left - view.x) / view.k,
+      y: (event.clientY - room.top - view.y) / view.k,
+    };
+  };
+
+  const onPointerMove = (event) => {
+    const what = at(pointing(event));
+    setOver(what && what.file);
+    frame.style.cursor = what ? "pointer" : "grab";
+    frame.title = what && what.node !== undefined ? props.review.definitions.get(what.node).path : "";
+  };
+
+  const onClick = (event) => {
+    const what = at(pointing(event));
+    if (!what) return;
+    const id = what.node !== undefined ? what.node : opens(what.box);
+    if (id !== null && id !== undefined) props.onOpen(id);
+  };
+
+  /* ---------------- drawing ---------------- */
+
+  /* The palette, as the page has it. Read from the stylesheet so a theme is still the one
+   * place colours are decided, even though nothing drawn here is styled by a rule. */
+  let paint: Record<string, string> = {};
+  const readPaint = () => {
+    const had = getComputedStyle(document.documentElement);
+    const of = (name) => had.getPropertyValue(`--${name}`).trim();
+    paint = {
+      raised: of("raised"), ink: of("ink"), muted: of("muted"), faint: of("faint"),
+      rule: of("rule"), lean: of("lean"), path: of("path"),
+      add: of("add"), del: of("del"), chg: of("chg"), aff: of("muted"),
+    };
+  };
+
+  let drawing = 0;
+  const redraw = () => {
+    if (drawing || !ink) return;
+    drawing = requestAnimationFrame(() => {
+      drawing = 0;
+      draw();
+    });
+  };
+
+  /* A canvas has a size in pixels of its own, and it isn't the size it's shown at: on a
+   * dense screen the two differ, and drawing at the wrong one is how text goes soft. */
+  const sized = () => {
+    const room = pane();
+    const dense = window.devicePixelRatio || 1;
+    paper.width = Math.round(room.width * dense);
+    paper.height = Math.round(room.height * dense);
+    paper.style.width = `${room.width}px`;
+    paper.style.height = `${room.height}px`;
+  };
+
+  function draw() {
+    const room = pane();
+    const dense = window.devicePixelRatio || 1;
+    const view = seen();
+
+    ink.setTransform(dense, 0, 0, dense, 0, 0);
+    ink.clearRect(0, 0, room.width, room.height);
+    ink.setTransform(dense * view.k, 0, 0, dense * view.k, dense * view.x, dense * view.y);
+    ink.lineJoin = "round";
+    ink.textBaseline = "alphabetic";
+
+    const near = neighbours(props.review, props.here);
+    for (const box of props.laid.boxes) place(box, 0);
+    for (const edge of props.review.edges) leans(edge, near);
+    ahead();
+    for (const [id, spot] of props.laid.at) node(id, spot, near);
+  }
+
+  const lit = (box) => covers(box).some((key) => key === over() || key === holding());
+
+  function place(box, deep) {
+    const radius = Math.max(RADIUS.node, RADIUS.box - deep * RADIUS.step);
+    const module = box.module;
+
+    /* Laid on with alpha rather than a flat colour, so a box inside a lit box adds to it
+     * instead of replacing it: the deepest place the pointer is in is the brightest. */
+    if (lit(box) && opens(box) !== null) {
+      ink.globalAlpha = 0.4;
+      ink.fillStyle = paint.raised;
+      round(box.x, box.y, box.w, box.h, radius);
+      ink.fill();
+      ink.globalAlpha = 1;
+    }
+
+    const here = module && module.id === props.here;
+    const soon = module && module.id === props.next;
+    ink.setLineDash(soon ? [5, 3] : deep && !here ? [3, 3] : []);
+    ink.lineWidth = here || soon ? 1.8 : 1;
+    ink.strokeStyle = here ? paint.lean : soon ? paint.path : paint.rule;
+    round(box.x, box.y, box.w, box.h, radius);
+    ink.stroke();
+    ink.setLineDash([]);
+
+    ink.font = `${BOX_FONT}px ${MONO}`;
+    let x = box.x + 10;
+    if (module) {
+      const mark = `${MARK[module.mark]} `;
+      ink.fillStyle = paint[TINT[module.mark]];
+      ink.fillText(mark, x, box.y + 16);
+      x += ink.measureText(mark).width;
+    }
+    ink.fillStyle = paint.muted;
+    ink.fillText(box.label, x, box.y + 16);
+
+    for (const child of box.boxes) place(child, deep + 1);
+  }
+
+  function node(id, spot, near) {
+    const definition = props.review.definitions.get(id);
+    const here = id === props.here;
+    const soon = id === props.next;
+    const read = props.read.has(id);
+    const dim = near.size > 0 && !near.has(id) && !here && !soon;
+    const tint = paint[TINT[definition.mark]];
+
+    ink.globalAlpha = here || soon ? 1 : read && dim ? 0.42 : read ? 0.6 : dim ? 0.55 : 1;
+
+    /* A node that's been read is emptied out — it keeps its coloured edge, so what happened
+     * to it is still legible, but it stops being a solid thing on the page. */
+    if (!read || here) {
+      ink.fillStyle = paint.raised;
+      round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);
+      ink.fill();
+    }
+
+    ink.setLineDash(soon ? [5, 3] : []);
+    ink.lineWidth = here ? 2 : soon ? 1.8 : 1.2;
+    ink.strokeStyle = here ? paint.lean : soon ? paint.path : tint;
+    round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);
+    ink.stroke();
+    ink.setLineDash([]);
+
+    ink.font = `${FONT}px ${MONO}`;
+    const mark = `${MARK[definition.mark]}`;
+    ink.fillStyle = tint;
+    ink.fillText(mark, spot.x + 10, spot.y + 18.5);
+    ink.fillStyle = here ? paint.lean : read ? paint.muted : paint.ink;
+    ink.fillText(
+      shorten(definition.name),
+      spot.x + 10 + ink.measureText(`${mark} `).width,
+      spot.y + 18.5,
+    );
+    ink.globalAlpha = 1;
+  }
+
+  function leans(edge, near) {
+    const from = spotOf(edge.from);
+    const to = spotOf(edge.to);
+    if (!from || !to) return;
+
+    const touching = props.here && (edge.from === props.here || edge.to === props.here);
+    const upwards = to.y <= from.y;
+
+    ink.globalAlpha = touching ? 1 : near.size ? 0.3 : 0.85;
+    ink.strokeStyle = touching ? paint.lean : paint.faint;
+    ink.lineWidth = touching ? 1.5 : upwards ? 1 : 1.2;
+    ink.setLineDash(upwards ? [] : [4, 3]);
+    ink.beginPath();
+    if (upwards) bend(to, from);
+    else aside(from, to);
+    ink.stroke();
+    ink.setLineDash([]);
+    ink.globalAlpha = 1;
+  }
+
+  /* Where the reading goes next. Nothing else in the drawing has an arrowhead, because
+   * nothing else is about which way time runs. */
+  function ahead() {
+    const from = spotOf(props.here);
+    const to = spotOf(props.next);
+    if (!from || !to) return;
+
+    const [leaves, arrives] = closest(from, to);
+    ink.globalAlpha = 0.55;
+    ink.strokeStyle = paint.path;
+    ink.fillStyle = paint.path;
+    ink.lineWidth = 1.8;
+    ink.setLineDash([5, 3]);
+    ink.beginPath();
+    ink.moveTo(leaves.x, leaves.y);
+    ink.lineTo(arrives.x, arrives.y);
+    ink.stroke();
+    ink.setLineDash([]);
+    tip(leaves, arrives);
+    ink.globalAlpha = 1;
+  }
+
+  function tip(from, to) {
+    const turn = Math.atan2(to.y - from.y, to.x - from.x);
+    const wide = 0.42;
+    const long = 9;
+    ink.beginPath();
+    ink.moveTo(to.x, to.y);
+    ink.lineTo(to.x - long * Math.cos(turn - wide), to.y - long * Math.sin(turn - wide));
+    ink.lineTo(to.x - long * Math.cos(turn + wide), to.y - long * Math.sin(turn + wide));
+    ink.closePath();
+    ink.fill();
+  }
+
+  const round = (x, y, w, h, r) => {
+    const tight = Math.min(r, w / 2, h / 2);
+    ink.beginPath();
+    ink.moveTo(x + tight, y);
+    ink.arcTo(x + w, y, x + w, y + h, tight);
+    ink.arcTo(x + w, y + h, x, y + h, tight);
+    ink.arcTo(x, y + h, x, y, tight);
+    ink.arcTo(x, y, x + w, y, tight);
+    ink.closePath();
+  };
+
+  const bend = (up, down) => {
+    const [x1, y1] = [up.x + up.w / 2, up.y + up.h];
+    const [x2, y2] = [down.x + down.w / 2, down.y];
+    const mid = (y1 + y2) / 2;
+    ink.moveTo(x1, y1);
+    ink.bezierCurveTo(x1, mid, x2, mid, x2, y2);
+  };
+
+  const aside = (from, to) => {
+    const [x1, y1] = [from.x + from.w, from.y + from.h / 2];
+    const [x2, y2] = [to.x + to.w, to.y + to.h / 2];
+    const out = 34 + Math.abs(y2 - y1) * 0.2;
+    ink.moveTo(x1, y1);
+    ink.bezierCurveTo(x1 + out, y1, x2 + out, y2, x2, y2);
+  };
+
+  /* ---------------- keeping up ---------------- */
+
   const onKey = (event) => {
     if (event.metaKey || event.altKey) return;
     if (event.key === "+" || event.key === "=") behaviour.scaleBy(select(paper), 1.2);
@@ -147,224 +417,83 @@ export function Graph(props) {
   };
 
   onMount(() => {
+    ink = paper.getContext("2d");
+    readPaint();
+    sized();
     select(paper).call(behaviour);
+    frame.addEventListener("wheel", onWheel, { passive: true });
     fit();
 
     /* A resized window changes how far out the whole drawing sits, so the limit has to
      * move with it or the reader gets stuck too close in. */
     const resized = new ResizeObserver(() => {
+      sized();
       const shown = whole();
       behaviour.scaleExtent([shown.k, CLOSEST]);
-      if (zoomTransform(paper).k < shown.k) fit();
+      if (seen().k < shown.k) fit();
+      else redraw();
     });
     resized.observe(frame);
 
     document.addEventListener("keydown", onKey);
     onCleanup(() => {
       resized.disconnect();
+      frame.removeEventListener("wheel", onWheel);
       document.removeEventListener("keydown", onKey);
     });
   });
 
-  /* Reading moves the view, but only when what's being read has gone off screen, and only
-   * ever in answer to the reading. Where the view is isn't watched here — that's what let
-   * this fight the reader before. */
+  /* Everything the drawing depends on, watched in one place: read it here, and a change to
+   * it draws again. */
   createEffect(() => {
-    const spot = props.laid.at.get(props.here);
+    void [props.here, props.next, props.read, props.review, props.laid, over()];
+    redraw();
+  });
+
+  /* Reading moves the view, but only when what's being read has gone off screen, and only
+   * ever in answer to the reading. */
+  createEffect(() => {
+    const spot = spotOf(props.here);
     if (!spot || !paper) return;
 
-    const at = zoomTransform(paper);
-    const seen = pane();
-    const [x, y] = [at.applyX(spot.x), at.applyY(spot.y)];
+    const view = seen();
+    const room = pane();
+    const [x, y] = [view.applyX(spot.x), view.applyY(spot.y)];
     const showing =
-      x >= 0 && y >= 0 && x + spot.w * at.k <= seen.width && y + NODE_H * at.k <= seen.height;
+      x >= 0 && y >= 0 && x + spot.w * view.k <= room.width && y + spot.h * view.k <= room.height;
     if (showing) return;
 
-    select(paper).call(behaviour.transform, onto(spot, at.k));
+    select(paper).call(behaviour.transform, onto(spot, view.k));
   });
 
   return (
-    <div class="canvas" ref={frame} onPointerOver={onPointerOver} onPointerLeave={() => setOver(null)}>
-      <svg
-        class={near().size ? "focus" : ""}
-        ref={paper}
-        role="img"
-        aria-label="What changed, and what holds up what"
-      >
-        <defs>
-          <marker
-            id="tip"
-            viewBox="0 0 8 8"
-            refX="7"
-            refY="4"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M0,0 L8,4 L0,8 z" />
-          </marker>
-        </defs>
-        <g ref={moving}>
-          <For each={props.laid.boxes}>
-            {(box) => (
-              <Box
-                box={box}
-                deep={0}
-                radius={RADIUS.box}
-                here={props.here}
-                next={props.next}
-                lit={lit}
-                opens={opens}
-                onOpen={props.onOpen}
-              />
-            )}
-          </For>
+    <div
+      class="canvas"
+      ref={frame}
+      onPointerMove={onPointerMove}
+      onPointerLeave={() => setOver(null)}
+      onClick={onClick}
+    >
+      <canvas ref={paper} />
 
-          <For each={props.review.edges}>
-            {(edge) => <Leans edge={edge} at={props.laid.at} here={props.here} />}
-          </For>
-
-          <For each={placed()}>
-            {(definition) => (
-              <Node
-                definition={definition}
-                spot={props.laid.at.get(definition.id)}
-                here={props.here}
-                next={props.next}
-                read={props.read.has(definition.id)}
-                dim={dimmed(definition.id)}
-                file={definition.file}
-                onOpen={props.onOpen}
-              />
-            )}
-          </For>
-
-          {/* Where the reading goes next. The order is the whole point of the tool, and
-            * without this the graph shows where you are but not where you're being taken. */}
-          <Show when={spotOf(props.here) && spotOf(props.next)}>
-            <path class="up" d={onward(spotOf(props.here), spotOf(props.next))} />
-          </Show>
-        </g>
-      </svg>
+      {/* What a canvas can't be: something to tab through, and something to read aloud. */}
+      <ul class="spoken" aria-label="What changed, and what holds up what">
+        {props.review.steps.map((step) => {
+          const definition = props.review.definitions.get(step.definition);
+          return (
+            <li>
+              <button onClick={() => props.onOpen(definition.id)}>
+                {definition.path} — {definition.kind}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
 
       <div class="viewkeys">
         scroll to zoom · drag to move · <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current
       </div>
     </div>
-  );
-}
-
-/* A box, and whatever it holds — which is boxes, so this draws itself again one level in.
- *
- * There is no such thing here as a group or a file, only a place at some depth. Each takes
- * a press, each lights when the pointer or the reading is anywhere inside it, and each that
- * answers to a module wears that module's mark and its current-or-next outline. Because the
- * tints are laid on with alpha, a box inside a lit box adds to it rather than replacing it,
- * and the deepest place you're pointing is the brightest thing on the page.
- */
-function Box(props) {
-  const module = () => props.box.module;
-  const mine = () => module() && module().id === props.here;
-  const soon = () => module() && module().id === props.next;
-
-  const classes = () =>
-    ["box", props.deep ? "deep" : "", mine() ? "here" : "", soon() ? "next" : "",
-      module() ? TINT[module().mark] : ""]
-      .filter(Boolean)
-      .join(" ");
-
-  return (
-    <g class={classes()} data-box={props.box.key}>
-      <Show when={props.opens(props.box)}>
-        <rect
-          class={`hit${props.lit(props.box) ? " on" : ""}`}
-          x={props.box.x}
-          y={props.box.y}
-          width={props.box.w}
-          height={props.box.h}
-          rx={props.radius}
-          onClick={() => props.onOpen(props.opens(props.box))}
-        />
-      </Show>
-      <rect
-        x={props.box.x}
-        y={props.box.y}
-        width={props.box.w}
-        height={props.box.h}
-        rx={props.radius}
-      />
-      <text x={props.box.x + 10} y={props.box.y + 16}>
-        <Show when={module()}>
-          <tspan class="mk" font-weight="700">{MARK[module().mark]} </tspan>
-        </Show>
-        {props.box.label}
-      </text>
-
-      <For each={props.box.boxes}>
-        {(child) => (
-          <Box
-            box={child}
-            deep={props.deep + 1}
-            radius={Math.max(RADIUS.node, props.radius - RADIUS.step)}
-            here={props.here}
-            next={props.next}
-            lit={props.lit}
-            opens={props.opens}
-            onOpen={props.onOpen}
-          />
-        )}
-      </For>
-    </g>
-  );
-}
-
-function Node(props) {
-  const marking = () => props.definition.mark;
-  const classes = () =>
-    ["nd",
-      TINT[marking()],
-      props.definition.id === props.here ? "sel" : "",
-      props.definition.id === props.next ? "next" : "",
-      props.read ? "done" : "",
-      props.dim ? "dim" : ""]
-      .filter(Boolean)
-      .join(" ");
-
-  return (
-    <g
-      class={classes()}
-      transform={`translate(${props.spot.x},${props.spot.y})`}
-      data-file={props.file}
-      tabindex="0"
-      role="button"
-      aria-label={props.definition.path}
-      onClick={() => props.onOpen(props.definition.id)}
-      onKeyDown={(event) => event.key === "Enter" && props.onOpen(props.definition.id)}
-    >
-      <rect width={props.spot.w} height={NODE_H} rx={RADIUS.node} />
-      <text x="10" y="18.5">
-        <tspan class="mk" font-weight="700">{MARK[marking()]}</tspan>
-        <tspan class="nm" dx="6">{shorten(props.definition.name)}</tspan>
-      </text>
-      <title>{props.definition.path}</title>
-    </g>
-  );
-}
-
-function Leans(props) {
-  const from = () => props.at.get(props.edge.from);
-  const to = () => props.at.get(props.edge.to);
-  const touching = () => props.here && (props.edge.from === props.here || props.edge.to === props.here);
-  const upwards = () => to().y <= from().y;
-  const shape = () => (upwards() ? bend(to(), from()) : aside(from(), to()));
-
-  return (
-    <Show when={from() && to()}>
-      <path class={`${upwards() ? "eg" : "ec"}${touching() ? " on" : ""}`} d={shape()} />
-      <Show when={touching()}>
-        <path class="eh" d={shape()} />
-      </Show>
-    </Show>
   );
 }
 
@@ -379,12 +508,9 @@ function neighbours(review, here) {
   return near;
 }
 
-/* From the definition being read to the one after it: straight, between whichever pair of
- * faces sits closest together. Picking a side by which way the target mostly lies gets it
- * wrong whenever two boxes are roughly level or one wraps around the other — the line then
- * sets off away from where it's going before crossing back. Trying all sixteen pairs and
- * keeping the shortest is both simpler to say and always right. */
-function onward(from, to) {
+/* From the definition being read to the one after it: between whichever pair of faces sits
+ * closest together. */
+function closest(from, to) {
   let best = null;
   for (const a of faces(from)) {
     for (const b of faces(to)) {
@@ -392,7 +518,7 @@ function onward(from, to) {
       if (!best || far < best.far) best = { far, a, b };
     }
   }
-  return `M${best.a.x},${best.a.y} L${best.b.x},${best.b.y}`;
+  return [best.a, best.b];
 }
 
 const faces = (box) => [
@@ -401,17 +527,3 @@ const faces = (box) => [
   { x: box.x, y: box.y + box.h / 2 },
   { x: box.x + box.w, y: box.y + box.h / 2 },
 ];
-
-const bend = (up, down) => {
-  const [x1, y1] = [up.x + up.w / 2, up.y + NODE_H];
-  const [x2, y2] = [down.x + down.w / 2, down.y];
-  const mid = (y1 + y2) / 2;
-  return `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`;
-};
-
-const aside = (from, to) => {
-  const [x1, y1] = [from.x + from.w, from.y + NODE_H / 2];
-  const [x2, y2] = [to.x + to.w, to.y + NODE_H / 2];
-  const out = 34 + Math.abs(y2 - y1) * 0.2;
-  return `M${x1},${y1} C${x1 + out},${y1} ${x2 + out},${y2} ${x2},${y2}`;
-};

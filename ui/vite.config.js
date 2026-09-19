@@ -17,7 +17,17 @@ function live() {
     name: "dagger-review",
     configureServer(server) {
       server.middlewares.use("/review", (request, response) => {
-        const dagger = spawn("target/debug/dagger", ["--json"], { cwd: ".." });
+        /* Which pair to read. Named in the address when the page asks for a particular
+         * one, and otherwise whatever this server was started on — so a browser opened
+         * beside a window started on `HEAD~1 HEAD` is looking at the same change, rather
+         * than quietly at a different one. Neither, and dagger decides, which means the
+         * working changes. */
+        const asked = new URL(request.url, "http://dagger").searchParams;
+        const before = asked.get("before") || process.env.DAGGER_BEFORE;
+        const after = asked.get("after") || process.env.DAGGER_AFTER;
+        const reading = before && after ? [before, after] : [];
+
+        const dagger = spawn("target/debug/dagger", ["--json", ...reading], { cwd: ".." });
 
         let said = "";
         let wrong = "";

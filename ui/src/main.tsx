@@ -24,7 +24,9 @@ declare global {
 async function load() {
   const tauri = window.__TAURI__;
   if (!tauri) {
-    const said = await fetch("/review");
+    /* Whatever the address asks for is passed straight on, so a link to one change is a
+     * link somebody else can open. */
+    const said = await fetch(`/review${window.location.search}`);
     if (!said.ok) throw new Error(await said.text());
     return said.json();
   }
