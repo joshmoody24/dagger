@@ -6,6 +6,12 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+/// Settings travel as JSON, since that's what the wire speaks, but a repo writes them
+/// as TOML.
+fn json(settings: &toml::Value) -> serde_json::Value {
+    serde_json::to_value(settings).unwrap_or(serde_json::Value::Null)
+}
+
 /// An adapter is a command, read the way a shell would read it: a slash makes it a
 /// path in the repo, anything else comes off PATH.
 fn resolve(repo: &Path, adapter: &str) -> PathBuf {
@@ -44,8 +50,20 @@ fn ask(repo: &Path, adapter: &str, args: &[String], request: &Request) -> Result
 
 /// What an adapter says about itself. Asking beats guessing from its name, which would
 /// break the moment someone renamed theirs.
-pub fn describe(repo: &Path, adapter: &str, args: &[String]) -> Result<Described> {
-    match ask(repo, adapter, args, &Request::Describe)? {
+pub fn describe(
+    repo: &Path,
+    adapter: &str,
+    args: &[String],
+    settings: &toml::Value,
+) -> Result<Described> {
+    match ask(
+        repo,
+        adapter,
+        args,
+        &Request::Describe {
+            settings: json(settings),
+        },
+    )? {
         Response::Described { include, revisions } => Ok(Described { include, revisions }),
         Response::Failed { message } => bail!("{adapter} wouldn't say what it does: {message}"),
         other => bail!("asked {adapter} what it does and got {other:?}"),
@@ -93,10 +111,13 @@ pub fn extract(
     extractor: &Extractor,
     dir: &Path,
     files: &[String],
+    changed: &[String],
 ) -> Result<(Extraction, Vec<Note>)> {
     let request = Request::Extract {
         dir: dir.to_string_lossy().into_owned(),
         files: files.to_vec(),
+        changed: changed.to_vec(),
+        settings: json(&extractor.settings),
     };
     match ask(repo, &extractor.adapter, &extractor.args, &request)? {
         Response::Extracted { extraction, notes } => Ok((extraction, notes)),

@@ -18,7 +18,13 @@ pub enum Request {
     /// the files it speaks for, so a repo doesn't have to spell out that a Rust adapter
     /// reads Rust. A snapshot adapter can also say which two revisions to compare when
     /// the user hasn't named any.
-    Describe,
+    Describe {
+        /// Whatever the repo wrote under this adapter's `settings`. Dagger doesn't read
+        /// it: an adapter that needs to be told which server to run, or which dialect to
+        /// expect, gets told here rather than through a pile of arguments.
+        #[serde(default)]
+        settings: serde_json::Value,
+    },
     /// Put this revision somewhere on disk and say where.
     Materialize { rev: String },
     /// Read a snapshot and report what's defined in the files handed over.
@@ -27,7 +33,18 @@ pub enum Request {
     /// untouched helper can still be what joins two edits together. Reading other
     /// files for context is fine and often necessary, but report only these, since
     /// dagger has already decided who speaks for what.
-    Extract { dir: String, files: Vec<String> },
+    Extract {
+        dir: String,
+        files: Vec<String>,
+        /// Files whose contents differ between the two snapshots. A hint, not a filter:
+        /// an adapter may still report anything it likes, and one that ignores this is
+        /// merely slow rather than wrong. It lets an adapter work outward from a change
+        /// rather than reading a whole repository to describe a few lines.
+        #[serde(default)]
+        changed: Vec<String>,
+        #[serde(default)]
+        settings: serde_json::Value,
+    },
 }
 
 /// Two revisions to compare.

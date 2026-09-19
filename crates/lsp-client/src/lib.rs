@@ -1,7 +1,7 @@
-//! Just enough of the language server protocol to ask rust-analyzer questions.
+//! Just enough of the language server protocol to ask a language server questions.
 //!
-//! Hand-rolled rather than pulled in, because only four messages are needed and the
-//! shapes are stable. Framing is a Content-Length header, then a JSON body.
+//! Hand-rolled rather than pulled in, because only a handful of messages are needed and
+//! the shapes are stable. Framing is a Content-Length header, then a JSON body.
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
@@ -17,16 +17,21 @@ pub struct Server {
 }
 
 impl Server {
-    /// Starts the server and waits until it has finished thinking. Answers given before
-    /// then are wrong rather than slow, which is worse.
-    pub fn start(root: &Path) -> Result<Self> {
-        let mut child = Command::new("rust-analyzer")
+    /// Starts a server and shakes hands with it. `options` becomes the server's
+    /// initializationOptions, which is where a particular server's own knobs live.
+    pub fn start(command: &[String], root: &Path, options: Value) -> Result<Self> {
+        let (program, args) = command
+            .split_first()
+            .context("no language server was named")?;
+
+        let mut child = Command::new(program)
+            .args(args)
             .current_dir(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .context("couldn't start rust-analyzer; is it on PATH?")?;
+            .with_context(|| format!("couldn't start {program}; is it on PATH?"))?;
 
         let to_server = child.stdin.take().expect("stdin was piped");
         let from_server = BufReader::new(child.stdout.take().expect("stdout was piped"));
@@ -37,11 +42,11 @@ impl Server {
             next_id: 1,
         };
 
-        server.handshake(root)?;
+        server.handshake(root, options)?;
         Ok(server)
     }
 
-    fn handshake(&mut self, root: &Path) -> Result<()> {
+    fn handshake(&mut self, root: &Path, options: Value) -> Result<()> {
         let root = root.canonicalize()?;
         self.request(
             "initialize",
@@ -50,36 +55,51 @@ impl Server {
                 "rootUri": uri(&root),
                 "capabilities": {
                     "window": { "workDoneProgress": true },
+                    // rust-analyzer offers this and says when it has stopped indexing.
+                    // Servers that don't understand it ignore it.
                     "experimental": { "serverStatusNotification": true },
-                    // Without asking for markdown, hover arrives as prose with the
-                    // signature buried in it rather than fenced off.
                     "textDocument": {
+                        // Without asking for markdown, hover arrives as prose with the
+                        // signature buried in it rather than fenced off.
                         "hover": { "contentFormat": ["markdown"] },
+                        // Unasked, symbols come back as a flat list of names and whole
+                        // ranges. The nested form also says where each name sits, which
+                        // is the spot everything else gets asked about.
+                        "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
                     },
                 },
-                // Nothing here needs macros expanded or build scripts run, and both cost
-                // real time on a cold tree.
-                "initializationOptions": {
-                    "cargo": { "buildScripts": { "enable": false } },
-                    "procMacro": { "enable": false },
-                },
+                "initializationOptions": options,
             }),
         )?;
-        self.notify("initialized", json!({}))?;
-        self.wait_until_ready()
+        self.notify("initialized", json!({}))
     }
 
-    /// rust-analyzer says when it has stopped indexing. Without waiting, a reference
-    /// query answers from a half-built picture and quietly reports too little.
-    fn wait_until_ready(&mut self) -> Result<()> {
+    /// Reads notifications until one satisfies `settled`. Some servers answer questions
+    /// before they've finished indexing, and those answers are wrong rather than slow,
+    /// which is worse.
+    pub fn wait_until(&mut self, settled: impl Fn(&Value) -> bool) -> Result<()> {
         loop {
             let message = self.read_message()?;
-            if message["method"] == "experimental/serverStatus"
-                && message["params"]["quiescent"] == Value::Bool(true)
-            {
+            if settled(&message) {
                 return Ok(());
             }
         }
+    }
+
+    /// Telling a server about a file is what makes it load the project that file belongs
+    /// to. Servers that index everything up front don't mind hearing it anyway.
+    pub fn open(&mut self, path: &Path, language: &str, text: &str) -> Result<()> {
+        self.notify(
+            "textDocument/didOpen",
+            json!({
+                "textDocument": {
+                    "uri": uri(path),
+                    "languageId": language,
+                    "version": 1,
+                    "text": text,
+                },
+            }),
+        )
     }
 
     pub fn request(&mut self, method: &str, params: Value) -> Result<Value> {
@@ -110,12 +130,41 @@ impl Server {
         Ok(())
     }
 
+    /// Reads the next message meant for us, answering anything the server asks of the
+    /// client along the way.
+    ///
+    /// Conversation runs both ways: a server may ask the client to register a capability
+    /// or hand over configuration, and it waits for the answer before doing anything
+    /// else. Ignoring those questions doesn't lose a feature, it wedges the server.
     fn read_message(&mut self) -> Result<Value> {
+        loop {
+            let message = self.read_raw()?;
+            let asking = message.get("id").is_some() && message.get("method").is_some();
+            if !asking {
+                return Ok(message);
+            }
+
+            let result = match message["method"].as_str() {
+                // One answer per thing asked about, and none of them a setting we hold
+                // an opinion on.
+                Some("workspace/configuration") => Value::Array(
+                    message["params"]["items"]
+                        .as_array()
+                        .map(|items| vec![Value::Null; items.len()])
+                        .unwrap_or_default(),
+                ),
+                _ => Value::Null,
+            };
+            self.send(json!({"jsonrpc": "2.0", "id": message["id"], "result": result}))?;
+        }
+    }
+
+    fn read_raw(&mut self) -> Result<Value> {
         let mut length = None;
         loop {
             let mut line = String::new();
             if self.from_server.read_line(&mut line)? == 0 {
-                bail!("rust-analyzer stopped talking");
+                bail!("the language server stopped talking");
             }
             let line = line.trim_end();
             if line.is_empty() {

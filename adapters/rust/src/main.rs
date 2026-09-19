@@ -9,15 +9,14 @@
 //! graph of made-up edges reads worse than no graph.
 
 mod items;
-mod lsp;
 mod modules;
 
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, PartText, Span};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
+use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Note, Request, Response};
-use lsp::{Lines, Server};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{self, Read};
@@ -42,11 +41,11 @@ fn main() -> Result<()> {
 
 fn answer(request: Request) -> Result<Response> {
     match request {
-        Request::Describe => Ok(Response::Described {
+        Request::Describe { .. } => Ok(Response::Described {
             include: vec!["**/*.rs".to_string()],
             revisions: None,
         }),
-        Request::Extract { dir, files } => {
+        Request::Extract { dir, files, .. } => {
             let (extraction, notes) = extract(Path::new(&dir), &files)?;
             Ok(Response::Extracted { extraction, notes })
         }
@@ -156,7 +155,20 @@ fn bind(
 ) -> Result<Vec<Mention>> {
     // Indexing is the slow part by a wide margin, so it's worth admitting to.
     eprintln!("  waiting for rust-analyzer to index");
-    let mut server = Server::start(dir)?;
+    let mut server = Server::start(
+        &["rust-analyzer".to_string()],
+        dir,
+        // Nothing here needs macros expanded or build scripts run, and both cost real
+        // time on a cold tree.
+        json!({
+            "cargo": { "buildScripts": { "enable": false } },
+            "procMacro": { "enable": false },
+        }),
+    )?;
+    server.wait_until(|message| {
+        message["method"] == "experimental/serverStatus"
+            && message["params"]["quiescent"] == serde_json::Value::Bool(true)
+    })?;
     let count: usize = parsed.iter().map(|file| file.found.len()).sum();
     eprintln!("  asking rust-analyzer about {count} definitions");
     let root = dir.canonicalize()?;
@@ -288,17 +300,20 @@ fn part_at(found: &items::Found, at: usize) -> Option<Part> {
     None
 }
 
-/// Hover is markdown with the definition fenced off in it. That block is the compiler's
-/// own account of what the thing looks like from outside, which is what a contract is.
+/// Hover is markdown with the definition fenced off in it, which is rust-analyzer's
+/// account of what the thing looks like from outside.
 ///
-/// The first block is the module it lives in, so the one wanted is the last: after it
-/// comes only documentation and layout trivia, neither fenced as rust.
+/// The first block names the module it lives in, so the one wanted is the last — but only
+/// of those before the rule. Past the rule comes the doc comment, and a doc comment's
+/// examples are fenced rust too. Reading one of those as the contract would turn editing
+/// an example into breaking every caller.
 fn signature(hover: &serde_json::Value) -> Option<String> {
     let markdown = hover["contents"]["value"].as_str()?;
+    let declaration = markdown.split("\n---").next().unwrap_or(markdown);
     let mut blocks = Vec::new();
     let mut current: Option<Vec<&str>> = None;
 
-    for line in markdown.lines() {
+    for line in declaration.lines() {
         match (&mut current, line.starts_with("```")) {
             (None, true) if line.starts_with("```rust") => current = Some(Vec::new()),
             (Some(code), true) => {

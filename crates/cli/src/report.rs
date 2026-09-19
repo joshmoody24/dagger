@@ -13,6 +13,9 @@ pub fn glyph(change: &Change) -> char {
         Change::Added => '+',
         Change::Removed => '-',
         Change::Kept(edits) if edits.contract => '!',
+        // The signature was rewritten without callers noticing: reformatted, or a type
+        // spelled a different way that means the same thing.
+        Change::Kept(edits) if edits.changed(Part::Type) => '~',
         Change::Kept(edits) if edits.changed(Part::Body) => '~',
         Change::Kept(edits) if edits.changed(Part::Docs) => '"',
         Change::Kept(_) => '.',

@@ -47,7 +47,7 @@ fn answer(request: Request) -> Result<Response> {
                 files,
             })
         }
-        Request::Describe => Ok(Response::Described {
+        Request::Describe { .. } => Ok(Response::Described {
             include: Vec::new(),
             revisions: Some(worth_reviewing()?),
         }),

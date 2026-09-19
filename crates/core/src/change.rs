@@ -80,14 +80,23 @@ fn changed_parts(before: &Occurrence, after: &Occurrence) -> BTreeSet<Part> {
         .collect()
 }
 
-/// Whether callers see something different, preferring the compiler's view of the
-/// definition and falling back to the signature as written.
+/// Whether callers see something different. Any of three signals is enough: the name,
+/// the signature as written, or what the extractor's tooling says the thing looks like
+/// from outside.
+///
+/// Taking whichever fires rather than letting one overrule another is deliberate. A
+/// contract that came from a summary — an editor's hover text, say — can be identical on
+/// both sides while the declaration plainly changed, and letting that silence the written
+/// text would hide a real break. Reading a definition that turned out to be fine costs a
+/// moment; missing one that broke costs more.
 fn contract_changed(before: &Occurrence, after: &Occurrence) -> bool {
-    let text = match (before.contract.as_deref(), after.contract.as_deref()) {
-        (Some(b), Some(a)) => b != a,
-        _ => part_text(before, Part::Type) != part_text(after, Part::Type),
+    let told = match (before.contract.as_deref(), after.contract.as_deref()) {
+        (Some(before), Some(after)) => before != after,
+        _ => false,
     };
-    text || before.locator.name != after.locator.name
+
+    told || part_text(before, Part::Type) != part_text(after, Part::Type)
+        || before.locator.name != after.locator.name
 }
 
 pub fn classify(def: &Definition) -> (Change, Vec<Diagnostic>) {
@@ -208,17 +217,40 @@ mod tests {
         assert!(!edits.changed(Part::Type));
     }
 
-    /// The reverse: a signature reflowed by a formatter, with callers unaffected.
+    /// A signature reflowed by a formatter, which callers don't care about. We say they
+    /// might anyway: the alternative is trusting a contract that can be a summary, and a
+    /// summary that stays the same while the declaration changes would hide a real break.
     #[test]
-    fn the_contract_wins_over_the_signature_text() {
+    fn a_rewritten_signature_counts_even_when_the_contract_agrees() {
         let mut before = occurrence("parseId", &[(Part::Type, "parseId(s: string)")]);
         before.contract = Some("parseId(s: string): number".to_string());
         let mut after = occurrence("parseId", &[(Part::Type, "parseId(\n  s: string,\n)")]);
         after.contract = Some("parseId(s: string): number".to_string());
         let edits = edits(Sides::Kept { before, after });
 
-        assert!(!edits.contract);
+        assert!(edits.contract);
         assert!(edits.changed(Part::Type));
+    }
+
+    /// The case the union exists for: a contract that summarises rather than spells out,
+    /// so only the written declaration shows the member arriving.
+    #[test]
+    fn a_summarising_contract_cannot_hide_a_changed_declaration() {
+        let mut before = occurrence(
+            "Money",
+            &[(Part::Type, "interface Money { amount: number }")],
+        );
+        before.contract = Some("interface Money".to_string());
+        let mut after = occurrence(
+            "Money",
+            &[(
+                Part::Type,
+                "interface Money { amount: number; precise: boolean }",
+            )],
+        );
+        after.contract = Some("interface Money".to_string());
+
+        assert!(edits(Sides::Kept { before, after }).contract);
     }
 
     #[test]

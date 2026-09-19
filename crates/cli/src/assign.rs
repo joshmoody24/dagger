@@ -67,6 +67,10 @@ fn patterns(globs: &[String]) -> Result<Vec<Pattern>> {
         .collect()
 }
 
+pub fn walk_all(dir: &Path) -> Result<Vec<String>> {
+    walked(dir)
+}
+
 fn walked(dir: &Path) -> Result<Vec<String>> {
     let mut found = Vec::new();
     walk(dir, dir, &mut found)?;

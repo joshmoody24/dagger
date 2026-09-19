@@ -1,10 +1,9 @@
 [package]
-name = "dagger-protocol"
+name = "dagger-lsp-client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-dagger-core = { path = "../core" }
-serde.workspace = true
+anyhow.workspace = true
 serde_json.workspace = true

@@ -111,7 +111,15 @@ fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, Strin
     }
 
     let suggested = match &config.snapshots {
-        Some(snapshots) => adapter::describe(repo, &snapshots.adapter, &snapshots.args)?.revisions,
+        Some(snapshots) => {
+            adapter::describe(
+                repo,
+                &snapshots.adapter,
+                &snapshots.args,
+                &snapshots.settings,
+            )?
+            .revisions
+        }
         None => None,
     };
 
@@ -129,7 +137,13 @@ fn claims(repo: &Path, config: &Config) -> Result<Vec<Vec<String>>> {
         .iter()
         .map(|extractor| {
             if extractor.include.is_empty() {
-                Ok(adapter::describe(repo, &extractor.adapter, &extractor.args)?.include)
+                Ok(adapter::describe(
+                    repo,
+                    &extractor.adapter,
+                    &extractor.args,
+                    &extractor.settings,
+                )?
+                .include)
             } else {
                 Ok(extractor.include.clone())
             }
@@ -179,8 +193,11 @@ fn compare(
     after: (&str, &adapter::Snapshot),
     args: &Args,
 ) -> Result<()> {
-    let (before, mut notes) = read(repo, config, claims, before)?;
-    let (after, mut later) = read(repo, config, claims, after)?;
+    let changed = differing(before.1, after.1)?;
+    status(&format!("{} files differ", changed.len()));
+
+    let (before, mut notes) = read(repo, config, claims, before, &changed)?;
+    let (after, mut later) = read(repo, config, claims, after, &changed)?;
     notes.append(&mut later);
 
     let matched = match_snapshots(before, after);
@@ -205,6 +222,31 @@ fn compare(
     Ok(())
 }
 
+/// Which files aren't the same on both sides. Only a hint for adapters, so a file
+/// that can't be read counts as differing rather than stopping anything.
+fn differing(before: &adapter::Snapshot, after: &adapter::Snapshot) -> Result<Vec<String>> {
+    let listed = |snapshot: &adapter::Snapshot| -> Result<Vec<String>> {
+        match &snapshot.files {
+            Some(files) => Ok(files.clone()),
+            None => assign::walk_all(&snapshot.dir),
+        }
+    };
+
+    let mut names: Vec<String> = listed(before)?;
+    names.extend(listed(after)?);
+    names.sort();
+    names.dedup();
+
+    Ok(names
+        .into_iter()
+        .filter(|name| {
+            let one = std::fs::read(before.dir.join(name)).ok();
+            let other = std::fs::read(after.dir.join(name)).ok();
+            one != other
+        })
+        .collect())
+}
+
 /// Every extractor's answer for one snapshot, plus the leftovers, merged into the one
 /// pile of facts the core expects.
 fn read(
@@ -212,6 +254,7 @@ fn read(
     config: &Config,
     claims: &[Vec<String>],
     (rev, snapshot): (&str, &adapter::Snapshot),
+    changed: &[String],
 ) -> Result<(Extraction, Vec<Note>)> {
     let dir = &snapshot.dir;
     let assignment = assign::assign(
@@ -232,7 +275,7 @@ fn read(
             files.len(),
             extractor.adapter
         ));
-        let (mut extracted, mut said) = adapter::extract(repo, extractor, dir, files)?;
+        let (mut extracted, mut said) = adapter::extract(repo, extractor, dir, files, changed)?;
         merged.occurrences.append(&mut extracted.occurrences);
         merged.mentions.append(&mut extracted.mentions);
         notes.append(&mut said);

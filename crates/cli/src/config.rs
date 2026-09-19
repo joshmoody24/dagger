@@ -24,6 +24,10 @@ pub struct Adapter {
     pub adapter: String,
     #[serde(default)]
     pub args: Vec<String>,
+    /// Passed through untouched. Anything an adapter needs telling belongs here rather
+    /// than in `args`, which stays what it looks like: arguments to a program.
+    #[serde(default = "nothing")]
+    pub settings: toml::Value,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -32,6 +36,8 @@ pub struct Extractor {
     pub adapter: String,
     #[serde(default)]
     pub args: Vec<String>,
+    #[serde(default = "nothing")]
+    pub settings: toml::Value,
     /// The files this extractor speaks for. When two extractors claim the same file
     /// the last one listed wins, so a broad rule can be narrowed by a later one.
     /// Whatever no extractor claims falls back to being read whole.
@@ -46,6 +52,10 @@ pub struct ReviewConfig {
     /// The one place completeness is given up on purpose, so it's worth keeping short.
     #[serde(default)]
     pub ignore: Vec<String>,
+}
+
+fn nothing() -> toml::Value {
+    toml::Value::Table(toml::map::Map::new())
 }
 
 impl Config {

@@ -88,11 +88,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "dagger-lsp-adapter"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "dagger-core",
+ "dagger-lsp-client",
+ "dagger-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "dagger-lsp-client"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+]
+
+[[package]]
 name = "dagger-protocol"
 version = "0.0.0"
 dependencies = [
  "dagger-core",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -101,6 +122,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "dagger-core",
+ "dagger-lsp-client",
  "dagger-protocol",
  "proc-macro2",
  "quote",
