@@ -1,6 +1,7 @@
 use dagger_core::change::Change;
 use dagger_core::model::{Definition, Identity, Part};
 use dagger_core::review::Review;
+use dagger_protocol::Note;
 use std::collections::BTreeMap;
 use std::io::Write;
 
@@ -26,7 +27,7 @@ fn name(definition: &Definition) -> String {
 
 /// Writing rather than printing, because a reader quitting out of a pager closes the
 /// pipe, and that shouldn't look like a crash.
-pub fn print(review: &Review, definitions: &[Definition]) {
+pub fn print(review: &Review, definitions: &[Definition], notes: &[Note]) {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     let by_identity: BTreeMap<Identity, &Definition> = definitions
@@ -77,8 +78,19 @@ pub fn print(review: &Review, definitions: &[Definition]) {
         );
     }
 
-    if !review.diagnostics.is_empty() {
-        let _ = writeln!(out, "\n{} things worth knowing:", review.diagnostics.len());
+    if !review.diagnostics.is_empty() || !notes.is_empty() {
+        let _ = writeln!(
+            out,
+            "\n{} things worth knowing:",
+            review.diagnostics.len() + notes.len()
+        );
+        for note in notes {
+            let about = match &note.file {
+                Some(file) => format!("{file}: "),
+                None => String::new(),
+            };
+            let _ = writeln!(out, "  {about}{}", note.message);
+        }
         for diagnostic in &review.diagnostics {
             let _ = writeln!(out, "  {diagnostic:?}");
         }

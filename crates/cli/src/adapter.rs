@@ -1,7 +1,7 @@
 use crate::config::{Adapter, Extractor};
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_protocol::{Request, Response};
+use dagger_protocol::{Note, Request, Response};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -93,13 +93,13 @@ pub fn extract(
     extractor: &Extractor,
     dir: &Path,
     files: &[String],
-) -> Result<Extraction> {
+) -> Result<(Extraction, Vec<Note>)> {
     let request = Request::Extract {
         dir: dir.to_string_lossy().into_owned(),
         files: files.to_vec(),
     };
     match ask(repo, &extractor.adapter, &extractor.args, &request)? {
-        Response::Extracted(extraction) => Ok(extraction),
+        Response::Extracted { extraction, notes } => Ok((extraction, notes)),
         Response::Failed { message } => {
             bail!(
                 "{} couldn't read the snapshot: {message}",

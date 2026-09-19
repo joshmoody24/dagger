@@ -5,6 +5,7 @@
 //! `lib.rs`, `main.rs` and `mod.rs` name no module of their own. Getting this right is
 //! what makes a locator survive the crate being moved to a different directory.
 
+use dagger_protocol::Note;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -12,12 +13,19 @@ use std::path::{Path, PathBuf};
 #[derive(Default)]
 pub struct Modules {
     crates: BTreeMap<PathBuf, Option<String>>,
+    pub notes: Vec<Note>,
 }
 
 impl Modules {
     pub fn path_of(&mut self, root: &Path, file: &str) -> Vec<String> {
         let file = Path::new(file);
         let Some((manifest, name)) = self.enclosing_crate(root, file) else {
+            self.notes.push(Note {
+                message: "no Cargo.toml above this, so its path is standing in for a \
+                          module path"
+                    .to_string(),
+                file: Some(file.to_string_lossy().into_owned()),
+            });
             return fallback(file);
         };
 

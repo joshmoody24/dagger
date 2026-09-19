@@ -15,7 +15,7 @@ use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, PartText, Span};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
-use dagger_protocol::{Request, Response};
+use dagger_protocol::{Note, Request, Response};
 use proc_macro2::TokenTree;
 use quote::ToTokens;
 use std::collections::BTreeMap;
@@ -42,7 +42,8 @@ fn main() -> Result<()> {
 fn answer(request: Request) -> Result<Response> {
     match request {
         Request::Extract { dir, files } => {
-            Ok(Response::Extracted(extract(Path::new(&dir), &files)?))
+            let (extraction, notes) = extract(Path::new(&dir), &files)?;
+            Ok(Response::Extracted { extraction, notes })
         }
         Request::Describe => Ok(Response::Described {
             include: vec!["**/*.rs".to_string()],
@@ -57,13 +58,25 @@ struct Parsed {
     found: Vec<items::Found>,
 }
 
-fn extract(dir: &Path, files: &[String]) -> Result<Extraction> {
+/// A file that won't parse is skipped and spoken about, rather than taking the whole
+/// snapshot down with it. Half a review beats none.
+fn extract(dir: &Path, files: &[String]) -> Result<(Extraction, Vec<Note>)> {
     let mut modules = modules::Modules::default();
+    let mut notes = Vec::new();
     let parsed: Vec<Parsed> = files
         .iter()
         .filter(|path| path.ends_with(".rs"))
-        .map(|path| parse(dir, path, &mut modules))
-        .collect::<Result<_>>()?;
+        .filter_map(|path| match parse(dir, path, &mut modules) {
+            Ok(parsed) => Some(parsed),
+            Err(error) => {
+                notes.push(Note {
+                    message: format!("skipped it: {error:#}"),
+                    file: Some(path.clone()),
+                });
+                None
+            }
+        })
+        .collect();
 
     let occurrences: Vec<Occurrence> = parsed
         .iter()
@@ -71,10 +84,14 @@ fn extract(dir: &Path, files: &[String]) -> Result<Extraction> {
         .collect();
 
     let mentions = bind(&parsed, &occurrences);
-    Ok(Extraction {
-        occurrences,
-        mentions,
-    })
+    notes.append(&mut modules.notes);
+    Ok((
+        Extraction {
+            occurrences,
+            mentions,
+        },
+        notes,
+    ))
 }
 
 fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parsed> {

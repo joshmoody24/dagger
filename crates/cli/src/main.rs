@@ -13,6 +13,7 @@ use anyhow::{Result, bail};
 use config::Config;
 use dagger_core::matching::{Extraction, match_snapshots};
 use dagger_core::review::review;
+use dagger_protocol::Note;
 use std::io::Write;
 use std::path::Path;
 
@@ -129,10 +130,11 @@ fn compare(
     after: &Path,
     json: bool,
 ) -> Result<()> {
-    let matched = match_snapshots(
-        read(repo, config, claims, before)?,
-        read(repo, config, claims, after)?,
-    );
+    let (before, mut notes) = read(repo, config, claims, before)?;
+    let (after, mut later) = read(repo, config, claims, after)?;
+    notes.append(&mut later);
+
+    let matched = match_snapshots(before, after);
     let review = review(&matched.definitions, &matched.references);
 
     if json {
@@ -142,27 +144,34 @@ fn compare(
             serde_json::to_string_pretty(&review)?
         );
     } else {
-        report::print(&review, &matched.definitions);
+        report::print(&review, &matched.definitions, &notes);
     }
     Ok(())
 }
 
 /// Every extractor's answer for one snapshot, plus the leftovers, merged into the one
 /// pile of facts the core expects.
-fn read(repo: &Path, config: &Config, claims: &[Vec<String>], dir: &Path) -> Result<Extraction> {
+fn read(
+    repo: &Path,
+    config: &Config,
+    claims: &[Vec<String>],
+    dir: &Path,
+) -> Result<(Extraction, Vec<Note>)> {
     let assignment = assign::assign(&config.review.ignore, claims, dir)?;
     let mut merged = fallback::extract(dir, &assignment.fallback);
+    let mut notes = Vec::new();
 
     for (extractor, files) in config.extractors.iter().zip(&assignment.extractors) {
         if files.is_empty() {
             continue;
         }
-        let mut extracted = adapter::extract(repo, extractor, dir, files)?;
+        let (mut extracted, mut said) = adapter::extract(repo, extractor, dir, files)?;
         merged.occurrences.append(&mut extracted.occurrences);
         merged.mentions.append(&mut extracted.mentions);
+        notes.append(&mut said);
     }
 
-    Ok(merged)
+    Ok((merged, notes))
 }
 
 /// A revision named on the command line only means something if a snapshot adapter is

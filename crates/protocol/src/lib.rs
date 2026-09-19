@@ -29,6 +29,17 @@ pub enum Request {
     Extract { dir: String, files: Vec<String> },
 }
 
+/// Something an adapter wants the reader to know: a file it couldn't parse, a
+/// project it couldn't make sense of. Prose rather than a fixed set of cases,
+/// because dagger can't know in advance what a given language's tooling will run
+/// into.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Note {
+    pub message: String,
+    /// The file it's about, when it's about one.
+    pub file: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum Response {
@@ -43,9 +54,13 @@ pub enum Response {
         /// pointed at a path it doesn't own says false.
         temporary: bool,
     },
-    Extracted(Extraction),
-    /// Something went wrong that the user should hear about, worded for them.
-    Failed {
-        message: String,
+    Extracted {
+        extraction: Extraction,
+        /// Anything that went less than perfectly. An adapter that skipped a file it
+        /// couldn't read says so here rather than failing the whole run.
+        #[serde(default)]
+        notes: Vec<Note>,
     },
+    /// Something went wrong that the user should hear about, worded for them.
+    Failed { message: String },
 }
