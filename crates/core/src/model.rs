@@ -11,7 +11,7 @@ pub enum Part {
     /// Internal. Changing it can't break callers.
     Body,
     /// Written for callers, but changing it can't break them.
-    Doc,
+    Docs,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
