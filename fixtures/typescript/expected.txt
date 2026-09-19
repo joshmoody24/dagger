@@ -1,0 +1,10 @@
+8 definitions, 6 to read (4 changed, 3 affected)
++ new   - gone   ! callers affected   ~ body   " docs   . untouched
+at most 3 held in mind at once, 0 read early, 1 jumps between files
+
+  1. ! src::money::Currency                         src/money.ts
+  2. = src::money::Money::currency                  src/money.ts (affected)
+  3. ! src::money::Money                            src/money.ts
+  4. + src::money::Money::precise                   src/money.ts
+  5. ~ src::money::addMoney                         src/money.ts (affected)
+  6. = src::cart::cartTotal                         src/cart.ts (affected)

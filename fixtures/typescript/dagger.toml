@@ -1,0 +1,9 @@
+# No snapshot adapter: the two snapshots are the directories named on the command line,
+# which is what makes this runnable without a repository.
+
+[[extractors]]
+adapter = "../../target/debug/dagger-lsp"
+include = ["**/*.ts"]
+
+[extractors.settings]
+server = ["tsc", "--lsp", "--stdio"]
