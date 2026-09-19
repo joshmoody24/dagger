@@ -36,6 +36,9 @@ fn answer(request: Request) -> Result<Response> {
                 temporary: true,
             })
         }
+        Request::Describe => Ok(Response::Described {
+            include: Vec::new(),
+        }),
         Request::Extract { .. } => bail!("git only lays snapshots out, it doesn't read them"),
     }
 }

@@ -3,7 +3,6 @@
 //! Keeping this on our side means adapter authors never write glob matching, and a
 //! surprising assignment can be printed rather than guessed at.
 
-use crate::config::Config;
 use anyhow::{Context, Result};
 use glob::Pattern;
 use std::path::{Path, PathBuf};
@@ -17,16 +16,17 @@ pub struct Assignment {
     pub ignored: usize,
 }
 
-pub fn assign(config: &Config, dir: &Path) -> Result<Assignment> {
-    let ignore = patterns(&config.review.ignore)?;
-    let claims: Vec<Vec<Pattern>> = config
-        .extractors
+/// `claims` is one set of globs per extractor, already settled: whatever the repo
+/// asked for, or what the adapter said it reads.
+pub fn assign(ignore: &[String], claims: &[Vec<String>], dir: &Path) -> Result<Assignment> {
+    let ignore = patterns(ignore)?;
+    let claims: Vec<Vec<Pattern>> = claims
         .iter()
-        .map(|extractor| patterns(&extractor.include))
+        .map(|globs| patterns(globs))
         .collect::<Result<_>>()?;
 
     let mut assignment = Assignment {
-        extractors: vec![Vec::new(); config.extractors.len()],
+        extractors: vec![Vec::new(); claims.len()],
         ..Assignment::default()
     };
 

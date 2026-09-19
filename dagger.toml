@@ -3,7 +3,6 @@ adapter = "target/debug/dagger-git"
 
 [[extractors]]
 adapter = "target/debug/dagger-rust"
-include = ["**/*.rs"]
 
 [review]
 ignore = ["Cargo.lock", "flake.lock", "dagger-demo.html"]

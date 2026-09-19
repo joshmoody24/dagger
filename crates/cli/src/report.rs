@@ -2,6 +2,7 @@ use dagger_core::change::Change;
 use dagger_core::model::{Definition, Identity, Part};
 use dagger_core::review::Review;
 use std::collections::BTreeMap;
+use std::io::Write;
 
 /// A one-character shorthand for what happened, borrowed from the mock: additions and
 /// removals stand out, and a contract change is louder than a body change.
@@ -23,7 +24,11 @@ fn name(definition: &Definition) -> String {
     path.join("::")
 }
 
+/// Writing rather than printing, because a reader quitting out of a pager closes the
+/// pipe, and that shouldn't look like a crash.
 pub fn print(review: &Review, definitions: &[Definition]) {
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
     let by_identity: BTreeMap<Identity, &Definition> = definitions
         .iter()
         .map(|definition| (definition.identity, definition))
@@ -42,7 +47,8 @@ pub fn print(review: &Review, definitions: &[Definition]) {
         })
         .count();
 
-    println!(
+    let _ = writeln!(
+        out,
         "{} definitions, {} to read ({} changed, {} knocked on)",
         definitions.len(),
         review.members.len(),
@@ -63,7 +69,8 @@ pub fn print(review: &Review, definitions: &[Definition]) {
         } else {
             ""
         };
-        println!(
+        let _ = writeln!(
+            out,
             "  {mark} {:<44} {}{knocked_on}",
             name(definition),
             definition.sides.latest().file
@@ -71,9 +78,9 @@ pub fn print(review: &Review, definitions: &[Definition]) {
     }
 
     if !review.diagnostics.is_empty() {
-        println!("\n{} things worth knowing:", review.diagnostics.len());
+        let _ = writeln!(out, "\n{} things worth knowing:", review.diagnostics.len());
         for diagnostic in &review.diagnostics {
-            println!("  {diagnostic:?}");
+            let _ = writeln!(out, "  {diagnostic:?}");
         }
     }
 }

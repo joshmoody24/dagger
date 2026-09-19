@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Adapters live outside the default build, so building "everything" means --workspace.
+set -euo pipefail
+cd "$(dirname "$0")"
+cargo build --workspace "$@"

@@ -42,6 +42,29 @@ fn ask(repo: &Path, adapter: &str, args: &[String], request: &Request) -> Result
         .with_context(|| format!("{} said something we couldn't read", program.display()))
 }
 
+/// The files an extractor claims when the repo hasn't said. Asking beats guessing
+/// from the adapter's name, which would break the moment someone renamed theirs.
+pub fn describe(repo: &Path, extractor: &Extractor) -> Result<Vec<String>> {
+    match ask(
+        repo,
+        &extractor.adapter,
+        &extractor.args,
+        &Request::Describe,
+    )? {
+        Response::Described { include } => Ok(include),
+        Response::Failed { message } => {
+            bail!(
+                "{} wouldn't say what it reads: {message}",
+                extractor.adapter
+            )
+        }
+        other => bail!(
+            "asked {} what it reads and got {other:?}",
+            extractor.adapter
+        ),
+    }
+}
+
 /// A revision sitting on disk, and whether clearing it up is our job.
 pub struct Snapshot {
     pub dir: PathBuf,

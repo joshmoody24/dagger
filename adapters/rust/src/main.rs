@@ -44,6 +44,9 @@ fn answer(request: Request) -> Result<Response> {
         Request::Extract { dir, files } => {
             Ok(Response::Extracted(extract(Path::new(&dir), &files)?))
         }
+        Request::Describe => Ok(Response::Described {
+            include: vec!["**/*.rs".to_string()],
+        }),
         Request::Materialize { .. } => bail!("this only reads snapshots, it doesn't lay them out"),
     }
 }

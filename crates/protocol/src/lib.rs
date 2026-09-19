@@ -14,6 +14,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
+    /// What this adapter can do, asked before anything else. An extractor answers
+    /// with the files it speaks for, so a repo doesn't have to spell out that a Rust
+    /// adapter reads Rust.
+    Describe,
     /// Put this revision somewhere on disk and say where.
     Materialize { rev: String },
     /// Read a snapshot and report what's defined in the files handed over.
@@ -28,6 +32,11 @@ pub enum Request {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum Response {
+    Described {
+        /// Glob patterns this adapter claims by default. A repo that says `include`
+        /// replaces this outright rather than adding to it.
+        include: Vec<String>,
+    },
     Materialized {
         dir: String,
         /// Whether dagger should delete the directory when it's done. An adapter that
