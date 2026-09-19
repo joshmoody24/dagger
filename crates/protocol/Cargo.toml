@@ -1,0 +1,9 @@
+[package]
+name = "dagger-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+dagger-core = { path = "../core" }
+serde.workspace = true

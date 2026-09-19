@@ -1,0 +1,14 @@
+[package]
+name = "dagger-git-adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "dagger-git"
+path = "src/main.rs"
+
+[dependencies]
+dagger-protocol = { path = "../protocol" }
+anyhow.workspace = true
+serde_json.workspace = true
