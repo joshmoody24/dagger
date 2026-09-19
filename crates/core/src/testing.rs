@@ -1,4 +1,4 @@
-use crate::model::{Identity, Locator, Occurrence, Part, PartText, Span};
+use crate::model::{Identity, Locator, Occurrence, Part, Piece, Span};
 use crate::reference::{BinderId, Reference, Site, Target};
 
 pub fn occurrence(name: &str, parts: &[(Part, &str)]) -> Occurrence {
@@ -11,18 +11,17 @@ pub fn occurrence(name: &str, parts: &[(Part, &str)]) -> Occurrence {
         file: "money.ts".to_string(),
         parts: parts
             .iter()
-            .map(|(part, text)| {
-                (
-                    *part,
-                    PartText {
-                        text: text.to_string(),
-                        span: Span { start: 0, end: 0 },
-                        file: None,
-                    },
-                )
-            })
+            .map(|(part, text)| (*part, vec![piece(text)]))
             .collect(),
         contract: None,
+    }
+}
+
+pub fn piece(text: &str) -> Piece {
+    Piece {
+        text: text.to_string(),
+        span: Span { start: 0, end: 0 },
+        file: None,
     }
 }
 

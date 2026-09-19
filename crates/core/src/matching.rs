@@ -104,8 +104,8 @@ fn rescue_renames(
 fn text_of(occurrence: &Occurrence) -> Vec<(Part, String)> {
     occurrence
         .parts
-        .iter()
-        .map(|(part, text)| (*part, text.text.clone()))
+        .keys()
+        .filter_map(|&part| occurrence.text_of(part).map(|text| (part, text)))
         .collect()
 }
 

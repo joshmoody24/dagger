@@ -13,7 +13,7 @@ mod modules;
 
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, PartText, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
 use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Note, Request, Response};
@@ -111,13 +111,15 @@ fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parse
 }
 
 fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
-    let slice = |range: &Range<usize>| PartText {
-        text: file.lines.slice(range).to_string(),
-        span: Span {
-            start: range.start as u32,
-            end: range.end as u32,
-        },
-        file: None,
+    let slice = |range: &Range<usize>| {
+        vec![Piece {
+            text: file.lines.slice(range).to_string(),
+            span: Span {
+                start: range.start as u32,
+                end: range.end as u32,
+            },
+            file: None,
+        }]
     };
 
     let mut parts = BTreeMap::from([(Part::Type, slice(&found.declaration))]);

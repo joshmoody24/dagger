@@ -4,7 +4,7 @@
 //! it's a lockfile, a pile of YAML, or a language nobody has written an adapter for.
 
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, PartText, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -44,11 +44,11 @@ fn occurrence(dir: &Path, file: &str) -> Option<Occurrence> {
         file: file.to_string(),
         parts: BTreeMap::from([(
             Part::Body,
-            PartText {
+            vec![Piece {
                 text,
                 span,
                 file: None,
-            },
+            }],
         )]),
         contract: None,
     })

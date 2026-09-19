@@ -12,7 +12,7 @@ use crate::report;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use dagger_core::model::{Definition, Identity, Occurrence, PartText, Sides};
+use dagger_core::model::{Definition, Identity, Occurrence, Sides};
 use dagger_core::order::{Ordering, Step};
 use dagger_core::review::Review;
 use std::collections::BTreeMap;
@@ -190,15 +190,17 @@ fn print_parts(sides: &Sides, paint: &Paint) {
     print!("{body}");
 }
 
+/// Every piece of the definition run together in the order they appear, which is how they
+/// were written and how they read. Splitting into parts is for deciding what breaks
+/// callers, not for showing people.
 fn stitched(occurrence: Option<&Occurrence>) -> Option<String> {
     let occurrence = occurrence?;
-    let mut parts: Vec<&PartText> = occurrence.parts.values().collect();
-    parts.sort_by_key(|part| part.span.start);
 
     Some(
-        parts
+        occurrence
+            .pieces()
             .iter()
-            .map(|part| part.text.trim_matches('\n'))
+            .map(|(_, piece)| piece.text.trim_matches('\n'))
             .filter(|text| !text.is_empty())
             .collect::<Vec<_>>()
             .join("\n"),

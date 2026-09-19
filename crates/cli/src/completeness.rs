@@ -63,14 +63,11 @@ fn covered(definitions: &[Definition]) -> (Coverage<'_>, Coverage<'_>) {
 }
 
 fn note<'a>(coverage: &mut Coverage<'a>, occurrence: &'a Occurrence) {
-    for (part, text) in &occurrence.parts {
-        let file = occurrence
-            .file_of(*part)
-            .unwrap_or(occurrence.file.as_str());
+    for (file, piece) in occurrence.pieces() {
         coverage
             .entry(file)
             .or_default()
-            .push(text.span.start as usize..text.span.end as usize);
+            .push(piece.span.start as usize..piece.span.end as usize);
     }
 }
 

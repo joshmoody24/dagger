@@ -20,11 +20,17 @@ pub struct Span {
     pub end: u32,
 }
 
+/// One stretch of source belonging to a part.
+///
+/// A part is made of these rather than being one of them, because the source a part
+/// covers isn't always in one stretch. A module's imports can sit wherever the language
+/// allows them, which in most languages is anywhere. A C function can be declared at the
+/// top of a file and again further down.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PartText {
+pub struct Piece {
     pub text: String,
     pub span: Span,
-    /// Set when this part lives somewhere other than the definition's own file, the
+    /// Set when this piece lives somewhere other than the definition's own file, the
     /// way a C declaration sits in a header away from its body.
     pub file: Option<String>,
 }
@@ -46,9 +52,10 @@ pub struct Occurrence {
     pub kind: String,
     /// Where the definition lives, and where its parts live unless they say otherwise.
     pub file: String,
-    /// The source, split up for the reader. Only used for display and for checking
-    /// that every changed byte belongs somewhere.
-    pub parts: BTreeMap<Part, PartText>,
+    /// The source, split up for the reader. Only used for display and for checking that
+    /// every changed byte belongs somewhere. Each part's pieces are in the order they
+    /// appear, which is the order a reader would meet them.
+    pub parts: BTreeMap<Part, Vec<Piece>>,
     /// How the definition looks from outside, according to the compiler. Not found
     /// anywhere in the source, which is why it sits apart from the parts.
     ///
@@ -60,9 +67,43 @@ pub struct Occurrence {
 }
 
 impl Occurrence {
-    pub fn file_of(&self, part: Part) -> Option<&str> {
-        let text = self.parts.get(&part)?;
-        Some(text.file.as_deref().unwrap_or(&self.file))
+    /// The part's text, its pieces run together. What a reader would see if the stretches
+    /// were laid end to end, and what comparing two sides comes down to.
+    pub fn text_of(&self, part: Part) -> Option<String> {
+        let pieces = self.parts.get(&part)?;
+        Some(
+            pieces
+                .iter()
+                .map(|piece| piece.text.as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
+
+    /// Which files a part is spread across. More than one only where a language lets a
+    /// definition be split, the way C puts a declaration in a header.
+    pub fn files_of(&self, part: Part) -> Vec<&str> {
+        let mut files: Vec<&str> = self
+            .parts
+            .get(&part)
+            .into_iter()
+            .flatten()
+            .map(|piece| piece.file.as_deref().unwrap_or(&self.file))
+            .collect();
+        files.dedup();
+        files
+    }
+
+    /// Every piece of every part, in the order they appear, with the file each sits in.
+    pub fn pieces(&self) -> Vec<(&str, &Piece)> {
+        let mut pieces: Vec<(&str, &Piece)> = self
+            .parts
+            .values()
+            .flatten()
+            .map(|piece| (piece.file.as_deref().unwrap_or(&self.file), piece))
+            .collect();
+        pieces.sort_by_key(|(file, piece)| (*file, piece.span.start));
+        pieces
     }
 }
 

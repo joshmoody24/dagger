@@ -53,18 +53,16 @@ impl Change {
     }
 }
 
-fn part_text(occ: &Occurrence, part: Part) -> Option<&str> {
-    occ.parts.get(&part).map(|p| p.text.as_str())
+fn part_text(occ: &Occurrence, part: Part) -> Option<String> {
+    occ.text_of(part)
 }
 
 /// Landed somewhere else, counting a part that moved out on its own the way a C
 /// declaration can migrate to a different header.
 fn moved(before: &Occurrence, after: &Occurrence) -> bool {
     let part_moved = before.parts.keys().chain(after.parts.keys()).any(|&part| {
-        match (before.file_of(part), after.file_of(part)) {
-            (Some(before), Some(after)) => before != after,
-            _ => false,
-        }
+        let (was, is) = (before.files_of(part), after.files_of(part));
+        !was.is_empty() && !is.is_empty() && was != is
     });
 
     before.file != after.file || before.locator.scope != after.locator.scope || part_moved
@@ -126,7 +124,7 @@ pub fn classify(def: &Definition) -> (Change, Vec<Diagnostic>) {
 mod tests {
     use super::*;
     use crate::model::Identity;
-    use crate::testing::occurrence;
+    use crate::testing::{occurrence, piece};
 
     fn classify_sides(sides: Sides) -> (Change, Vec<Diagnostic>) {
         classify(&Definition {
@@ -177,10 +175,51 @@ mod tests {
     fn a_part_can_move_on_its_own() {
         let before = occurrence("zero", &[(Part::Type, "sig")]);
         let mut after = occurrence("zero", &[(Part::Type, "sig")]);
-        after.parts.get_mut(&Part::Type).unwrap().file = Some("money.h".to_string());
+        after.parts.get_mut(&Part::Type).unwrap()[0].file = Some("money.h".to_string());
         let edits = edits(Sides::Kept { before, after });
 
         assert!(edits.moved);
+        assert!(!edits.worth_reading());
+    }
+
+    /// A module's imports sit wherever the language allows, which is rarely one stretch.
+    /// Editing the second one has to count the same as editing the first.
+    #[test]
+    fn a_part_made_of_several_pieces_is_compared_as_a_whole() {
+        let mut before = occurrence("money", &[(Part::Body, "use std::fmt;")]);
+        before
+            .parts
+            .get_mut(&Part::Body)
+            .unwrap()
+            .push(piece("use std::io;"));
+
+        let mut after = occurrence("money", &[(Part::Body, "use std::fmt;")]);
+        after
+            .parts
+            .get_mut(&Part::Body)
+            .unwrap()
+            .push(piece("use std::net;"));
+
+        assert!(edits(Sides::Kept { before, after }).changed(Part::Body));
+    }
+
+    /// A declaration in a header and again in the file it belongs to: one part, two files,
+    /// and staying put in both means it hasn't moved.
+    #[test]
+    fn a_part_can_sit_in_two_files_without_having_moved() {
+        let split = || {
+            let mut occurrence = occurrence("helper", &[(Part::Type, "int helper(void);")]);
+            let pieces = occurrence.parts.get_mut(&Part::Type).unwrap();
+            pieces[0].file = Some("money.h".to_string());
+            pieces.push(piece("int helper(void)"));
+            occurrence
+        };
+
+        let edits = edits(Sides::Kept {
+            before: split(),
+            after: split(),
+        });
+        assert!(!edits.moved);
         assert!(!edits.worth_reading());
     }
 
