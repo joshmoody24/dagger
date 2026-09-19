@@ -71,6 +71,17 @@ pub fn walk_all(dir: &Path) -> Result<Vec<String>> {
     walked(dir)
 }
 
+/// Drops whatever the repo asked to leave out. Ignoring a file means it isn't part of a
+/// review at all, so nothing downstream should hear about it — not the extractors, and not
+/// the check that complains about changes nobody accounted for.
+pub fn not_ignored(ignore: &[String], files: Vec<String>) -> Result<Vec<String>> {
+    let ignore = patterns(ignore)?;
+    Ok(files
+        .into_iter()
+        .filter(|file| !ignore.iter().any(|pattern| pattern.matches(file)))
+        .collect())
+}
+
 fn walked(dir: &Path) -> Result<Vec<String>> {
     let mut found = Vec::new();
     walk(dir, dir, &mut found)?;

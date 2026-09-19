@@ -27,20 +27,24 @@ pub fn check(
     changed
         .iter()
         .filter_map(|file| {
-            let lines = unaccounted(
+            let missed = unaccounted(
                 &read(before, file),
                 &read(after, file),
                 was_covered.get(file.as_str()).map(Vec::as_slice),
                 is_covered.get(file.as_str()).map(Vec::as_slice),
             );
 
-            (lines > 0).then(|| Diagnostic::Unattributed {
+            (!missed.is_empty()).then(|| Diagnostic::Unattributed {
                 file: file.clone(),
-                lines,
+                lines: missed.len(),
+                at: missed.into_iter().take(SHOWN).collect(),
             })
         })
         .collect()
 }
+
+/// Enough line numbers to go and look, not enough to drown the rest of the output.
+const SHOWN: usize = 5;
 
 /// Which stretches of each file some definition speaks for, on each side. A part that
 /// named its own file is counted against that one, the way a C declaration in a header is.
@@ -75,35 +79,40 @@ fn read(dir: &Path, file: &str) -> String {
     std::fs::read_to_string(dir.join(file)).unwrap_or_default()
 }
 
-/// How many differing lines no definition speaks for. A line that was deleted is checked
-/// against the older side, an added one against the newer.
+/// Which differing lines no definition speaks for, numbered from one as an editor would.
+/// A line that was deleted is checked against the older side, an added one against the
+/// newer, and reported at whichever side it belongs to.
 fn unaccounted(
     before: &str,
     after: &str,
     was_covered: Option<&[Range<usize>]>,
     is_covered: Option<&[Range<usize>]>,
-) -> usize {
+) -> Vec<u32> {
     let (was, is) = (offsets(before), offsets(after));
     let diff = TextDiff::from_lines(before, after);
-    let mut missed = 0;
+    let mut missed = Vec::new();
 
     let mut old_line = 0usize;
     let mut new_line = 0usize;
     for change in diff.iter_all_changes() {
+        // A blank line belongs to nobody. Definitions sit apart from each other, and the
+        // space between them isn't something a reader was going to look at.
+        let blank = change.value().trim().is_empty();
+
         match change.tag() {
             ChangeTag::Equal => {
                 old_line += 1;
                 new_line += 1;
             }
             ChangeTag::Delete => {
-                if !inside(was.get(old_line), was_covered) {
-                    missed += 1;
+                if !blank && !inside(line_at(&was, old_line), was_covered) {
+                    missed.push(old_line as u32 + 1);
                 }
                 old_line += 1;
             }
             ChangeTag::Insert => {
-                if !inside(is.get(new_line), is_covered) {
-                    missed += 1;
+                if !blank && !inside(line_at(&is, new_line), is_covered) {
+                    missed.push(new_line as u32 + 1);
                 }
                 new_line += 1;
             }
@@ -125,14 +134,24 @@ fn offsets(text: &str) -> Vec<usize> {
     starts
 }
 
-/// Blank lines and the like are let through: a definition can't be expected to claim the
-/// gap between itself and the next one.
-fn inside(start: Option<&usize>, covered: Option<&[Range<usize>]>) -> bool {
-    let Some(&start) = start else {
+/// The stretch of bytes one line occupies.
+fn line_at(starts: &[usize], line: usize) -> Option<Range<usize>> {
+    let start = *starts.get(line)?;
+    let end = starts.get(line + 1).copied().unwrap_or(usize::MAX);
+    Some(start..end)
+}
+
+/// Whether any definition speaks for any of this line.
+///
+/// Overlap rather than containment, because a definition rarely starts where its line does.
+/// `pub fn start()` begins after the `pub`, a doc comment begins after the indentation, and
+/// asking whether the line's first byte sits inside the range says no to both.
+fn inside(line: Option<Range<usize>>, covered: Option<&[Range<usize>]>) -> bool {
+    let Some(line) = line else {
         return true;
     };
     covered
         .unwrap_or_default()
         .iter()
-        .any(|range| range.contains(&start) || range.end == start)
+        .any(|range| range.start < line.end && line.start < range.end)
 }

@@ -194,7 +194,7 @@ fn compare(
     after: (&str, &adapter::Snapshot),
     args: &Args,
 ) -> Result<()> {
-    let changed = differing(before.1, after.1)?;
+    let changed = assign::not_ignored(&config.review.ignore, differing(before.1, after.1)?)?;
     status(&format!("{} files differ", changed.len()));
 
     let (before_dir, after_dir) = (before.1.dir.clone(), after.1.dir.clone());

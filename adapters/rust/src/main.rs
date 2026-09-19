@@ -13,14 +13,13 @@ mod modules;
 
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
+use dagger_core::model::{Locator, Occurrence, Piece, Span};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
 use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Note, Request, Response};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{self, Read};
-use std::ops::Range;
 use std::path::Path;
 
 fn main() -> Result<()> {
@@ -103,32 +102,37 @@ fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parse
     let file = syn::parse_file(&source).with_context(|| format!("couldn't parse {path}"))?;
     let scope = modules.path_of(dir, path);
 
+    let mut found = items::module(&file.attrs, &file.items, &scope, 0..source.len())
+        .into_iter()
+        .collect::<Vec<_>>();
+    found.extend(items::find(&file.items, &scope));
+
     Ok(Parsed {
         path: path.to_string(),
-        found: items::find(&file.items, &scope),
+        found,
         lines: Lines::new(&source),
     })
 }
 
 fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
-    let slice = |range: &Range<usize>| {
-        vec![Piece {
-            text: file.lines.slice(range).to_string(),
-            span: Span {
-                start: range.start as u32,
-                end: range.end as u32,
-            },
-            file: None,
-        }]
-    };
-
-    let mut parts = BTreeMap::from([(Part::Type, slice(&found.declaration))]);
-    if let Some(body) = &found.body {
-        parts.insert(Part::Body, slice(body));
-    }
-    if let Some(docs) = &found.docs {
-        parts.insert(Part::Docs, slice(docs));
-    }
+    let parts = found
+        .parts
+        .iter()
+        .map(|(part, ranges)| {
+            let pieces = ranges
+                .iter()
+                .map(|range| Piece {
+                    text: file.lines.slice(range).to_string(),
+                    span: Span {
+                        start: range.start as u32,
+                        end: range.end as u32,
+                    },
+                    file: None,
+                })
+                .collect();
+            (*part, pieces)
+        })
+        .collect();
 
     Occurrence {
         locator: locator(found),
@@ -251,7 +255,7 @@ fn referring(
             let at = file.lines.offset(line, column);
 
             let from = innermost(file, at)?;
-            let part = part_at(from, at)?;
+            let part = from.part_at(at)?;
 
             Some(Mention {
                 from: locator(from),
@@ -287,19 +291,6 @@ fn innermost(file: &Parsed, at: usize) -> Option<&items::Found> {
         .iter()
         .filter(|found| found.extent().contains(&at))
         .min_by_key(|found| found.extent().len())
-}
-
-fn part_at(found: &items::Found, at: usize) -> Option<Part> {
-    if found.declaration.contains(&at) {
-        return Some(Part::Type);
-    }
-    if found.body.as_ref().is_some_and(|body| body.contains(&at)) {
-        return Some(Part::Body);
-    }
-    if found.docs.as_ref().is_some_and(|docs| docs.contains(&at)) {
-        return Some(Part::Docs);
-    }
-    None
 }
 
 /// Hover is markdown with the definition fenced off in it, which is rust-analyzer's
