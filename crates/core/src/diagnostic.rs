@@ -11,4 +11,10 @@ pub enum Diagnostic {
     /// so we fell back to comparing the signature as written. Usually means the file
     /// changed language or stopped type checking.
     LopsidedContract { definition: Identity },
+    /// A name in this definition's type part that no binder could place. If it turns
+    /// out to be something that changed, we missed telling the reader about it.
+    UnboundInContract {
+        definition: Identity,
+        symbol: String,
+    },
 }
