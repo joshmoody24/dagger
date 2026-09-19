@@ -228,6 +228,10 @@ impl Lines {
         &self.text[range.clone()]
     }
 
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
     pub fn offset(&self, line: u32, column: u32) -> usize {
         let start = match self.starts.get(line as usize) {
             Some(start) => *start,

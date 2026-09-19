@@ -425,21 +425,11 @@ fn definitions(
 ) -> Vec<Occurrence> {
     seen.values()
         .flat_map(|file| {
-            file.symbols.iter().map(move |symbol| {
-                let slice = |range: Range<usize>| {
-                    vec![Piece {
-                        text: file.lines.slice(&range).to_string(),
-                        span: Span {
-                            start: range.start as u32,
-                            end: range.end as u32,
-                        },
-                        file: None,
-                    }]
-                };
-
-                let mut parts = BTreeMap::from([(Part::Type, slice(symbol.declaration()))]);
+            let symbols = file.symbols.iter().map(move |symbol| {
+                let mut parts =
+                    BTreeMap::from([(Part::Type, pieces(file, &[symbol.declaration()]))]);
                 if let Some(body) = symbol.body() {
-                    parts.insert(Part::Body, slice(body));
+                    parts.insert(Part::Body, pieces(file, &[body]));
                 }
 
                 let locator = locator(file, symbol);
@@ -450,7 +440,83 @@ fn definitions(
                     file: file.path.clone(),
                     parts,
                 }
-            })
+            });
+
+            symbols.chain(module(file))
+        })
+        .collect()
+}
+
+/// The file itself, holding whatever none of its definitions do.
+///
+/// A server reports what a file defines, not what else is in it: the imports at the top, a
+/// comment sitting between two functions, a statement run at load time. Left out, those
+/// belong to nothing, and a change that only touches them produces a review with nothing in
+/// it — which for a language whose files start with a dozen imports is most days.
+///
+/// It goes in as workings rather than contract, because that's what nearly all of it is,
+/// and because nothing refers to a file by name for a break to travel through.
+fn module(file: &Opened) -> Option<Occurrence> {
+    let leftovers = leftovers(file);
+    if leftovers.is_empty() {
+        return None;
+    }
+
+    let mut path: Vec<String> = file
+        .path
+        .rsplit_once('.')
+        .map_or(file.path.as_str(), |(stem, _)| stem)
+        .split('/')
+        .map(str::to_string)
+        .collect();
+    let name = path.pop()?;
+
+    Some(Occurrence {
+        locator: Locator { scope: path, name },
+        kind: "module".to_string(),
+        file: file.path.clone(),
+        parts: BTreeMap::from([(Part::Body, pieces(file, &leftovers))]),
+        contract: None,
+    })
+}
+
+/// The stretches of a file no definition covers, blank ones left out. A definition can't be
+/// asked to account for the space around it.
+fn leftovers(file: &Opened) -> Vec<Range<usize>> {
+    let mut claimed: Vec<Range<usize>> = file
+        .symbols
+        .iter()
+        .map(|symbol| symbol.whole.clone())
+        .collect();
+    claimed.sort_by_key(|range| range.start);
+
+    let mut left = Vec::new();
+    let mut at = 0usize;
+    for range in claimed {
+        if range.start > at {
+            left.push(at..range.start);
+        }
+        at = at.max(range.end);
+    }
+    let end = file.lines.text().len();
+    if at < end {
+        left.push(at..end);
+    }
+
+    left.retain(|range| !file.lines.slice(range).trim().is_empty());
+    left
+}
+
+fn pieces(file: &Opened, ranges: &[Range<usize>]) -> Vec<Piece> {
+    ranges
+        .iter()
+        .map(|range| Piece {
+            text: file.lines.slice(range).to_string(),
+            span: Span {
+                start: range.start as u32,
+                end: range.end as u32,
+            },
+            file: None,
         })
         .collect()
 }
