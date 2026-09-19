@@ -1,5 +1,7 @@
 [workspace]
-members = ["crates/core", "crates/git-adapter", "crates/protocol"]
+members = ["adapters/git", "adapters/rust", "crates/cli", "crates/core", "crates/protocol"]
+# Adapters install separately, so a plain build stays to the tool itself.
+default-members = ["crates/cli", "crates/core", "crates/protocol"]
 resolver = "2"
 
 [workspace.package]

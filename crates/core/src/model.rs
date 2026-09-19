@@ -24,6 +24,9 @@ pub struct Span {
 pub struct PartText {
     pub text: String,
     pub span: Span,
+    /// Set when this part lives somewhere other than the definition's own file, the
+    /// way a C declaration sits in a header away from its body.
+    pub file: Option<String>,
 }
 
 /// Where a definition lives in one snapshot. Extractors have to keep this unique,
@@ -41,6 +44,7 @@ pub struct Occurrence {
     pub locator: Locator,
     /// What the extractor calls this, like "function" or "test". We never read it.
     pub kind: String,
+    /// Where the definition lives, and where its parts live unless they say otherwise.
     pub file: String,
     /// The source, split up for the reader. Only used for display and for checking
     /// that every changed byte belongs somewhere.
@@ -53,6 +57,13 @@ pub struct Occurrence {
     /// extractor that supplies it can dump the whole definition into one part and
     /// still get every downstream answer right. It just won't read as nicely.
     pub contract: Option<String>,
+}
+
+impl Occurrence {
+    pub fn file_of(&self, part: Part) -> Option<&str> {
+        let text = self.parts.get(&part)?;
+        Some(text.file.as_deref().unwrap_or(&self.file))
+    }
 }
 
 /// Handed out by matching. Means nothing on its own.

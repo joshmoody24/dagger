@@ -17,6 +17,7 @@ pub fn occurrence(name: &str, parts: &[(Part, &str)]) -> Occurrence {
                     PartText {
                         text: text.to_string(),
                         span: Span { start: 0, end: 0 },
+                        file: None,
                     },
                 )
             })

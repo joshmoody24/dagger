@@ -57,6 +57,19 @@ fn part_text(occ: &Occurrence, part: Part) -> Option<&str> {
     occ.parts.get(&part).map(|p| p.text.as_str())
 }
 
+/// Landed somewhere else, counting a part that moved out on its own the way a C
+/// declaration can migrate to a different header.
+fn moved(before: &Occurrence, after: &Occurrence) -> bool {
+    let part_moved = before.parts.keys().chain(after.parts.keys()).any(|&part| {
+        match (before.file_of(part), after.file_of(part)) {
+            (Some(before), Some(after)) => before != after,
+            _ => false,
+        }
+    });
+
+    before.file != after.file || before.locator.scope != after.locator.scope || part_moved
+}
+
 fn changed_parts(before: &Occurrence, after: &Occurrence) -> BTreeSet<Part> {
     before
         .parts
@@ -85,7 +98,7 @@ pub fn classify(def: &Definition) -> (Change, Vec<Diagnostic>) {
             let lopsided = before.contract.is_some() != after.contract.is_some();
             let change = Change::Kept(Edits {
                 contract: contract_changed(before, after),
-                moved: before.file != after.file || before.locator.scope != after.locator.scope,
+                moved: moved(before, after),
                 parts: changed_parts(before, after),
             });
             let diagnostics = if lopsided {
@@ -148,6 +161,27 @@ mod tests {
         let after = occurrence("plusMoney", &[(Part::Type, "sig")]);
 
         assert!(edits(Sides::Kept { before, after }).contract);
+    }
+
+    /// A C declaration migrating to a different header, body left where it was.
+    #[test]
+    fn a_part_can_move_on_its_own() {
+        let before = occurrence("zero", &[(Part::Type, "sig")]);
+        let mut after = occurrence("zero", &[(Part::Type, "sig")]);
+        after.parts.get_mut(&Part::Type).unwrap().file = Some("money.h".to_string());
+        let edits = edits(Sides::Kept { before, after });
+
+        assert!(edits.moved);
+        assert!(!edits.worth_reading());
+    }
+
+    /// A body showing up where there wasn't one isn't a part changing address.
+    #[test]
+    fn gaining_a_part_is_not_a_move() {
+        let before = occurrence("zero", &[(Part::Type, "sig")]);
+        let after = occurrence("zero", &[(Part::Type, "sig"), (Part::Body, "return 0")]);
+
+        assert!(!edits(Sides::Kept { before, after }).moved);
     }
 
     #[test]

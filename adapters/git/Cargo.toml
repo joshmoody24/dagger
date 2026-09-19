@@ -9,6 +9,6 @@ name = "dagger-git"
 path = "src/main.rs"
 
 [dependencies]
-dagger-protocol = { path = "../protocol" }
+dagger-protocol = { path = "../../crates/protocol" }
 anyhow.workspace = true
 serde_json.workspace = true

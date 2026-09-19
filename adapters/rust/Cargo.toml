@@ -1,0 +1,20 @@
+[package]
+name = "dagger-rust-adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "dagger-rust"
+path = "src/main.rs"
+
+[dependencies]
+dagger-core = { path = "../../crates/core" }
+dagger-protocol = { path = "../../crates/protocol" }
+anyhow.workspace = true
+serde_json.workspace = true
+syn = { version = "2", features = ["full", "extra-traits", "visit", "parsing", "printing"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+toml = "0.9"
+serde.workspace = true

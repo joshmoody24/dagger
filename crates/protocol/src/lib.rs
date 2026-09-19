@@ -16,9 +16,13 @@ use serde::{Deserialize, Serialize};
 pub enum Request {
     /// Put this revision somewhere on disk and say where.
     Materialize { rev: String },
-    /// Read a snapshot and report everything defined in it. The whole tree, not just
-    /// what changed: an untouched helper can still be what joins two edits together.
-    Extract { dir: String },
+    /// Read a snapshot and report what's defined in the files handed over.
+    ///
+    /// These are every file the adapter owns, not just the ones that changed: an
+    /// untouched helper can still be what joins two edits together. Reading other
+    /// files for context is fine and often necessary, but report only these, since
+    /// dagger has already decided who speaks for what.
+    Extract { dir: String, files: Vec<String> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,5 +36,7 @@ pub enum Response {
     },
     Extracted(Extraction),
     /// Something went wrong that the user should hear about, worded for them.
-    Failed { message: String },
+    Failed {
+        message: String,
+    },
 }

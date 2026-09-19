@@ -1,0 +1,62 @@
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use std::path::Path;
+
+pub const FILE: &str = "dagger.toml";
+
+/// How one repo wants its reviews built. Absent entirely is fine: every file then
+/// falls to the built-in whole-file reading, which is coarse but honest.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Config {
+    pub snapshots: Option<Adapter>,
+    #[serde(default)]
+    pub extractors: Vec<Extractor>,
+    #[serde(default)]
+    pub review: ReviewConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Adapter {
+    /// A command, read the way a shell would: a slash makes it a path in the repo,
+    /// anything else comes off PATH.
+    pub adapter: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Extractor {
+    pub adapter: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// The files this extractor speaks for. When two extractors claim the same file
+    /// the last one listed wins, so a broad rule can be narrowed by a later one.
+    /// Whatever no extractor claims falls back to being read whole.
+    #[serde(default)]
+    pub include: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReviewConfig {
+    /// Files to leave out of the review altogether, whoever would have claimed them.
+    /// The one place completeness is given up on purpose, so it's worth keeping short.
+    #[serde(default)]
+    pub ignore: Vec<String>,
+}
+
+impl Config {
+    pub fn read(repo: &Path) -> Result<Self> {
+        let path = repo.join(FILE);
+        match std::fs::read_to_string(&path) {
+            Ok(text) => {
+                toml::from_str(&text).with_context(|| format!("{} doesn't parse", path.display()))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(error) => Err(error).with_context(|| format!("couldn't read {}", path.display())),
+        }
+    }
+}
