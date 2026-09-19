@@ -112,3 +112,102 @@ fn project(members: &BTreeSet<Identity>, references: &[Reference]) -> Vec<Edge> 
 
     edges
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Part, Sides};
+    use crate::testing::{occurrence, reference};
+
+    fn edited(id: u32, name: &str) -> Definition {
+        Definition {
+            identity: Identity(id),
+            sides: Sides::Kept {
+                before: occurrence(name, &[(Part::Body, "old")]),
+                after: occurrence(name, &[(Part::Body, "new")]),
+            },
+        }
+    }
+
+    fn untouched(id: u32, name: &str) -> Definition {
+        Definition {
+            identity: Identity(id),
+            sides: Sides::Kept {
+                before: occurrence(name, &[(Part::Body, "same")]),
+                after: occurrence(name, &[(Part::Body, "same")]),
+            },
+        }
+    }
+
+    #[test]
+    fn only_definitions_worth_reading_get_in() {
+        let review = review(&[edited(0, "lookupPrice"), untouched(1, "withRetry")], &[]);
+
+        assert_eq!(review.members, BTreeSet::from([Identity(0)]));
+    }
+
+    /// buildLineItems calls withRetry calls lookupPrice. The helper is untouched and
+    /// generic, so the reader never sees it, but the two edits are still related.
+    #[test]
+    fn an_untouched_helper_is_stepped_over() {
+        let definitions = [
+            edited(0, "buildLineItems"),
+            untouched(1, "withRetry"),
+            edited(2, "lookupPrice"),
+        ];
+        let references = [reference(0, 1, Part::Body), reference(1, 2, Part::Body)];
+
+        let review = review(&definitions, &references);
+
+        assert_eq!(
+            review.edges,
+            vec![Edge {
+                from: Identity(0),
+                to: Identity(2),
+                via: vec![Identity(1)],
+            }]
+        );
+    }
+
+    #[test]
+    fn a_direct_mention_has_nothing_in_between() {
+        let definitions = [edited(0, "cartTotal"), edited(1, "lineTotal")];
+        let review = review(&definitions, &[reference(0, 1, Part::Body)]);
+
+        assert_eq!(
+            review.edges,
+            vec![Edge {
+                from: Identity(0),
+                to: Identity(1),
+                via: Vec::new(),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_chain_of_hidden_helpers_is_kept_in_order() {
+        let definitions = [
+            edited(0, "handleCheckout"),
+            untouched(1, "middle"),
+            untouched(2, "inner"),
+            edited(3, "lookupPrice"),
+        ];
+        let references = [
+            reference(0, 1, Part::Body),
+            reference(1, 2, Part::Body),
+            reference(2, 3, Part::Body),
+        ];
+
+        let review = review(&definitions, &references);
+
+        assert_eq!(review.edges[0].via, vec![Identity(1), Identity(2)]);
+    }
+
+    #[test]
+    fn a_dead_end_helper_produces_no_edge() {
+        let definitions = [edited(0, "cartTotal"), untouched(1, "log")];
+        let review = review(&definitions, &[reference(0, 1, Part::Body)]);
+
+        assert!(review.edges.is_empty());
+    }
+}
