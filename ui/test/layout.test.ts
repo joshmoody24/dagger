@@ -9,7 +9,7 @@ import test from "node:test";
 import type { Box, Edge, Identity, Line, Raw } from "../src/dagger.ts";
 import { NODE_H, digest, layout, shorten, stitch, widthOf } from "../src/review.ts";
 import { phases, standing } from "../src/progress.ts";
-import { focused } from "../src/review.ts";
+import { compare, focused } from "../src/review.ts";
 
 const raw: Raw = JSON.parse(fs.readFileSync(new URL("./review.json", import.meta.url), "utf8"));
 const review = digest(raw);
@@ -272,4 +272,57 @@ test("a short diff is left alone", () => {
     { mark: "+" as const, line: { at: 2, text: "two" } },
   ];
   assert.deepEqual(focused(lines, 10), lines);
+});
+
+/* Whatever it decides changed, the marks have to add up: reading everything but the
+ * additions gives back the older version, and everything but the removals the newer. A
+ * diff that doesn't is lying about one of them. */
+test("a diff rebuilds both of the sides it came from", () => {
+  const lines = (texts: string[]) => texts.map((text, at) => ({ at: at + 1, text }));
+  let seed = 7;
+  const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+
+  for (let round = 0; round < 200; round++) {
+    const was = Array.from({ length: Math.floor(next() * 40) }, () =>
+      String.fromCharCode(97 + Math.floor(next() * 6)),
+    );
+    const is = was
+      .filter(() => next() > 0.3)
+      .flatMap((one) => (next() > 0.8 ? [String.fromCharCode(97 + Math.floor(next() * 6)), one] : [one]));
+
+    const shown = compare(lines(was), lines(is));
+    assert.deepEqual(
+      shown.filter((one) => one.mark !== "+").map((one) => one.line.text),
+      was,
+      `round ${round} lost the older side`,
+    );
+    assert.deepEqual(
+      shown.filter((one) => one.mark !== "−").map((one) => one.line.text),
+      is,
+      `round ${round} lost the newer side`,
+    );
+  }
+});
+
+/* The reason the comparison was rewritten: a definition can be a whole file, and the table
+ * of every line against every other took most of a second to find a handful of changes. */
+test("a small change in a long file is found without weighing every line against every other", () => {
+  const lines = (texts: string[]) => texts.map((text, at) => ({ at: at + 1, text }));
+  const was = Array.from({ length: 6000 }, (_, at) => `line ${at}`);
+  const is = [...was];
+  is.splice(3000, 2, "changed one", "changed two", "changed three");
+
+  const shown = compare(lines(was), lines(is));
+  const edits = shown.filter((one) => one.mark !== " ");
+
+  assert.equal(edits.length, 5, "two lines gone, three arrived");
+  assert.deepEqual(
+    shown.filter((one) => one.mark !== "−").map((one) => one.line.text),
+    is,
+  );
+});
+
+test("nothing changed means nothing marked", () => {
+  const lines = ["one", "two", "three"].map((text, at) => ({ at: at + 1, text }));
+  assert.ok(compare(lines, [...lines]).every((one) => one.mark === " "));
 });

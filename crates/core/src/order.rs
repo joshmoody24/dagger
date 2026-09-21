@@ -311,6 +311,10 @@ fn pick(
                 at.bands[candidate] as isize,
                 // Arriving somewhere, read what it says it is before what it holds: a
                 // module's own definition is its file's prose and what it brings in.
+                //
+                // Costs more held in mind on some readings and less on others — a module's
+                // imports count against it the way a function's contract does, which
+                // overstates them, since nobody holds an import list in their head.
                 isize::from(!headers[candidate]),
                 // Then finish a branch, when one can be finished.
                 -(closes as isize),
