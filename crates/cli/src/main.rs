@@ -88,7 +88,9 @@ fn main() -> Result<()> {
     let before = lay_out(&repo, &config, &before_rev)?;
     let after = lay_out(&repo, &config, &after_rev)?;
 
-    let result = if args.explain {
+    // The snapshots take themselves away when they go out of scope here, whichever way
+    // this ends.
+    if args.explain {
         explain(&config, &claims, &after)
     } else {
         compare(
@@ -99,11 +101,7 @@ fn main() -> Result<()> {
             (&after_rev, &after),
             &args,
         )
-    };
-
-    clean_up(&before);
-    clean_up(&after);
-    result
+    }
 }
 
 /// What to compare. The user's word first, then whatever the snapshot adapter thinks is
@@ -341,11 +339,5 @@ fn lay_out(repo: &Path, config: &Config, rev: &str) -> Result<adapter::Snapshot>
                 files: None,
             })
         }
-    }
-}
-
-fn clean_up(snapshot: &adapter::Snapshot) {
-    if snapshot.temporary {
-        let _ = std::fs::remove_dir_all(&snapshot.dir);
     }
 }

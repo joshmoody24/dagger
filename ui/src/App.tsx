@@ -26,6 +26,13 @@ export function App(props) {
     onCleanup(() => beside.removeEventListener("change", settle));
   });
 
+  const hiding = () => review().worries.filter((worry) => worry.hides);
+  const weaker = () => review().worries.filter((worry) => !worry.hides);
+  const said = () =>
+    hiding().length
+      ? `${hiding().length} this review might not be showing`
+      : `${weaker().length} worked out a weaker way`;
+
   const showing = () => wide() || sheet() !== "closed";
   const open = () => !wide() && sheet() === "closed" && setSheet("half");
   const shut = () => !wide() && setSheet("closed");
@@ -99,16 +106,17 @@ export function App(props) {
         <div class="t">
           <span class="what">{steps().length} to read, grouped by {review().grouping || "module"}</span>
           <span class="prog">{at() + 1} of {steps().length}</span>
-          {/* Only there when there's something to say. Nothing went wrong most of the
-            * time, and a permanent badge reading nought is just something to ignore. */}
+          {/* Only there when there's something to say, and only a warning when something
+            * might be missing. A review worked out a weaker way is worth knowing about and
+            * isn't worth alarm — told as alarm, it teaches you to ignore the alarm. */}
           <Show when={review().worries.length}>
             <button
-              class="worry"
+              class={`worry${hiding().length ? " bad" : ""}`}
               onClick={() => setWorriesOpen((was) => !was)}
-              title={`${review().worries.length} dagger couldn't work out`}
-              aria-label={`${review().worries.length} dagger couldn't work out`}
+              title={said()}
+              aria-label={said()}
             >
-              ⚠
+              {hiding().length ? "⚠" : "ⓘ"}
             </button>
           </Show>
         </div>
@@ -145,10 +153,20 @@ export function App(props) {
       <Show when={worriesOpen()}>
         <aside class="notes">
           <button class="ib" onClick={() => setWorriesOpen(false)} aria-label="Close">×</button>
-          <h2>What dagger couldn't work out</h2>
-          <ul>
-            <For each={review().worries}>{(worry) => <li>{worry}</li>}</For>
-          </ul>
+
+          <Show when={hiding().length}>
+            <h2>This review might not be showing</h2>
+            <ul>
+              <For each={hiding()}>{(worry) => <li>{worry.said}</li>}</For>
+            </ul>
+          </Show>
+
+          <Show when={weaker().length}>
+            <h2 class="lesser">Worked out a weaker way</h2>
+            <ul>
+              <For each={weaker()}>{(worry) => <li>{worry.said}</li>}</For>
+            </ul>
+          </Show>
         </aside>
       </Show>
     </>

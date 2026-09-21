@@ -11,6 +11,7 @@ import type {
   Raw,
   Review,
   Spot,
+  Worry,
 } from "./dagger.ts";
 
 /* Reads what dagger says about a change and works out where to draw it.
@@ -110,7 +111,12 @@ export function digest(raw: Raw): Review {
     grouping: raw.grouping.name,
     worries: [
       ...raw.review.diagnostics.map((diagnostic) => told(diagnostic, definitions)),
-      ...raw.notes.map((note) => (note.file ? `${note.file}: ${note.message}` : note.message)),
+      /* An adapter's note is always about something it couldn't do, so whatever it was
+       * about isn't in the review. */
+      ...raw.notes.map((note) => ({
+        said: note.file ? `${note.file}: ${note.message}` : note.message,
+        hides: true,
+      })),
     ],
   };
 }
@@ -138,7 +144,7 @@ export function broke(review: Review, id: Identity) {
 
 /* Dagger's diagnostics say what it had to work around. A reader deserves them in words
  * rather than as a shape of JSON. */
-function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): string {
+function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): Worry {
   const [[kind, what]] = Object.entries(diagnostic) as [string, any][];
   /* Every one of these is about a particular definition, and five copies of the same
    * sentence with nothing to tell them apart is no use to anybody. */
@@ -147,17 +153,37 @@ function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): s
     return definition ? `${definition.path} (${definition.file})` : `definition ${id}`;
   };
 
+  /* Whether the review might not be showing something that changed, which is a different
+   * kind of news from having worked something out a weaker way. Said together, the one
+   * that matters is lost among the ones that don't. */
   switch (kind) {
     case "unattributed":
-      return `${what.file}: ${what.lines} changed line${what.lines === 1 ? "" : "s"} belong to no definition, around line ${what.at.join(", ")}`;
-    case "lopsided_contract":
-      return `${named(what.definition)}: the compiler described one side of this and not the other, so the signature as written was compared instead`;
+      return {
+        hides: true,
+        said: `${what.file}: ${what.lines} changed line${what.lines === 1 ? "" : "s"} belong to no definition, around line ${what.at.join(", ")}`,
+      };
     case "unbound_in_contract":
-      return `${what.symbol} appears where callers of ${named(what.definition)} can see it, but nothing could say what it refers to`;
+      return {
+        hides: true,
+        said: `${what.symbol} appears where callers of ${named(what.definition)} can see it, but nothing could say what it refers to`,
+      };
     case "mention_from_nowhere":
-      return `a mention of ${named(what.to)} came from ${what.from.name}, which was never reported`;
+      return {
+        hides: true,
+        said: `a mention of ${named(what.to)} came from ${what.from.name}, which was never reported`,
+      };
+    case "two_of_one_name":
+      return {
+        hides: true,
+        said: `${what.times} definitions are called ${[...what.locator.scope, what.locator.name].join("::")}, so only one of them could be followed from one side to the other`,
+      };
+    case "lopsided_contract":
+      return {
+        hides: false,
+        said: `${named(what.definition)}: the compiler described one side of this and not the other, so the signature as written was compared instead`,
+      };
     default:
-      return `${kind}: ${JSON.stringify(what)}`;
+      return { hides: true, said: `${kind}: ${JSON.stringify(what)}` };
   }
 }
 

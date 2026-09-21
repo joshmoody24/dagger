@@ -84,6 +84,20 @@ pub struct Snapshot {
     pub files: Option<Vec<String>>,
 }
 
+/// A laid-out snapshot takes itself away.
+///
+/// Tidying up by hand means every path out of the reading has to remember to do it, and the
+/// ones that don't are the paths nobody walks on purpose: the second snapshot failing to
+/// lay out leaves the first sitting in the temporary directory, and an error anywhere after
+/// leaves both. A copy of a repository is not a small thing to leave behind.
+impl Drop for Snapshot {
+    fn drop(&mut self) {
+        if self.temporary {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+}
+
 pub fn materialize(repo: &Path, snapshots: &Adapter, rev: &str) -> Result<Snapshot> {
     let request = Request::Materialize {
         rev: rev.to_string(),

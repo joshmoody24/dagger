@@ -110,6 +110,13 @@ export interface Definition {
   group: string[];
 }
 
+/* Something dagger had to work around, and whether it might have cost the reader a change.
+ * Both go on the page; only one of them is a warning. */
+export interface Worry {
+  said: string;
+  hides: boolean;
+}
+
 export interface Review {
   definitions: Map<Identity, Definition>;
   steps: Step[];
@@ -117,7 +124,7 @@ export interface Review {
   changes: Record<Identity, Change>;
   cost: Cost;
   grouping?: string;
-  worries: string[];
+  worries: Worry[];
 }
 
 export interface Spot {

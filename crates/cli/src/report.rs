@@ -94,11 +94,18 @@ pub fn print(review: &Review, ordering: &Ordering, definitions: &[Definition], n
         );
     }
 
-    if !review.diagnostics.is_empty() || !notes.is_empty() {
+    // Whatever might be hiding a change is said first, and said as the worse news it is.
+    // Told all together, the one that matters is buried among the ones that don't.
+    let (hiding, weaker): (Vec<_>, Vec<_>) = review
+        .diagnostics
+        .iter()
+        .partition(|diagnostic| diagnostic.hides());
+
+    if !hiding.is_empty() || !notes.is_empty() {
         let _ = writeln!(
             out,
-            "\n{} things worth knowing:",
-            review.diagnostics.len() + notes.len()
+            "\n{} things this review might not be showing:",
+            hiding.len() + notes.len()
         );
         for note in notes {
             let about = match &note.file {
@@ -107,7 +114,14 @@ pub fn print(review: &Review, ordering: &Ordering, definitions: &[Definition], n
             };
             let _ = writeln!(out, "  {about}{}", note.message);
         }
-        for diagnostic in &review.diagnostics {
+        for diagnostic in hiding {
+            let _ = writeln!(out, "  {diagnostic:?}");
+        }
+    }
+
+    if !weaker.is_empty() {
+        let _ = writeln!(out, "\n{} worked out a weaker way:", weaker.len());
+        for diagnostic in weaker {
             let _ = writeln!(out, "  {diagnostic:?}");
         }
     }

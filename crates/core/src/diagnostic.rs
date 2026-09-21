@@ -19,6 +19,12 @@ pub enum Diagnostic {
     },
     /// An extractor reported a mention coming from a definition it never reported.
     MentionFromNowhere { from: Locator },
+    /// Two definitions in one snapshot answering to the same name.
+    ///
+    /// A definition has to be addressable by name, or it can't be told from its twin in the
+    /// other snapshot. One of them gets matched and the rest read as arriving or leaving,
+    /// which nobody did — so this can invent a change as easily as hide one.
+    TwoOfOneName { locator: Locator, times: usize },
     /// Lines that differ between the snapshots but sit inside no definition, so nothing in
     /// the review accounts for them. Whatever an extractor walked past. A reader who trusts
     /// the review would never learn these changed.
@@ -28,4 +34,18 @@ pub enum Diagnostic {
         /// The first few, so this can be looked into rather than just counted.
         at: Vec<u32>,
     },
+}
+
+impl Diagnostic {
+    /// Whether this one means the review might not be showing something that changed.
+    ///
+    /// These aren't all the same kind of bad news, and reporting them as though they were
+    /// teaches a reader to ignore the lot. Changed lines nobody accounts for, a mention
+    /// from a definition that was never reported, a name in a contract that nothing could
+    /// place — each of those can hide a change, and a reader trusting the review would
+    /// never learn of it. A lopsided contract is different in kind: the change is there
+    /// and it's shown, it was just worked out from the text rather than the compiler.
+    pub fn hides(&self) -> bool {
+        !matches!(self, Diagnostic::LopsidedContract { .. })
+    }
 }

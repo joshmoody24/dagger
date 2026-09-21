@@ -21,13 +21,18 @@ pub struct Matched {
 /// Decide which definitions in the two snapshots are the same definition, then say
 /// everything else in terms of the identities that fall out.
 pub fn match_snapshots(before: Extraction, after: Extraction) -> Matched {
+    /* Checked before anything is done with them, because everything after this takes a
+     * name for an identity. Left unsaid, a repeated name doesn't fail — it quietly matches
+     * one of the twins and reports the others as arriving or leaving. */
+    let mut diagnostics = twins(&before.occurrences);
+    diagnostics.append(&mut twins(&after.occurrences));
+
     let pairs = pair_up(&before.occurrences, &after.occurrences);
     let definitions = build_definitions(pairs, before.occurrences, after.occurrences);
 
     let before_index = locator_index(&definitions, |sides| sides.before());
     let after_index = locator_index(&definitions, |sides| sides.after());
 
-    let mut diagnostics = Vec::new();
     let references = collect_references(
         &before.mentions,
         &after.mentions,
@@ -43,11 +48,28 @@ pub fn match_snapshots(before: Extraction, after: Extraction) -> Matched {
     }
 }
 
+/// Names more than one definition in a snapshot answers to.
+fn twins(occurrences: &[Occurrence]) -> Vec<Diagnostic> {
+    let mut times: BTreeMap<&Locator, usize> = BTreeMap::new();
+    for occurrence in occurrences {
+        *times.entry(&occurrence.locator).or_default() += 1;
+    }
+
+    times
+        .into_iter()
+        .filter(|(_, times)| *times > 1)
+        .map(|(locator, times)| Diagnostic::TwoOfOneName {
+            locator: locator.clone(),
+            times,
+        })
+        .collect()
+}
+
 /// Which after-occurrence, if any, each before-occurrence turned into.
 fn pair_up(before: &[Occurrence], after: &[Occurrence]) -> Vec<Option<usize>> {
     let mut after_by_locator: BTreeMap<&Locator, usize> = BTreeMap::new();
     for (index, occurrence) in after.iter().enumerate() {
-        after_by_locator.insert(&occurrence.locator, index);
+        after_by_locator.entry(&occurrence.locator).or_insert(index);
     }
 
     let mut taken = vec![false; after.len()];
