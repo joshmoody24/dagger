@@ -64,7 +64,15 @@ pub fn describe(
             settings: json(settings),
         },
     )? {
-        Response::Described { include, revisions } => Ok(Described { include, revisions }),
+        Response::Described {
+            include,
+            revisions,
+            usage,
+        } => Ok(Described {
+            include,
+            revisions,
+            usage,
+        }),
         Response::Failed { message } => bail!("{adapter} wouldn't say what it does: {message}"),
         other => bail!("asked {adapter} what it does and got {other:?}"),
     }
@@ -74,6 +82,9 @@ pub struct Described {
     pub include: Vec<String>,
     /// Only a snapshot adapter fills this in.
     pub revisions: Option<Revisions>,
+    /// How this adapter lets a change be named, a line each. Only a snapshot adapter has
+    /// anything to say here.
+    pub usage: Vec<String>,
 }
 
 /// A revision sitting on disk, whether clearing it up is our job, and what the
@@ -95,6 +106,21 @@ impl Drop for Snapshot {
         if self.temporary {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
+    }
+}
+
+/// What the user asked for on the command line, turned into two revisions by whoever
+/// knows what the words mean.
+pub fn revisions(repo: &Path, snapshots: &Adapter, asked: &[String]) -> Result<Revisions> {
+    let request = Request::Resolve {
+        asked: asked.to_vec(),
+        settings: json(&snapshots.settings),
+    };
+    match ask(repo, &snapshots.adapter, &snapshots.args, &request)? {
+        Response::Resolved { revisions } => Ok(revisions),
+        // Worded by whoever understands the words, so it's passed on as it came.
+        Response::Failed { message } => bail!("{message}"),
+        other => bail!("asked {} what to read and got {other:?}", snapshots.adapter),
     }
 }
 

@@ -25,8 +25,7 @@ use std::process::{Command, Stdio};
 async fn review(
     window: tauri::Window,
     repo: String,
-    before: Option<String>,
-    after: Option<String>,
+    asked: Vec<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut dagger = Command::new(found());
@@ -35,9 +34,10 @@ async fn review(
             .current_dir(&repo)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        if let (Some(before), Some(after)) = (before, after) {
-            dagger.args([before, after]);
-        }
+        /* Passed on as typed. What counts as a way of naming a change is the snapshot
+         * adapter's to say, so a window that read these would be a second opinion about
+         * it — and one that goes out of date the moment an adapter learns a new word. */
+        dagger.args(&asked);
 
         let mut run = dagger
             .spawn()
@@ -99,13 +99,12 @@ fn found() -> PathBuf {
 
 /// What this window was opened on, as the command line put it.
 ///
-/// Revisions are optional in the same way they're optional on the command line: named, they
-/// are what gets read; left out, dagger decides, which means the working changes.
+/// Whatever followed `--read` travels to dagger untouched. Named nothing and dagger
+/// decides, which means the working changes.
 #[derive(serde::Serialize)]
 struct Opened {
     repo: String,
-    before: Option<String>,
-    after: Option<String>,
+    asked: Vec<String>,
 }
 
 #[tauri::command]
@@ -116,8 +115,16 @@ fn opened() -> Opened {
                 .map(|here| here.to_string_lossy().into_owned())
                 .unwrap_or_else(|_| ".".to_string())
         }),
-        before: said("--before"),
-        after: said("--after"),
+        asked: rest("--read"),
+    }
+}
+
+/// Everything after a flag, which is all of it: these are dagger's arguments, not ours.
+fn rest(flag: &str) -> Vec<String> {
+    let mut args = std::env::args().skip_while(|arg| arg != flag);
+    match args.next() {
+        Some(_) => args.collect(),
+        None => Vec::new(),
     }
 }
 

@@ -40,12 +40,16 @@ struct Settings {
     /// packages — instead of leaving them out. On by default: without them, tooling that
     /// reads generated declarations has to compile everything from source instead.
     carry_ignored: bool,
+    /// What branches are cut from and merged back into, when it isn't the obvious one.
+    /// Left empty, this is whatever the remote says its own HEAD is.
+    trunk: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             carry_ignored: true,
+            trunk: String::new(),
         }
     }
 }
@@ -70,7 +74,14 @@ fn answer(request: Request) -> Result<Response> {
         Request::Describe { .. } => Ok(Response::Described {
             include: Vec::new(),
             revisions: Some(worth_reviewing()?),
+            usage: UNDERSTOOD.lines().map(str::to_string).collect(),
         }),
+        Request::Resolve { asked, settings } => {
+            let settings: Settings = serde_json::from_value(settings).unwrap_or_default();
+            Ok(Response::Resolved {
+                revisions: resolve(&asked, &settings)?,
+            })
+        }
         Request::Extract { .. } => bail!("git only lays snapshots out, it doesn't read them"),
     }
 }
@@ -95,6 +106,161 @@ fn worth_reviewing() -> Result<Revisions> {
     })
 }
 
+/// The two ends of what someone asked for, before git has been asked to resolve them.
+#[derive(Debug, PartialEq)]
+struct Ends<'a> {
+    left: &'a str,
+    right: &'a str,
+    /// Whether the left end means "where these two parted" rather than the revision
+    /// itself — git's `...`, and what reviewing a branch wants.
+    parted: bool,
+}
+
+/// The trunk, spelled so `resolve` knows to go and find it.
+const TRUNK: &str = "";
+
+/// Every way this adapter lets a change be named. Said once: dagger shows it in its own
+/// help, and it's what a reader who typed something else gets told.
+const UNDERSTOOD: &str = "\
+branch <name>        that branch, since it left the trunk
+commits <a> <b>      those two revisions
+commits <a>..<b>     or <a>...<b>, as git writes them";
+
+/// What was typed, in the words this adapter knows.
+///
+/// Spelled out rather than guessed at. A single name could just as well mean "the branch
+/// I want to read" as "the thing my branch came from", and the two give entirely different
+/// answers — one of them quietly, since a review of the wrong change looks exactly like a
+/// review of the right one. Git learned this with `checkout` and split it in two, so
+/// there's no sense learning it again here.
+fn read(asked: &[String]) -> Result<Ends<'_>> {
+    match asked {
+        [word, name] if word == "branch" => Ok(Ends {
+            left: TRUNK,
+            right: name,
+            parted: true,
+        }),
+        [word, range] if word == "commits" && range.contains("..") => Ok(span(range)),
+        [word, before, after] if word == "commits" => Ok(Ends {
+            left: before,
+            right: after,
+            parted: false,
+        }),
+        [range] if range.contains("..") => Ok(span(range)),
+        _ => bail!("dagger-git doesn't know what that means. It understands:\n{UNDERSTOOD}"),
+    }
+}
+
+/// One of git's own ranges. `...` is where two parted, `..` is the revisions themselves.
+fn span(range: &str) -> Ends<'_> {
+    let (parted, (left, right)) = match range.split_once("...") {
+        // Tried before `..`, which would otherwise read the third dot as part of a name.
+        Some(ends) => (true, ends),
+        None => (false, range.split_once("..").expect("a range has two dots")),
+    };
+    Ends {
+        left: if left.is_empty() { "HEAD" } else { left },
+        right: if right.is_empty() { "HEAD" } else { right },
+        parted,
+    }
+}
+
+/// Where a branch parted from what it branched off, or the revisions themselves.
+///
+/// Both ends come back as commits rather than as whatever was typed, so that nothing
+/// downstream has to resolve a name a second time and possibly differently.
+fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> {
+    let Ends {
+        left,
+        right,
+        parted,
+    } = read(asked)?;
+
+    let left = if left == TRUNK {
+        trunk(settings)?
+    } else {
+        left.to_string()
+    };
+    let (left, right) = (commit(&left)?, commit(right)?);
+
+    let before = if parted {
+        let found = say(&["merge-base", &left, &right])?;
+        if found.is_empty() {
+            bail!("those two share no history, so there's nothing between them");
+        }
+        found
+    } else {
+        left
+    };
+
+    Ok(Revisions {
+        before,
+        after: right,
+    })
+}
+
+/// What branches here are cut from.
+///
+/// A remote records which branch it hands out by default, which is the same question, and
+/// having been told once git remembers it. Repositories that never got that far fall back
+/// to the usual names.
+fn trunk(settings: &Settings) -> Result<String> {
+    if !settings.trunk.is_empty() {
+        return Ok(settings.trunk.clone());
+    }
+    if let Ok(named) = say(&["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        && !named.is_empty()
+    {
+        return Ok(named);
+    }
+    for guess in ["origin/main", "origin/master", "main", "master"] {
+        if commit(guess).is_ok() {
+            return Ok(guess.to_string());
+        }
+    }
+    bail!(
+        "couldn't tell what branches here are cut from. Say so in dagger.toml, under \
+         [snapshots.settings] as trunk = \"...\""
+    )
+}
+
+/// The commit a name stands for, the way a person means it.
+///
+/// A branch someone fetched but never checked out is only a remote-tracking ref, so the
+/// name they read on the pull request isn't a revision git will answer to. `git checkout`
+/// guesses past that and everything else refuses to, which is why naming a colleague's
+/// branch looks like a typo. This guesses the same way: the name as written first, then
+/// the one remote that has it.
+fn commit(name: &str) -> Result<String> {
+    if let Ok(found) = say(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        &format!("{name}^{{commit}}"),
+    ]) && !found.is_empty()
+    {
+        return Ok(found);
+    }
+
+    let tracking = lines(&[
+        "for-each-ref",
+        "--format=%(refname:short)",
+        &format!("refs/remotes/*/{name}"),
+    ])?;
+
+    match tracking.as_slice() {
+        [only] => say(&["rev-parse", "--verify", &format!("{only}^{{commit}}")]),
+        [] => bail!(
+            "there's no branch, tag or commit called {name} here. If it's someone else's \
+             branch, fetch it first"
+        ),
+        several => bail!(
+            "{name} is on more than one remote, so say which: {}",
+            several.join(", ")
+        ),
+    }
+}
+
 /// Tracked files plus anything new that isn't ignored, which is the same set git
 /// status talks about.
 fn current_files() -> Result<Vec<String>> {
@@ -107,7 +273,22 @@ fn current_files() -> Result<Vec<String>> {
     ])
 }
 
-fn listing(args: &[&str]) -> Result<Vec<String>> {
+/// One line of answer, with the newline git puts after it taken off.
+fn say(args: &[&str]) -> Result<String> {
+    Ok(run(args)?.trim().to_string())
+}
+
+/// An answer that comes back a line at a time, rather than NUL-separated.
+fn lines(args: &[&str]) -> Result<Vec<String>> {
+    Ok(run(args)?
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+fn run(args: &[&str]) -> Result<String> {
     let output = Command::new("git")
         .args(args)
         .output()
@@ -119,8 +300,11 @@ fn listing(args: &[&str]) -> Result<Vec<String>> {
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
+    Ok(String::from_utf8(output.stdout)?)
+}
 
-    Ok(String::from_utf8(output.stdout)?
+fn listing(args: &[&str]) -> Result<Vec<String>> {
+    Ok(run(args)?
         .split('\0')
         .filter(|name| !name.is_empty())
         .map(str::to_string)
@@ -213,4 +397,95 @@ fn export(commit: &str, dir: &Path) -> Result<()> {
         bail!("unpacking {commit} into {} failed", dir.display());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn asked(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| word.to_string()).collect()
+    }
+
+    #[test]
+    fn a_branch_is_read_against_the_trunk() {
+        let words = asked(&["branch", "feature"]);
+        let ends = read(&words).unwrap();
+        assert_eq!(ends.left, TRUNK);
+        assert_eq!(ends.right, "feature");
+        assert!(ends.parted, "a branch is read from where it parted");
+    }
+
+    #[test]
+    fn two_commits_are_those_two() {
+        let words = asked(&["commits", "a", "b"]);
+        assert_eq!(
+            read(&words).unwrap(),
+            Ends {
+                left: "a",
+                right: "b",
+                parted: false
+            }
+        );
+    }
+
+    #[test]
+    fn gits_own_ranges_are_understood() {
+        let two = asked(&["commits", "main..feature"]);
+        assert_eq!(
+            read(&two).unwrap(),
+            Ends {
+                left: "main",
+                right: "feature",
+                parted: false
+            }
+        );
+        let three = asked(&["main...feature"]);
+        assert_eq!(
+            read(&three).unwrap(),
+            Ends {
+                left: "main",
+                right: "feature",
+                parted: true
+            }
+        );
+    }
+
+    /* `...` has to be tried first: read as two dots it would leave a name starting with a
+     * dot, and ask git about a revision nobody typed. */
+    #[test]
+    fn three_dots_are_not_read_as_two() {
+        assert_eq!(span("main...HEAD").left, "main");
+        assert_eq!(span("main...HEAD").right, "HEAD");
+        assert!(span("main...HEAD").parted);
+    }
+
+    #[test]
+    fn an_end_left_out_is_where_you_are() {
+        assert_eq!(span("main..").right, "HEAD");
+        assert_eq!(span("..main").left, "HEAD");
+    }
+
+    /* The whole point of spelling it out: a name on its own meant two different things
+     * depending on who typed it, and got no complaint either way. */
+    #[test]
+    fn a_bare_name_is_refused_rather_than_guessed_at() {
+        let words = asked(&["main"]);
+        let said = read(&words).unwrap_err().to_string();
+        assert!(
+            said.contains("branch <name>"),
+            "should say what it knows: {said}"
+        );
+    }
+
+    #[test]
+    fn nonsense_is_refused() {
+        for words in [
+            asked(&[]),
+            asked(&["commits"]),
+            asked(&["branch", "a", "b"]),
+        ] {
+            assert!(read(&words).is_err(), "{words:?} should not be understood");
+        }
+    }
 }

@@ -84,6 +84,7 @@ fn answer(request: Request) -> Result<Response> {
         Request::Describe { settings } => Ok(Response::Described {
             include: settings_of(settings)?.include,
             revisions: None,
+            usage: Vec::new(),
         }),
         Request::Extract {
             dir,
@@ -95,7 +96,9 @@ fn answer(request: Request) -> Result<Response> {
                 extract(Path::new(&dir), &files, &changed, settings_of(settings)?)?;
             Ok(Response::Extracted { extraction, notes })
         }
-        Request::Materialize { .. } => bail!("this only reads snapshots, it doesn't lay them out"),
+        Request::Materialize { .. } | Request::Resolve { .. } => {
+            bail!("this only reads snapshots, it doesn't lay them out")
+        }
     }
 }
 

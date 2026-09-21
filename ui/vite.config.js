@@ -17,15 +17,15 @@ function live() {
     name: "dagger-review",
     configureServer(server) {
       server.middlewares.use("/review", (request, response) => {
-        /* Which pair to read. Named in the address when the page asks for a particular
-         * one, and otherwise whatever this server was started on — so a browser opened
-         * beside a window started on `HEAD~1 HEAD` is looking at the same change, rather
-         * than quietly at a different one. Neither, and dagger decides, which means the
-         * working changes. */
+        /* What to read, passed to dagger as typed — the words are its snapshot adapter's,
+         * not this server's. Named in the address when the page asks for something
+         * particular, and otherwise whatever this server was started on, so a browser
+         * opened beside a window is looking at the same change rather than quietly at a
+         * different one. Neither, and dagger decides, which means the working changes. */
         const asked = new URL(request.url, "http://dagger").searchParams;
-        const before = asked.get("before") || process.env.DAGGER_BEFORE;
-        const after = asked.get("after") || process.env.DAGGER_AFTER;
-        const reading = before && after ? [before, after] : [];
+        const reading = asked.getAll("read").length
+          ? asked.getAll("read")
+          : (process.env.DAGGER_READ || "").split("\n").filter(Boolean);
 
         const dagger = spawn("target/debug/dagger", ["--json", ...reading], { cwd: ".." });
 

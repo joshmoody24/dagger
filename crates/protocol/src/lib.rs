@@ -25,6 +25,19 @@ pub enum Request {
         #[serde(default)]
         settings: serde_json::Value,
     },
+    /// Turn what the user asked for on the command line into the two revisions to
+    /// compare.
+    ///
+    /// The words are the adapter's, not dagger's. "Branch", "commits", `main...HEAD` —
+    /// all of that is git's way of naming history, and a repository kept some other way
+    /// names it some other way. So the arguments travel exactly as typed and whoever
+    /// understands them says what they meant.
+    Resolve {
+        /// Everything after the flags, in order, untouched.
+        asked: Vec<String>,
+        #[serde(default)]
+        settings: serde_json::Value,
+    },
     /// Put this revision somewhere on disk and say where.
     Materialize {
         rev: String,
@@ -81,6 +94,15 @@ pub enum Response {
         /// work sitting around.
         #[serde(default)]
         revisions: Option<Revisions>,
+        /// The ways of naming a change this adapter answers to, a line each, for dagger
+        /// to show alongside its own help. Written here because the words are this
+        /// adapter's: dagger printing them itself would be a second copy of a list only
+        /// one of them can keep right.
+        #[serde(default)]
+        usage: Vec<String>,
+    },
+    Resolved {
+        revisions: Revisions,
     },
     Materialized {
         dir: String,
@@ -102,5 +124,7 @@ pub enum Response {
         notes: Vec<Note>,
     },
     /// Something went wrong that the user should hear about, worded for them.
-    Failed { message: String },
+    Failed {
+        message: String,
+    },
 }

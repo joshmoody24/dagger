@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Opens the window on a repository, building whatever is out of date first.
 #
-#   ./window                       this repository's working changes
-#   ./window HEAD~1 HEAD           some other pair, as the command line takes them
-#   ./window ../redo               another repository
-#   ./window ../redo HEAD~1 HEAD   both
+#   ./window                            this repository's working changes
+#   ./window branch some-branch         that branch, since it left the trunk
+#   ./window commits HEAD~1 HEAD        some other pair
+#   ./window ../redo                    another repository
+#   ./window ../redo branch theirs      both
+#
+# Anything after the repository goes to dagger as written — what those words mean is its
+# snapshot adapter's business, not this script's.
 #
 # The window shells out to dagger, so the tool built here is put on PATH ahead of any
 # installed one: a window built from this repository should read with the tool from it.
@@ -21,11 +25,8 @@ fi
 repo="$(cd "$repo" && pwd)"
 
 reading=()
-if [ $# -eq 2 ]; then
-  reading=(--before "$1" --after "$2")
-elif [ $# -ne 0 ]; then
-  echo "name two revisions or none: ./window [<repo>] [<before> <after>]" >&2
-  exit 1
+if [ $# -ne 0 ]; then
+  reading=(--read "$@")
 fi
 
 port=1420
@@ -57,7 +58,7 @@ fi
 said="target/page.log"
 
 start() {
-  (cd ui && DAGGER_BEFORE="${1:-}" DAGGER_AFTER="${2:-}" \
+  (cd ui && DAGGER_READ="$(printf '%s\n' "$@")" \
     exec ./node_modules/.bin/vite --port "$port" --strictPort >"../$said" 2>&1 </dev/null) &
   page=$!
   trap 'kill "$page" 2>/dev/null; wait "$page" 2>/dev/null' EXIT INT TERM

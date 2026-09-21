@@ -24,11 +24,14 @@ use std::io::{IsTerminal, Write};
 use std::path::Path;
 
 struct Args {
-    /// Left alone when the user named nothing, so the snapshot adapter gets to choose.
-    revisions: Option<(String, String)>,
+    /// What was typed after the flags, in order and untouched. Empty means the user
+    /// named nothing, so the snapshot adapter gets to choose. Dagger never reads these:
+    /// what counts as a way of naming history is the adapter's to say.
+    asked: Vec<String>,
     json: bool,
     explain: bool,
     list: bool,
+    help: bool,
 }
 
 fn parse_args() -> Result<Args> {
@@ -36,33 +39,62 @@ fn parse_args() -> Result<Args> {
     let mut json = false;
     let mut explain = false;
     let mut list = false;
+    let mut help = false;
 
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--json" => json = true,
             "--explain" => explain = true,
             "--list" => list = true,
-            "-h" | "--help" => {
-                println!("dagger [--json] [--explain] [--list] [<before> <after>]");
-                std::process::exit(0);
-            }
+            // Answered once the repository has been read, since half the answer is the
+            // snapshot adapter's and this doesn't know yet which one that is.
+            "-h" | "--help" => help = true,
             flag if flag.starts_with('-') => bail!("don't know the flag {flag}"),
             value => positional.push(value.to_string()),
         }
     }
 
-    let revisions = match positional.as_slice() {
-        [] => None,
-        [before, after] => Some((before.clone(), after.clone())),
-        _ => bail!("expected two revisions, or none at all"),
-    };
-
     Ok(Args {
-        revisions,
+        asked: positional,
+        help,
         json,
         explain,
         list,
     })
+}
+
+/// What dagger does, and how this repository lets a change be named.
+///
+/// The second half isn't dagger's to write. Which words work here depends on the snapshot
+/// adapter configured, so it's asked rather than guessed at — a list kept in two places is
+/// a list that goes wrong in one of them. A repository with no adapter, or one that won't
+/// answer, simply has nothing extra to say.
+fn help(repo: &Path, config: &Config) {
+    println!("dagger [--json] [--explain] [--list] [what to read]");
+    println!();
+    println!("Named nothing, dagger reads whatever you're working on.");
+    println!();
+
+    let understood = config.snapshots.as_ref().and_then(|snapshots| {
+        let said = adapter::describe(
+            repo,
+            &snapshots.adapter,
+            &snapshots.args,
+            &snapshots.settings,
+        );
+        said.ok().filter(|said| !said.usage.is_empty())
+    });
+
+    match understood {
+        Some(said) => {
+            println!("What else you can name here:");
+            println!();
+            for line in said.usage {
+                println!("  dagger {line}");
+            }
+        }
+        None => println!("What else you can name depends on the snapshot adapter configured."),
+    }
 }
 
 /// Progress goes to stderr, where it can't get mixed into the review itself. Reading two
@@ -80,6 +112,11 @@ fn main() -> Result<()> {
     let args = parse_args()?;
     let repo = std::env::current_dir()?;
     let config = Config::read(&repo)?;
+
+    if args.help {
+        help(&repo, &config);
+        return Ok(());
+    }
 
     let claims = claims(&repo, &config)?;
     let (before_rev, after_rev) = revisions(&repo, &config, &args)?;
@@ -107,8 +144,18 @@ fn main() -> Result<()> {
 /// What to compare. The user's word first, then whatever the snapshot adapter thinks is
 /// worth looking at, and failing both, the last commit.
 fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, String)> {
-    if let Some(named) = &args.revisions {
-        return Ok(named.clone());
+    match (args.asked.as_slice(), &config.snapshots) {
+        ([], _) => {}
+        (asked, Some(snapshots)) => {
+            let found = adapter::revisions(repo, snapshots, asked)?;
+            return Ok((found.before, found.after));
+        }
+        // Without an adapter there's nobody to ask, so two directories is all this can be.
+        ([before, after], None) => return Ok((before.clone(), after.clone())),
+        (_, None) => bail!(
+            "no snapshot adapter is configured in {}, so name two directories",
+            config::FILE
+        ),
     }
 
     let suggested = match &config.snapshots {
