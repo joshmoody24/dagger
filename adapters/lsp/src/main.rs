@@ -14,10 +14,10 @@
 
 mod symbols;
 
-use crate::symbols::Symbol;
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
+use dagger_core::prose::{line_end, line_start, preamble};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
 use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Note, Request, Response};
@@ -661,7 +661,7 @@ fn definitions(
                 if let Some(body) = body {
                     parts.insert(Part::Body, pieces(file, &[body]));
                 }
-                if let Some(told) = preamble(file, symbol, &lines) {
+                if let Some(told) = preamble(file.lines.text(), &symbol.whole, &lines) {
                     parts.insert(Part::Docs, pieces(file, &[told]));
                 }
 
@@ -713,79 +713,6 @@ fn module(file: &Opened) -> Option<Occurrence> {
     })
 }
 
-/// What was written just above a definition, which belongs to it.
-///
-/// A language server reports a definition from its declaration — `export interface Money {`
-/// — and says nothing about the comment above explaining what it's for. That comment then
-/// belongs to nothing, and falls through to the module, which ends up a pile of prose with
-/// gaps where the definitions it describes ought to be. It's documentation: the part of a
-/// definition written for whoever uses it, which the model already has a place for.
-///
-/// Told without knowing a single language's comment syntax: an unbroken run of lines
-/// directly above a definition that no other definition claims. Unclaimed is what makes it
-/// safe — a line belonging to something else stops the run, so this can never swallow the
-/// statement above. A blank line stops it too, which is how anybody writes: prose is
-/// against the thing it describes, and separated from whatever came before.
-fn preamble(file: &Opened, symbol: &Symbol, claimed: &[Range<usize>]) -> Option<Range<usize>> {
-    let text = file.lines.text();
-    let mut start = line_start(text, symbol.whole.start);
-
-    /* How far back this may reach. What's written above a method is inside the class the
-     * method is in, so the walk stops below the line the class opens on: prose belongs to
-     * whatever it's written inside, and can't be taken from it. */
-    let floor = claimed
-        .iter()
-        .filter(|range| range.start <= symbol.whole.start && range.end >= symbol.whole.end)
-        .filter(|range| range.start < line_start(text, symbol.whole.start))
-        .map(|range| line_end(text, range.start))
-        .max()
-        .unwrap_or(0);
-
-    loop {
-        if start <= floor {
-            break;
-        }
-        let above = line_start(text, start - 1);
-        let line = &text[above..start];
-
-        if line.trim().is_empty() {
-            break;
-        }
-        /* What stops the walk is another definition's line — not the one this sits inside.
-         * A method is written inside its class, so the class's lines cover the comment
-         * above the method too; letting that stop the walk means a documented method in a
-         * class never has any documentation at all. */
-        let barred = claimed
-            .iter()
-            .filter(|range| !(range.start <= symbol.whole.start && range.end >= symbol.whole.end));
-        if barred
-            .clone()
-            .any(|range| range.start < start && range.end > above)
-        {
-            break;
-        }
-        start = above;
-    }
-
-    /* Stopping at the line, not at the name. A server reports a definition from its own
-     * token, which on `const [said, setSaid] = …` is somewhere in the middle of the line —
-     * so ending here would hand `const [` to the prose above and leave the declaration to
-     * claim the line a second time. */
-    let owned = line_start(text, symbol.whole.start);
-    (start < owned).then_some(start..owned)
-}
-
-fn line_start(text: &str, at: usize) -> usize {
-    text[..at].rfind('\n').map(|found| found + 1).unwrap_or(0)
-}
-
-fn line_end(text: &str, at: usize) -> usize {
-    text[at..]
-        .find('\n')
-        .map(|found| at + found + 1)
-        .unwrap_or(text.len())
-}
-
 /// The lines each definition sits on, which is more than the span a server reports.
 ///
 /// A server describes a definition from its name outwards — `EDGE = 24` — and leaves the
@@ -812,7 +739,7 @@ fn leftovers(file: &Opened) -> Vec<Range<usize>> {
     let mut claimed: Vec<Range<usize>> = file
         .symbols
         .iter()
-        .flat_map(|symbol| preamble(file, symbol, &lines))
+        .flat_map(|symbol| preamble(file.lines.text(), &symbol.whole, &lines))
         .chain(lines.iter().cloned())
         .collect();
     claimed.sort_by_key(|range| range.start);
@@ -975,7 +902,7 @@ mod tests {
 
         file.symbols
             .iter()
-            .filter_map(|symbol| preamble(file, symbol, &wholes))
+            .filter_map(|symbol| preamble(file.lines.text(), &symbol.whole, &wholes))
             .map(|range| file.lines.slice(&range).to_string())
             .collect()
     }

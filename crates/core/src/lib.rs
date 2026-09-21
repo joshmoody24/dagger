@@ -5,6 +5,7 @@ pub mod matching;
 pub mod model;
 pub mod order;
 pub mod propagate;
+pub mod prose;
 pub mod reference;
 pub mod review;
 

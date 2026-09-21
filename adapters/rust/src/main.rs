@@ -13,7 +13,8 @@ mod modules;
 
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Piece, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
+use dagger_core::prose::preamble;
 use dagger_core::reference::{BinderId, Mention, Site, Target};
 use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Note, Request, Response};
@@ -21,6 +22,7 @@ use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{self, Read};
+use std::ops::Range;
 use std::path::Path;
 
 fn main() -> Result<()> {
@@ -129,12 +131,52 @@ fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parse
         .into_iter()
         .collect::<Vec<_>>();
     found.extend(items::find(&file.items, &scope));
+    told(&source, &mut found);
 
     Ok(Parsed {
         path: path.to_string(),
         found,
         lines: Lines::new(&source),
     })
+}
+
+/// Gives each definition the prose written above it.
+///
+/// A syntax tree has no comments in it. `///` survives because the language calls it an
+/// attribute and hands it over with the item; `//` and `/* */` are thrown away by the lexer
+/// before anything here sees them. So a definition arrives owning its declaration and not a
+/// word of what was written to explain it, and a change to that explanation is reported as
+/// lines belonging to no definition at all — which, in a codebase that explains itself in
+/// prose rather than in doc comments, is most of what gets written.
+///
+/// The rule is the same one every extractor needs, so it's kept in one place and told
+/// without knowing what a comment looks like in any language.
+fn told(source: &str, found: &mut [items::Found]) {
+    let claimed: Vec<Range<usize>> = found
+        .iter()
+        .flat_map(|one| one.parts.values().flatten().cloned())
+        .collect();
+
+    for one in found.iter_mut() {
+        let spans = one.parts.values().flatten();
+        let (Some(from), Some(to)) = (
+            spans.clone().map(|range| range.start).min(),
+            spans.map(|range| range.end).max(),
+        ) else {
+            continue;
+        };
+        /* A file's own module starts where the file does, so there's nothing above it —
+         * and reaching for some would take the prose off whatever comes first. */
+        if from == 0 {
+            continue;
+        }
+
+        if let Some(prose) = preamble(source, &(from..to), &claimed) {
+            let docs = one.parts.entry(Part::Docs).or_default();
+            docs.push(prose);
+            docs.sort_by_key(|range| range.start);
+        }
+    }
 }
 
 fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
