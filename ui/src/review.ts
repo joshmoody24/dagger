@@ -1,7 +1,5 @@
 import type {
   Box,
-  Change,
-  Cost,
   Definition,
   Diagnostic,
   Edge,
@@ -80,12 +78,12 @@ const MISC = "misc";
 /* What to call a module whose own definition isn't in this review, so its name never got
  * reported. The file it lives in is the best guess left, minus the extension — which is
  * about the file on disk, not about the code. */
-const guessed = (path: string) => path.split("/").pop().replace(/\.[^.]+$/, "");
+const guessed = (path: string) => (path.split("/").at(-1) ?? path).replace(/\.[^.]+$/, "");
 
 /* ---------------- what dagger said, in the shapes a page wants ---------------- */
 
 export function digest(raw: Raw): Review {
-  const definitions = new Map();
+  const definitions = new Map<Identity, Definition>();
   for (const definition of raw.definitions) {
     /* Which sides there are is the one thing the model won't let you get wrong: a
      * definition is added, removed, or kept with both — never neither. Asked this way
@@ -156,7 +154,7 @@ export function broke(review: Review, id: Identity) {
 /* Dagger's diagnostics say what it had to work around. A reader deserves them in words
  * rather than as a shape of JSON. */
 function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): Worry {
-  const [[kind, what]] = Object.entries(diagnostic) as [string, any][];
+  const [[kind, what]] = Object.entries(diagnostic);
   /* Every one of these is about a particular definition, and five copies of the same
    * sentence with nothing to tell them apart is no use to anybody. */
   const named = (id: Identity) => {
@@ -217,14 +215,14 @@ function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): W
  */
 export function layout(review: Review): Laid {
   const nodes = [...review.definitions.values()].filter((d) => d.kind !== "module");
-  const modules = new Map();
+  const modules = new Map<string, Definition>();
   for (const definition of review.definitions.values()) {
     if (definition.kind === "module") modules.set(definition.file, definition);
   }
 
-  const leansOn = new Map(nodes.map((n) => [n.id, []]));
+  const leansOn = new Map<Identity, Identity[]>(nodes.map((n) => [n.id, []]));
   for (const edge of review.edges) {
-    if (leansOn.has(edge.from) && leansOn.has(edge.to)) leansOn.get(edge.from).push(edge.to);
+    if (leansOn.has(edge.to)) leansOn.get(edge.from)?.push(edge.to);
   }
 
   const byPlace = collect(nodes, (node) => node.file);
@@ -233,9 +231,9 @@ export function layout(review: Review): Laid {
    * to light up when it's being read, and nothing for the arrow to point at. */
   for (const place of modules.keys()) if (!byPlace.has(place)) byPlace.set(place, []);
 
-  const groupOf = (place) => {
-    const [first] = byPlace.get(place);
-    return ((first || modules.get(place)).group || []).join("/");
+  const groupOf = (place: string) => {
+    const [first] = byPlace.get(place) ?? [];
+    return ((first ?? modules.get(place))?.group ?? []).join("/");
   };
   const byGroup = collect([...byPlace.keys()], groupOf);
   const laning = stacking(byPlace, review.edges);
@@ -245,7 +243,7 @@ export function layout(review: Review): Laid {
      * module a box inside the box would be saying the same thing twice — the same reason a
      * module never takes a node inside its own file. */
     const root = rootOf(everything, byPlace, modules);
-    const under = everything.filter((path) => !root || path !== root.file);
+    const under = everything.filter((path: string) => !root || path !== root.file);
     const stacked = laning(under);
 
     const inner = [...under]
@@ -256,7 +254,7 @@ export function layout(review: Review): Laid {
           key: path,
           module,
           label: module ? module.name : guessed(path),
-          rows: layer(byPlace.get(path), leansOn),
+          rows: layer(byPlace.get(path) ?? [], leansOn),
           lanes: [],
         });
       });
@@ -264,7 +262,7 @@ export function layout(review: Review): Laid {
     /* Boxes that hold each other up stack; boxes with nothing between them sit side by
      * side. Stacking those anyway made a group a single tall column with the page empty
      * either side of it. */
-    const lanes = [];
+    const lanes: Box[][] = [];
     for (const box of inner) (lanes[stacked(box.key)] ||= []).push(box);
 
     return sized({
@@ -276,7 +274,7 @@ export function layout(review: Review): Laid {
     });
   });
 
-  const at = new Map();
+  const at = new Map<Identity, Spot>();
   let y = MARGIN;
   let widest = 0;
 
@@ -287,7 +285,7 @@ export function layout(review: Review): Laid {
       x += box.w + BAND_GAP;
     }
     widest = Math.max(widest, x - BAND_GAP + MARGIN);
-    y += Math.max(...band.map((box) => box.h)) + BAND_GAP;
+    y += Math.max(...band.map((box: Box) => box.h)) + BAND_GAP;
   }
 
   return { at, boxes, modules, w: widest, h: y - BAND_GAP + MARGIN };
@@ -299,8 +297,8 @@ export function layout(review: Review): Laid {
 function rootOf(paths: string[], byPlace: Map<string, Definition[]>, modules: Map<string, Definition>) {
   const roots = paths
     .map((path) => modules.get(path))
-    .filter((module) => module && module.scope.length === 0 && !byPlace.get(module.file).length);
-  return roots.length === 1 ? roots[0] : null;
+    .filter((module) => module && module.scope.length === 0 && !byPlace.get(module.file)?.length);
+  return roots.length === 1 ? roots[0]! : null;
 }
 
 /* Room for whatever a box holds — boxes in lanes, nodes in rows — and never narrower than
@@ -366,7 +364,7 @@ export function* inside(box: Box): Generator<Definition> {
 /* Rows within a box: something sits below everything it leans on. */
 function layer(nodes: Definition[], leansOn: Map<Identity, Identity[]>) {
   const here = new Set(nodes.map((n) => n.id));
-  const rows = [];
+  const rows: Definition[][] = [];
   for (const node of nodes) {
     const row = depth(node.id, here, leansOn, new Map());
     (rows[row] ||= []).push(node);
@@ -392,14 +390,14 @@ function folded(row: Definition[]) {
  * whatever holds another file up sits above it. Without this the files in a group land in
  * whatever order they turned up in, and half the lines between them run the wrong way. */
 function stacking(byPlace: Map<string, Definition[]>, edges: Edge[]) {
-  const placeOf = new Map();
+  const placeOf = new Map<Identity, string>();
   for (const [path, held] of byPlace) for (const node of held) placeOf.set(node.id, path);
 
-  const leansOn = new Map([...byPlace.keys()].map((path) => [path, []]));
+  const leansOn = new Map<string, string[]>([...byPlace.keys()].map((path) => [path, []]));
   for (const edge of edges) {
     const from = placeOf.get(edge.from);
     const to = placeOf.get(edge.to);
-    if (from && to && from !== to) leansOn.get(from).push(to);
+    if (from && to && from !== to) leansOn.get(from)?.push(to);
   }
 
   /* Depth is worked out one group at a time, counting only what that group holds. A file
@@ -407,27 +405,27 @@ function stacking(byPlace: Map<string, Definition[]>, edges: Edge[]) {
    * which lane it lands in is a question about its neighbours — and letting those outside
    * edges count pushed files below others that weren't holding them up at all. Where the
    * groups themselves go is bands()' job. */
-  return (paths) => {
+  return (paths: string[]) => {
     const within = new Set(paths);
-    const seen = new Map();
-    return (path) => depth(path, within, leansOn, seen);
+    const seen = new Map<string, number>();
+    return (path: string) => depth(path, within, leansOn, seen);
   };
 }
 
 /* Bands of boxes: whatever holds another box up is drawn in an earlier band. */
 function bands(boxes: Box[], review: Review) {
-  const groupOf = new Map();
+  const groupOf = new Map<Identity, string>();
   for (const box of boxes) for (const node of inside(box)) groupOf.set(node.id, box.key);
 
-  const leansOn = new Map(boxes.map((box) => [box.key, []]));
+  const leansOn = new Map<string, string[]>(boxes.map((box) => [box.key, []]));
   for (const edge of review.edges) {
     const from = groupOf.get(edge.from);
     const to = groupOf.get(edge.to);
-    if (from && to && from !== to) leansOn.get(from).push(to);
+    if (from && to && from !== to) leansOn.get(from)?.push(to);
   }
 
   const keys = new Set(boxes.map((box) => box.key));
-  const found = [];
+  const found: Box[][] = [];
   for (const box of boxes) {
     const row = depth(box.key, keys, leansOn, new Map());
     (found[row] ||= []).push(box);
@@ -439,7 +437,7 @@ function bands(boxes: Box[], review: Review) {
  * A circle is settled by whoever is asked first, which is enough — being in a circle means
  * there is no right answer, only a readable one. */
 function depth<K>(id: K, within: Set<K>, leansOn: Map<K, K[]>, seen: Map<K, number>): number {
-  if (seen.has(id)) return seen.get(id);
+  if (seen.has(id)) return seen.get(id)!;
   seen.set(id, 0);
   const below = (leansOn.get(id) || []).filter((other) => within.has(other) && other !== id);
   const found = below.length
@@ -449,18 +447,19 @@ function depth<K>(id: K, within: Set<K>, leansOn: Map<K, K[]>, seen: Map<K, numb
   return found;
 }
 
-const byLoudness = (a, b) =>
+const byLoudness = (a: Definition, b: Definition) =>
   LOUDNESS.indexOf(a.mark) - LOUDNESS.indexOf(b.mark) || a.name.localeCompare(b.name);
-const rowWidth = (row) => row.reduce((sum, n) => sum + widthOf(n.name), 0) + NODE_GAP * (row.length - 1);
-const laneWidth = (lane) => lane.reduce((sum, f) => sum + f.w, 0) + BOX_GAP * (lane.length - 1);
-const laneHeight = (lane) => Math.max(...lane.map((f) => f.h));
+const rowWidth = (row: Definition[]) =>
+  row.reduce((sum, n) => sum + widthOf(n.name), 0) + NODE_GAP * (row.length - 1);
+const laneWidth = (lane: Box[]) => lane.reduce((sum, f) => sum + f.w, 0) + BOX_GAP * (lane.length - 1);
+const laneHeight = (lane: Box[]) => Math.max(...lane.map((f) => f.h));
 
 function collect<T, K>(items: T[], by: (item: T) => K) {
-  const out = new Map();
+  const out = new Map<K, T[]>();
   for (const item of items) {
     const key = by(item);
     if (!out.has(key)) out.set(key, []);
-    out.get(key).push(item);
+    out.get(key)!.push(item);
   }
   return out;
 }
@@ -529,32 +528,13 @@ function straighten(lines: Line[]) {
  * read, or has just read. A name appearing twice is left alone — pointing at the wrong one
  * is worse than pointing at nothing. */
 export function namesIn(review: Review) {
-  const seen = new Map();
+  const seen = new Map<string, Identity | null>();
   for (const definition of review.definitions.values()) {
     seen.set(definition.name, seen.has(definition.name) ? null : definition.id);
   }
-  for (const [name, id] of seen) if (id === null) seen.delete(name);
-  return seen;
-}
-
-const TOKENS = /(\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|("(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|`(?:[^`\\]|\\.)*`?)|([A-Za-z_$][\w$]*)|([\s\S])/g;
-
-/** One line of code, split into what it's made of. */
-export function tokens(line: string) {
-  const out = [];
-  let match;
-  TOKENS.lastIndex = 0;
-
-  while ((match = TOKENS.exec(line))) {
-    const [, comment, string, name, other] = match;
-    const kind = comment ? "quiet" : string ? "quiet" : name ? "name" : "plain";
-    const text = comment || string || name || other;
-
-    const last = out[out.length - 1];
-    if (last && last.kind === kind && kind === "plain") last.text += text;
-    else out.push({ kind, text });
-  }
-  return out;
+  const only = new Map<string, Identity>();
+  for (const [name, id] of seen) if (id !== null) only.set(name, id);
+  return only;
 }
 
 /** Line by line, marked as kept, gone, or new. */

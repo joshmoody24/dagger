@@ -14,8 +14,8 @@ import { For, Show } from "solid-js";
 
 interface Phase {
   said: string;
-  detail?: string;
-  through?: [number, number];
+  detail?: string | undefined;
+  through?: [number, number] | undefined;
   done: boolean;
 }
 

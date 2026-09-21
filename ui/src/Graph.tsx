@@ -1,6 +1,7 @@
-import { createEffect, createSignal, onCleanup, onMount, untrack } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
 import { select } from "d3-selection";
 import { zoom as zooming, zoomIdentity, zoomTransform } from "d3-zoom";
+import type { Box, Edge, Identity, Laid, Review, Spot } from "./dagger.ts";
 import { MARK, NODE_H, RADIUS, TINT, shorten } from "./review.ts";
 import { wearing } from "./theme.ts";
 
@@ -33,22 +34,47 @@ const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
  * transform itself — moving the view means asking the behaviour to move, so what the reader
  * is doing and what the page wants to show can't end up disagreeing.
  */
-export function Graph(props) {
-  let frame;
-  let paper;
-  let ink;
+/* What the pointer found: a definition, or the box around some, and the file either way —
+ * which is what lights up, since a box is a file and a node lives in one. */
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface Touched {
+  node?: Identity;
+  box?: Box;
+  file: string;
+}
+
+interface GraphProps {
+  review: Review;
+  laid: Laid;
+  here: Identity | null;
+  next: Identity | null;
+  read: Set<Identity>;
+  box: string | null;
+  onOpen: (id: Identity) => void;
+  onOpenBox: (key: string) => void;
+}
+
+export function Graph(props: GraphProps) {
+  let frame!: HTMLDivElement;
+  let paper!: HTMLCanvasElement;
+  let ink!: CanvasRenderingContext2D;
 
   /* What the pointer is over: a definition, or the box around some.
    *
    * Worked out by asking where things are rather than by asking the page. That's the other
    * half of what a canvas buys — there's no element to hit-test, and no flicker when the
    * answer is a node sitting on top of the box it belongs to. */
-  const [over, setOver] = createSignal(null);
-  const [touching, setTouching] = createSignal(null);
+  const [over, setOver] = createSignal<string | null>(null);
+  const [touching, setTouching] = createSignal<Identity | null>(null);
 
-  const behaviour = zooming()
+  const behaviour = zooming<HTMLCanvasElement, unknown>()
     /* Wheels are handled below instead. */
-    .filter((event) => event.type !== "wheel" && !event.ctrlKey && !event.button)
+    .filter((event: Event & { ctrlKey?: boolean; button?: number }) =>
+      event.type !== "wheel" && !event.ctrlKey && !event.button)
     .on("zoom", () => redraw());
 
   const pane = () => frame.getBoundingClientRect();
@@ -84,11 +110,11 @@ export function Graph(props) {
   };
 
   /* The same view, moved so one definition sits in the middle of it. */
-  const onto = (spot, k) =>
+  const onto = (spot: Spot, k: number) =>
     zoomIdentity
       .translate(pane().width / 2, pane().height / 2)
       .scale(k)
-      .translate(-(spot.x + spot.w / 2), -(spot.y + spot.h / 2));
+      .translate(-(spot.x + spot.w / 2), -(spot.y + (spot.h ?? NODE_H) / 2));
 
   const closer = () => {
     const spot = spotOf(props.here);
@@ -103,10 +129,10 @@ export function Graph(props) {
    * So the reports are added up and turned into one change of size per frame, and nothing
    * is held up in the meantime — this page doesn't scroll, so there's nothing to prevent. */
   let wheeled = 0;
-  let towards = [0, 0];
+  let towards: [number, number] = [0, 0];
   let turning = 0;
 
-  const onWheel = (event) => {
+  const onWheel = (event: WheelEvent) => {
     const room = pane();
     towards = [event.clientX - room.left, event.clientY - room.top];
     wheeled += event.deltaY;
@@ -124,13 +150,14 @@ export function Graph(props) {
 
   /* Where a definition sits, whether or not it has a node. A module is drawn as its box
    * rather than a node of its own, so anything pointing at one has to point at the box. */
-  const spotOf = (id) => {
+  const spotOf = (id: Identity | null): Spot | null => {
+    if (id === null) return null;
     const node = props.laid.at.get(id);
     if (node) return { x: node.x, y: node.y, w: node.w, h: NODE_H };
 
-    const boxed = (box) => {
+    const boxed = (box: Box): Spot | null => {
       if (box.module && box.module.id === id) {
-        return { x: box.x, y: box.y, w: box.w, h: box.h };
+        return { x: box.x ?? 0, y: box.y ?? 0, w: box.w, h: box.h };
       }
       for (const child of box.boxes) {
         const found = boxed(child);
@@ -145,26 +172,27 @@ export function Graph(props) {
     return null;
   };
 
-  const every = (boxes) => boxes.flatMap((box) => [box, ...every(box.boxes)]);
+  const every = (boxes: Box[]): Box[] => boxes.flatMap((box) => [box, ...every(box.boxes)]);
 
   /* What's under a point, in the drawing's own units. A definition wins over the box it's
    * in, and the innermost box wins over the ones around it. */
-  const at = ({ x, y }) => {
+  const at = ({ x, y }: { x: number; y: number }): Touched | null => {
     for (const [id, spot] of props.laid.at) {
       if (x >= spot.x && x <= spot.x + spot.w && y >= spot.y && y <= spot.y + NODE_H) {
-        return { node: id, file: props.review.definitions.get(id).file };
+        return { node: id, file: props.review.definitions.get(id)?.file ?? "" };
       }
     }
 
-    let innermost = null;
+    let innermost: Box | null = null;
     for (const box of every(props.laid.boxes)) {
-      if (x < box.x || x > box.x + box.w || y < box.y || y > box.y + box.h) continue;
+      const [bx, by] = [box.x ?? 0, box.y ?? 0];
+      if (x < bx || x > bx + box.w || y < by || y > by + box.h) continue;
       if (!innermost || box.w * box.h < innermost.w * innermost.h) innermost = box;
     }
     return innermost ? { box: innermost, file: innermost.key } : null;
   };
 
-  const pointing = (event) => {
+  const pointing = (event: { clientX: number; clientY: number }) => {
     const room = pane();
     const view = seen();
     return {
@@ -173,15 +201,18 @@ export function Graph(props) {
     };
   };
 
-  const onPointerMove = (event) => {
+  const onPointerMove = (event: PointerEvent) => {
     const what = at(pointing(event));
-    setOver(what && what.file);
+    setOver(what ? what.file : null);
     setTouching(what && what.node !== undefined ? what.node : null);
     frame.style.cursor = what ? "pointer" : "grab";
-    frame.title = what && what.node !== undefined ? props.review.definitions.get(what.node).path : "";
+    frame.title =
+      what && what.node !== undefined
+        ? props.review.definitions.get(what.node)?.path ?? ""
+        : "";
   };
 
-  const onClick = (event) => {
+  const onClick = (event: MouseEvent) => {
     const what = at(pointing(event));
     if (!what) return;
     if (what.node !== undefined) return props.onOpen(what.node);
@@ -189,8 +220,8 @@ export function Graph(props) {
     /* A box that answers to a module opens that module. One that's only a place — a folder
      * holding definitions that belong to it no more than to each other — opens as itself,
      * rather than reaching inside and picking one of its contents at random. */
-    const module = what.box.module;
-    return module ? props.onOpen(module.id) : props.onOpenBox(what.box.key);
+    const module = what.box!.module;
+    return module ? props.onOpen(module.id) : props.onOpenBox(what.box!.key);
   };
 
   /* ---------------- drawing ---------------- */
@@ -200,7 +231,7 @@ export function Graph(props) {
   let paint: Record<string, string> = {};
   const readPaint = () => {
     const had = getComputedStyle(document.documentElement);
-    const of = (name) => had.getPropertyValue(`--${name}`).trim();
+    const of = (name: string) => had.getPropertyValue(`--${name}`).trim();
     paint = {
       paper: of("paper"), ink: of("ink"), muted: of("muted"), faint: of("faint"),
       rule: of("rule"), lean: of("lean"), path: of("path"),
@@ -250,11 +281,12 @@ export function Graph(props) {
    * box around it too made a stack of ever-paler grounds, and lighting the box holding
    * whatever is selected left a patch of the page bright for as long as you read — which is
    * a lot of lightness to say something the outline round the node already says. */
-  const lit = (box) => box.key === over();
+  const lit = (box: Box) => box.key === over();
 
-  function place(box, deep) {
+  function place(box: Box, deep: number) {
     const radius = Math.max(RADIUS.node, RADIUS.box - deep * RADIUS.step);
     const module = box.module;
+    const [bx, by] = [box.x ?? 0, box.y ?? 0];
 
     const here = (module && module.id === props.here) || box.key === props.box;
     const soon = module && module.id === props.next;
@@ -266,26 +298,27 @@ export function Graph(props) {
     ink.setLineDash(soon ? [5, 3] : deep && !here ? [3, 3] : []);
     ink.lineWidth = here || soon ? 1.8 : under ? 1.4 : 1;
     ink.strokeStyle = here ? paint.lean : soon ? paint.path : under ? paint.muted : paint.rule;
-    round(box.x, box.y, box.w, box.h, radius);
+    round(bx, by, box.w, box.h, radius);
     ink.stroke();
     ink.setLineDash([]);
 
     ink.font = `${BOX_FONT}px ${MONO}`;
-    let x = box.x + 10;
+    let x = bx + 10;
     if (module) {
       const mark = `${MARK[module.mark]} `;
       ink.fillStyle = paint[TINT[module.mark]];
-      ink.fillText(mark, x, box.y + 16);
+      ink.fillText(mark, x, by + 16);
       x += ink.measureText(mark).width;
     }
     ink.fillStyle = paint.muted;
-    ink.fillText(box.label, x, box.y + 16);
+    ink.fillText(box.label, x, by + 16);
 
     for (const child of box.boxes) place(child, deep + 1);
   }
 
-  function node(id, spot, near) {
+  function node(id: Identity, spot: Spot, near: Set<Identity>) {
     const definition = props.review.definitions.get(id);
+    if (!definition) return;
     const here = id === props.here;
     const soon = id === props.next;
     const read = props.read.has(id);
@@ -329,7 +362,7 @@ export function Graph(props) {
     ink.globalAlpha = 1;
   }
 
-  function leans(edge, near) {
+  function leans(edge: Edge, near: Set<Identity>) {
     const from = spotOf(edge.from);
     const to = spotOf(edge.to);
     if (!from || !to) return;
@@ -371,7 +404,7 @@ export function Graph(props) {
     ink.globalAlpha = 1;
   }
 
-  function tip(from, to) {
+  function tip(from: Point, to: Point) {
     const turn = Math.atan2(to.y - from.y, to.x - from.x);
     const wide = 0.42;
     const long = 9;
@@ -383,7 +416,7 @@ export function Graph(props) {
     ink.fill();
   }
 
-  const round = (x, y, w, h, r) => {
+  const round = (x: number, y: number, w: number, h: number, r: number) => {
     const tight = Math.min(r, w / 2, h / 2);
     ink.beginPath();
     ink.moveTo(x + tight, y);
@@ -394,17 +427,17 @@ export function Graph(props) {
     ink.closePath();
   };
 
-  const bend = (up, down) => {
-    const [x1, y1] = [up.x + up.w / 2, up.y + up.h];
+  const bend = (up: Spot, down: Spot) => {
+    const [x1, y1] = [up.x + up.w / 2, up.y + (up.h ?? NODE_H)];
     const [x2, y2] = [down.x + down.w / 2, down.y];
     const mid = (y1 + y2) / 2;
     ink.moveTo(x1, y1);
     ink.bezierCurveTo(x1, mid, x2, mid, x2, y2);
   };
 
-  const aside = (from, to) => {
-    const [x1, y1] = [from.x + from.w, from.y + from.h / 2];
-    const [x2, y2] = [to.x + to.w, to.y + to.h / 2];
+  const aside = (from: Spot, to: Spot) => {
+    const [x1, y1] = [from.x + from.w, from.y + (from.h ?? NODE_H) / 2];
+    const [x2, y2] = [to.x + to.w, to.y + (to.h ?? NODE_H) / 2];
     const out = 34 + Math.abs(y2 - y1) * 0.2;
     ink.moveTo(x1, y1);
     ink.bezierCurveTo(x1 + out, y1, x2 + out, y2, x2, y2);
@@ -412,7 +445,7 @@ export function Graph(props) {
 
   /* ---------------- keeping up ---------------- */
 
-  const onKey = (event) => {
+  const onKey = (event: KeyboardEvent) => {
     if (event.metaKey || event.altKey) return;
     if (event.key === "+" || event.key === "=") behaviour.scaleBy(select(paper), 1.2);
     else if (event.key === "-" || event.key === "_") behaviour.scaleBy(select(paper), 1 / 1.2);
@@ -423,7 +456,7 @@ export function Graph(props) {
   };
 
   onMount(() => {
-    ink = paper.getContext("2d");
+    ink = paper.getContext("2d")!;
     readPaint();
     sized();
     select(paper).call(behaviour);
@@ -443,7 +476,7 @@ export function Graph(props) {
     /* A different graph — the ripples going away, a reload — is a different set of limits
      * and a view worth starting over from. */
     createEffect(() => {
-      props.laid;
+      void props.laid;
       untrack(fit);
     });
 
@@ -482,7 +515,8 @@ export function Graph(props) {
     const room = pane();
     const [x, y] = [view.applyX(spot.x), view.applyY(spot.y)];
     const showing =
-      x >= 0 && y >= 0 && x + spot.w * view.k <= room.width && y + spot.h * view.k <= room.height;
+      x >= 0 && y >= 0 && x + spot.w * view.k <= room.width &&
+      y + (spot.h ?? NODE_H) * view.k <= room.height;
     if (showing) return;
 
     select(paper).call(behaviour.transform, onto(spot, view.k));
@@ -503,16 +537,19 @@ export function Graph(props) {
 
       {/* What a canvas can't be: something to tab through, and something to read aloud. */}
       <ul class="spoken" aria-label="What changed, and what holds up what">
-        {props.review.steps.map((step) => {
-          const definition = props.review.definitions.get(step.definition);
-          return (
-            <li>
-              <button onClick={() => props.onOpen(definition.id)}>
-                {definition.path} — {definition.kind}
-              </button>
-            </li>
-          );
-        })}
+        <For each={props.review.steps}>
+          {(step) => (
+            <Show when={props.review.definitions.get(step.definition)}>
+              {(definition) => (
+                <li>
+                  <button onClick={() => props.onOpen(definition().id)}>
+                    {definition().path} — {definition().kind}
+                  </button>
+                </li>
+              )}
+            </Show>
+          )}
+        </For>
       </ul>
 
       <div class="viewkeys">
@@ -522,9 +559,9 @@ export function Graph(props) {
   );
 }
 
-function neighbours(review, here) {
-  const near = new Set();
-  if (!here) return near;
+function neighbours(review: Review, here: Identity | null) {
+  const near = new Set<Identity>();
+  if (here === null) return near;
   near.add(here);
   for (const edge of review.edges) {
     if (edge.from === here) near.add(edge.to);
@@ -535,20 +572,23 @@ function neighbours(review, here) {
 
 /* From the definition being read to the one after it: between whichever pair of faces sits
  * closest together. */
-function closest(from, to) {
-  let best = null;
+function closest(from: Spot, to: Spot): [Point, Point] {
+  let best: { far: number; a: Point; b: Point } | null = null;
   for (const a of faces(from)) {
     for (const b of faces(to)) {
       const far = Math.hypot(b.x - a.x, b.y - a.y);
       if (!best || far < best.far) best = { far, a, b };
     }
   }
-  return [best.a, best.b];
+  return best ? [best.a, best.b] : [faces(from)[0], faces(to)[0]];
 }
 
-const faces = (box) => [
-  { x: box.x + box.w / 2, y: box.y },
-  { x: box.x + box.w / 2, y: box.y + box.h },
-  { x: box.x, y: box.y + box.h / 2 },
-  { x: box.x + box.w, y: box.y + box.h / 2 },
-];
+const faces = (box: Spot): Point[] => {
+  const h = box.h ?? NODE_H;
+  return [
+    { x: box.x + box.w / 2, y: box.y },
+    { x: box.x + box.w / 2, y: box.y + h },
+    { x: box.x, y: box.y + h / 2 },
+    { x: box.x + box.w, y: box.y + h / 2 },
+  ];
+};

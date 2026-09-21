@@ -30,7 +30,7 @@ declare global {
  * the same command. Nothing here reads a saved review — one that's written down is out of
  * date as soon as anything changes, and the page can't tell.
  */
-async function load(_: unknown, { refetching }: { refetching: unknown }) {
+async function load() {
   const tauri = window.__TAURI__;
   if (!tauri) {
     /* Whatever the address asks for is passed straight on, so a link to one change is a
@@ -94,4 +94,4 @@ function Root() {
   );
 }
 
-render(() => <Root />, document.getElementById("root"));
+render(() => <Root />, document.getElementById("root")!);

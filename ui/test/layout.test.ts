@@ -6,9 +6,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import type { Box, Edge, Identity, Line, Raw } from "../src/dagger.ts";
 import { NODE_H, digest, layout, shorten, stitch, widthOf } from "../src/review.ts";
 
-const raw = JSON.parse(fs.readFileSync(new URL("./review.json", import.meta.url), "utf8"));
+const raw: Raw = JSON.parse(fs.readFileSync(new URL("./review.json", import.meta.url), "utf8"));
 const review = digest(raw);
 const laid = layout(review);
 const nodes = [...review.definitions.values()].filter((d) => d.kind !== "module");
@@ -57,11 +58,12 @@ test("nothing is drawn on top of anything else", () => {
 /* Boxes nest to whatever depth the grouping has, so this checks the rule rather than two
  * named levels of it: nothing is ever drawn outside the box that holds it. */
 test("nothing escapes the box that holds it", () => {
-  const within = (child, box) =>
-    child.x >= box.x && child.x + child.w <= box.x + box.w &&
-    child.y >= box.y && child.y + child.h <= box.y + box.h;
+  type Rect = { x?: number | undefined; y?: number | undefined; w?: number | undefined; h: number };
+  const within = (child: Rect, box: Box) =>
+    child.x! >= box.x! && child.x! + child.w! <= box.x! + box.w &&
+    child.y! >= box.y! && child.y! + child.h <= box.y! + box.h;
 
-  const walk = (box) => {
+  const walk = (box: Box) => {
     for (const child of box.boxes) {
       assert.ok(within(child, box), `${child.key} escapes ${box.key}`);
       walk(child);
@@ -85,7 +87,7 @@ test("a line only runs downwards where the code is circular", () => {
   const circular = cycles(placed);
 
   for (const edge of placed) {
-    if (laid.at.get(edge.to).y <= laid.at.get(edge.from).y) continue;
+    if (laid.at.get(edge.to)!.y <= laid.at.get(edge.from)!.y) continue;
     assert.equal(
       circular.get(edge.from),
       circular.get(edge.to),
@@ -94,34 +96,34 @@ test("a line only runs downwards where the code is circular", () => {
   }
 });
 
-const name = (id) => review.definitions.get(id).name;
+const name = (id: Identity) => review.definitions.get(id)!.name;
 
 /* Which cycle each definition belongs to, if any: Tarjan, with everything else left in a
  * group of its own. */
-function cycles(edges) {
-  const leadsTo = new Map();
+function cycles(edges: Edge[]) {
+  const leadsTo = new Map<Identity, Identity[]>();
   for (const edge of edges) leadsTo.set(edge.from, [...(leadsTo.get(edge.from) || []), edge.to]);
 
-  const order = new Map();
-  const low = new Map();
-  const open = [];
-  const inside = new Set();
-  const group = new Map();
+  const order = new Map<Identity, number>();
+  const low = new Map<Identity, number>();
+  const open: Identity[] = [];
+  const inside = new Set<Identity>();
+  const group = new Map<Identity, Identity>();
 
-  const walk = (at) => {
+  const walk = (at: Identity) => {
     order.set(at, order.size);
-    low.set(at, order.get(at));
+    low.set(at, order.get(at)!);
     open.push(at);
     inside.add(at);
 
     for (const next of leadsTo.get(at) || []) {
       if (!order.has(next)) walk(next);
-      if (inside.has(next)) low.set(at, Math.min(low.get(at), low.get(next)));
+      if (inside.has(next)) low.set(at, Math.min(low.get(at)!, low.get(next)!));
     }
 
     if (low.get(at) === order.get(at)) {
       while (true) {
-        const off = open.pop();
+        const off = open.pop()!;
         inside.delete(off);
         group.set(off, at);
         if (off === at) break;
@@ -148,6 +150,7 @@ test("a definition in one piece reads as itself", () => {
   const whole = [...review.definitions.values()].find(
     (definition) => definition.after && Object.values(definition.after.parts).flat().length === 1,
   );
+  assert.ok(whole?.after, "no definition arrives in a single piece");
   const piece = Object.values(whole.after.parts).flat()[0];
   const shown = stitch(whole.after)!.map((line) => line.text).join("\n");
   assert.equal(shown, piece.text.replace(/^\n+|\n+$/g, ""));
@@ -179,7 +182,8 @@ test("every line says where it is in the file", () => {
 
     /* Within one stretch they run consecutively; a gap is where they may jump. */
     for (let at = 1; at < lines.length; at++) {
-      const [before, now] = [lines[at - 1], lines[at]];
+      const before: Line = lines[at - 1];
+      const now: Line = lines[at];
       if (before.at === null || now.at === null) continue;
       assert.equal(now.at, before.at + 1, `${definition.path} jumps from ${before.at} to ${now.at}`);
     }

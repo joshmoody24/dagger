@@ -1,11 +1,12 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, type JSXElement, onCleanup, onMount, Show } from "solid-js";
 import { ChartColumn, Info, TriangleAlert, Waves } from "lucide-solid";
 import { Graph } from "./Graph.tsx";
 import { Reading } from "./Reading.tsx";
+import type { Box, Identity, Raw } from "./dagger.ts";
 import { digest, layout, namesIn } from "./review.ts";
 import { next as another, wear, wearing } from "./theme.ts";
 
-export function App(props) {
+export function App(props: { raw: Raw }) {
   const whole = createMemo(() => digest(props.raw));
 
   /* Whether to show what a change reached as well as what it changed.
@@ -49,7 +50,7 @@ export function App(props) {
   const names = createMemo(() => namesIn(review()));
 
   const [at, setAt] = createSignal(0);
-  const [read, setRead] = createSignal(new Set());
+  const [read, setRead] = createSignal<Set<Identity>>(new Set());
   const [worriesOpen, setWorriesOpen] = createSignal(false);
   const [costOpen, setCostOpen] = createSignal(false);
 
@@ -74,7 +75,7 @@ export function App(props) {
       ? `${hiding().length} this review might not be showing`
       : `${weaker().length} worked out a weaker way`;
 
-  const spread = (one) => [one, ...one.boxes.flatMap(spread)];
+  const spread = (one: Box): Box[] => [one, ...one.boxes.flatMap(spread)];
   /* Beside the graph it's a column you can put away and drag wider; over the graph it's a
    * drawer. Either way, doing anything at all brings it back — you might skip past
    * something you hadn't read, but you asked to go there, and a tool that argues about
@@ -101,28 +102,33 @@ export function App(props) {
    * around things that did — and picking one has to show it rather than quietly show
    * something else. So the reading has a position, and looking has a subject, and stepping
    * puts the two back together. */
-  const [aside, setAside] = createSignal(null);
+  const [aside, setAside] = createSignal<Identity | null>(null);
   /* A box that stands for no definition — a folder full of them — can still be looked at,
    * and looking at it shows the box rather than something inside it. */
-  const [box, setBox] = createSignal(null);
-  const here = () => (box() ? null : aside() ?? (steps()[at()] || {}).definition);
-  const next = () => (steps()[at() + 1] || {}).definition;
+  const [box, setBox] = createSignal<string | null>(null);
+  const here = () => (box() ? null : aside() ?? steps()[at()]?.definition ?? null);
+  const next = () => steps()[at() + 1]?.definition ?? null;
   const stepping = () => aside() === null;
 
-  const step = (by) => {
+  const step = (by: number) => {
     setAside(null);
     setBox(null);
     setAt((was) => Math.min(Math.max(was + by, 0), steps().length - 1));
     open();
   };
-  const markRead = () => setRead((was) => new Set(was).add(here()));
+  const markRead = () => {
+    const id = here();
+    if (id !== null) setRead((was) => new Set(was).add(id));
+  };
   const toggleRead = () =>
     setRead((was) => {
+      const id = here();
+      if (id === null) return was;
       const now = new Set(was);
-      if (!now.delete(here())) now.add(here());
+      if (!now.delete(id)) now.add(id);
       return now;
     });
-  const goTo = (id) => {
+  const goTo = (id: Identity) => {
     setBox(null);
     const found = steps().findIndex((step) => step.definition === id);
     if (found >= 0) {
@@ -134,7 +140,7 @@ export function App(props) {
     open();
   };
 
-  const goToBox = (key) => {
+  const goToBox = (key: string) => {
     setAside(null);
     setBox(key);
     open();
@@ -162,21 +168,24 @@ export function App(props) {
     r: () => setRipples((was) => !was),
     /* Trying colours on. Every one is somebody's editor, so the question is which, and the
      * only way to answer it is to look. */
-    t: () => wear(another(wearing())),
+    t: () => void wear(another(wearing())),
     g: () => setAt(0),
     G: () => setAt(steps().length - 1),
     Escape: () => {
-      if (!worriesOpen() && !costOpen()) return shut();
+      if (!worriesOpen() && !costOpen()) {
+        shut();
+        return;
+      }
       setWorriesOpen(false);
       setCostOpen(false);
     },
   };
 
-  const onKey = (event) => {
+  const onKey = (event: KeyboardEvent) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    const pressed = keys[event.key];
+    const pressed = keys[event.key as keyof typeof keys];
     if (!pressed) return;
-    pressed();
+    void pressed();
     event.preventDefault();
   };
 
@@ -249,14 +258,14 @@ export function App(props) {
         <Reading
           review={review()}
           here={here()}
-          box={box() && laid().boxes.flatMap(spread).find((one) => one.key === box())}
+          box={laid().boxes.flatMap(spread).find((one) => one.key === box()) ?? null}
           step={stepping() ? steps()[at()] : undefined}
           at={at()}
           onStep={step}
-          onRead={(by) => { markRead(); step(by); }}
+          onRead={(by: number) => { markRead(); step(by); }}
           onOpen={goTo}
           names={names()}
-          read={read().has(here())}
+          read={here() !== null && read().has(here()!)}
           viewed={read()}
           onToggle={toggleRead}
           sheet={facing()}
@@ -305,7 +314,7 @@ export function App(props) {
 
 /* Anything the page wants to say beside itself. Native, so Escape and the click outside are
  * the browser's job rather than ours to reimplement badly. */
-function Panel(props) {
+function Panel(props: { open: boolean; onClose: () => void; title: string; children: JSXElement }) {
   let box: HTMLDialogElement | undefined;
 
   createEffect(() => {
@@ -318,7 +327,7 @@ function Panel(props) {
     <dialog
       class="panel"
       ref={box}
-      onClose={props.onClose}
+      onClose={() => props.onClose()}
       onClick={(event) => event.target === box && props.onClose()}
     >
       <h2>{props.title}</h2>

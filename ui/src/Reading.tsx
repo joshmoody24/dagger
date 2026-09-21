@@ -1,13 +1,40 @@
 import { createEffect, createMemo, For, Show } from "solid-js";
+import type { Box, Definition as Def, Identity, Review, Step } from "./dagger.ts";
+import type { Painted } from "./colouring.ts";
 import { MARK, TINT, broke, compare, inside, stitch } from "./review.ts";
 import { colouring, painted, readied, speaks } from "./colouring.ts";
 import { dressing, wearing } from "./theme.ts";
 
+/** Which definitions a name leads to, for the ones a reader can follow. */
+type Names = Map<string, Identity>;
+
+interface ReadingProps {
+  review: Review;
+  here: Identity | null;
+  box: Box | null;
+  step: Step | undefined;
+  at: number;
+  names: Names;
+  read: boolean;
+  viewed: Set<Identity>;
+  sheet: string;
+  width: number;
+  onStep: (by: number) => void;
+  onRead: (by: number) => void;
+  onOpen: (id: Identity) => void;
+  onToggle: () => void;
+  onWiden: (width: number) => void;
+  onExpand: () => void;
+  onClose: () => void;
+}
+
 /* The definition in front of the reader: what it is, why it's here, and how it changed. */
-export function Reading(props) {
-  const definition = () => props.review.definitions.get(props.here);
+export function Reading(props: ReadingProps) {
+  const definition = () => (props.here === null ? undefined : props.review.definitions.get(props.here));
   const leans = () =>
-    props.review.edges.filter((edge) => edge.from === definition().id).map((edge) => edge.to);
+    props.review.edges
+      .filter((edge) => edge.from === definition()?.id)
+      .map((edge) => edge.to);
 
   const because = () => leans().filter((id) => broke(props.review, id));
   const uses = () => leans().filter((id) => !broke(props.review, id));
@@ -45,9 +72,9 @@ export function Reading(props) {
         if (sheet) sheet.scrollTop = 0;
         return;
       }
-      const above = sheet!.getBoundingClientRect().top;
+      const above = sheet.getBoundingClientRect().top;
       const onto = changed.getBoundingClientRect().top;
-      sheet!.scrollTop += onto - above - 12;
+      sheet.scrollTop += onto - above - 12;
     });
   });
 
@@ -64,31 +91,42 @@ export function Reading(props) {
         </Show>
         <div class="sh">
           <Show when={definition()}>
-            <b class={`ch ${TINT[definition().mark]}`}>{MARK[definition().mark]}</b>
+            {(one) => <b class={`ch ${TINT[one().mark]}`}>{MARK[one().mark]}</b>}
           </Show>
-          <h2>{definition() ? definition().path : props.box.label}</h2>
-          <button class="ib grip" onClick={props.onExpand} aria-label={props.sheet === "full" ? "Shrink" : "Expand"}>
+          <h2>{definition()?.path ?? props.box?.label ?? ""}</h2>
+          <button class="ib grip" onClick={() => props.onExpand()} aria-label={props.sheet === "full" ? "Shrink" : "Expand"}>
             {props.sheet === "full" ? "⌄" : "⌃"}
           </button>
-          <button class="ib grip" onClick={props.onClose} aria-label="Close">×</button>
+          <button class="ib grip" onClick={() => props.onClose()} aria-label="Close">×</button>
         </div>
 
         <div class="sb" ref={sheet}>
-          <Show when={props.box} fallback={<Definition
-            definition={definition()}
-            because={because()}
-            uses={uses()}
-            step={props.step}
-            review={props.review}
-            names={props.names}
-            onOpen={props.onOpen}
-          />}>
-            <Package
-              box={props.box}
-              review={props.review}
-              viewed={props.viewed}
-              onOpen={props.onOpen}
-            />
+          <Show
+            when={props.box}
+            fallback={
+              <Show when={definition()}>
+                {(one) => (
+                  <Definition
+                    definition={one()}
+                    because={because()}
+                    uses={uses()}
+                    step={props.step}
+                    review={props.review}
+                    names={props.names}
+                    onOpen={props.onOpen}
+                  />
+                )}
+              </Show>
+            }
+          >
+            {(one) => (
+              <Package
+                box={one()}
+                review={props.review}
+                viewed={props.viewed}
+                onOpen={props.onOpen}
+              />
+            )}
           </Show>
         </div>
 
@@ -123,7 +161,7 @@ export function Reading(props) {
             </button>
             <button
               class={`pos${props.read ? " done" : ""}`}
-              onClick={props.onToggle}
+              onClick={() => props.onToggle()}
               aria-label={props.read ? "Viewed. Press to unmark" : "Not viewed yet"}
             >
               <span class="gl">{props.read ? "✓ " : ""}{props.at + 1}/{props.review.steps.length}</span>
@@ -150,7 +188,15 @@ export function Reading(props) {
 }
 
 /* One definition: what it is, why it's here, and how it changed. */
-function Definition(props) {
+function Definition(props: {
+  definition: Def;
+  because: Identity[];
+  uses: Identity[];
+  review: Review;
+  names: Names;
+  onOpen: (id: Identity) => void;
+  step: Step | undefined;
+}) {
   return (
     <>
       {/* What a definition is comes from a fixed set, so it reads as a label rather than as
@@ -179,7 +225,7 @@ function Definition(props) {
 /* A box that stands for no definition of its own — a folder, a package. There's nothing to
  * read here, so this says what's inside and hands the reader to it. Picking one of its
  * contents on the reader's behalf would be answering a question nobody asked. */
-function Package(props) {
+function Package(props: { box: Box; review: Review; viewed: Set<Identity>; onOpen: (id: Identity) => void }) {
   const held = () => [...inside(props.box)].sort((a, b) => a.name.localeCompare(b.name));
   const changed = () => held().filter((one) => one.mark !== "affected" && one.mark !== "still");
 
@@ -215,11 +261,16 @@ function Package(props) {
 
 /* Names of other definitions, marked when the reader hasn't got to them yet — which is the
  * one thing they can't check for themselves. */
-function Names(props) {
+function Names(props: {
+  ids: Identity[];
+  review: Review;
+  step: Step | undefined;
+  onOpen: (id: Identity) => void;
+}) {
   const shown = () =>
     props.ids
       .map((id) => props.review.definitions.get(id))
-      .filter(Boolean)
+      .filter((one): one is Def => one !== undefined)
       .map((definition) => ({
         definition,
         /* Only the reading order can say whether something is being taken on faith. Looked
@@ -241,7 +292,7 @@ function Names(props) {
   );
 }
 
-function Diff(props) {
+function Diff(props: { definition: Def; names: Names; onOpen: (id: Identity) => void }) {
   /* Fetches the grammar for whatever this file is written in, once it's known. */
   createEffect(() => readied(speaks(props.definition.file), dressing(), wearing()));
 
@@ -294,11 +345,16 @@ function Diff(props) {
 /* Comments and strings step back, and a name that belongs to something else in this review
  * becomes a way to get there. That last part is why this isn't a highlighting library: no
  * library knows which words in this code the reader is about to meet. */
-function Code(props) {
+function Code(props: {
+  pieces: Painted[];
+  names: Names;
+  here: Identity;
+  onOpen: (id: Identity) => void;
+}) {
   /* Coloured by the grammar, then read again for names that go somewhere. A highlighter
    * can't know which words in this code are definitions the reader is about to meet, and
    * that's the one thing worth more than the colour. */
-  const parts = () =>
+  const parts = (): Led[] =>
     props.pieces.flatMap((piece) =>
       piece.colour ? split(piece, props.names, props.here) : [piece],
     );
@@ -307,20 +363,29 @@ function Code(props) {
     <For each={parts()}>
       {(part) => (
         <Show
-          when={part.goes !== undefined}
+          when={part.goes}
           fallback={<span style={part.colour ? { color: part.colour } : undefined}>{part.text}</span>}
         >
-          <span class="lnk" style={{ color: part.colour }} onClick={() => props.onOpen(part.goes)}>
-            {part.text}
-          </span>
+          {(goes) => (
+            <span
+              class="lnk"
+              style={part.colour ? { color: part.colour } : undefined}
+              onClick={() => props.onOpen(goes())}
+            >
+              {part.text}
+            </span>
+          )}
         </Show>
       )}
     </For>
   );
 }
 
+/** A coloured piece, and where its text leads if it names something else in the review. */
+type Led = Painted & { goes?: Identity };
+
 /* A coloured piece, cut around any names in it that lead somewhere else. */
-function split(piece, names, here) {
+function split(piece: Painted, names: Names, here: Identity): Led[] {
   const goes = names.get(piece.text.trim());
   if (goes !== undefined && goes !== here && piece.text.trim() === piece.text) {
     return [{ ...piece, goes }];

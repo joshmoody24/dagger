@@ -44,7 +44,7 @@ export const speaks = (file: string) => SPEAKS[file.split(".").pop() ?? ""] ?? n
 
 export interface Painted {
   text: string;
-  colour?: string;
+  colour?: string | undefined;
 }
 
 let ready: HighlighterCore | undefined;

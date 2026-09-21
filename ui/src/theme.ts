@@ -51,7 +51,7 @@ export const dressing = dressed;
 export async function wear(name: string, root = document.documentElement) {
   const { default: theme } = await WEARING[name]();
   paint(theme, root);
-  setDressed(theme as Theme);
+  setDressed(theme);
   setWorn(name);
 }
 
