@@ -70,6 +70,13 @@ pub struct ReviewConfig {
     /// The one place completeness is given up on purpose, so it's worth keeping short.
     #[serde(default)]
     pub ignore: Vec<String>,
+    /// How far past what changed to follow what depends on it, when nobody says.
+    ///
+    /// A repository knows things about itself that a default can't: how widely its pieces
+    /// are used, how long its tooling takes to answer, whether following a change outward
+    /// is a second's work or a minute's. `--ripples` still wins, so this is where a repo
+    /// starts from rather than what it insists on.
+    pub ripples: Option<u32>,
 }
 
 fn nothing() -> toml::Value {

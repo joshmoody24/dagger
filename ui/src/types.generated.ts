@@ -160,7 +160,19 @@ export type Grouping = {
 /**
  * What a reader would call this way of grouping: "package", "owner", "layer".
  */
-name: string, of: { [key in Identity]: Array<string> }, };
+name: string, of: { [key in Identity]: Array<string> }, 
+/**
+ * How deep each group sits among the groups: nought for one that leans on no other,
+ * one more than the furthest it leans on otherwise. Keyed the way a group is written
+ * on a page, outermost first, joined by slashes.
+ *
+ * Worked out here so it's worked out once. The reading follows it — what leans on no
+ * other group is read before what leans on it — and the page draws its rows of boxes
+ * by it, and those two being the same number is the whole reason a reading runs down
+ * a page rather than around it. Two of them would agree until they didn't, and the
+ * symptom would be an order that feels random.
+ */
+bands: { [key in string]: number }, };
 
 export type Note = { message: string, 
 /**

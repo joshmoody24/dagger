@@ -1291,6 +1291,17 @@
     }
   ],
   "grouping": {
+    "bands": {
+      "adapters/git": 0,
+      "adapters/lsp": 0,
+      "adapters/rust": 0,
+      "crates/cli": 0,
+      "crates/core": 0,
+      "crates/lsp-client": 0,
+      "crates/protocol": 0,
+      "ui": 0,
+      "ui/src-tauri": 0
+    },
     "name": "package",
     "of": {
       "0": [

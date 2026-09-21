@@ -11,12 +11,11 @@ export function App(props: { raw: Raw }) {
 
   /* How far out to show what a change reached.
    *
-   * Never further than the reading went — whoever ran dagger said how far to follow with
-   * --ripples, and a page offering more than that would be offering to show nothing. Within
-   * that it's the reader's: the definitions that use a change directly are usually the
-   * point, and the ones several removes out are the same news arriving again. */
+   * Starts at none. What changed is the review; what a change reached is a second and
+   * larger question, and one worth asking on purpose rather than being handed. Never goes
+   * further than the reading went — whoever ran dagger said how far to follow with
+   * --ripples, and a page offering more than that would be offering to show nothing. */
   const [ripples, setRipples] = createSignal(0);
-  createEffect(() => setRipples(whole().ripples));
   const further = () => setRipples((was) => (was >= whole().ripples ? 0 : was + 1));
 
   const review = createMemo(() => {

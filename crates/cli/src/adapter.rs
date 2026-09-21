@@ -2,7 +2,7 @@ use crate::config::{Adapter, Extractor};
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_protocol::{Note, Request, Response, Revisions};
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -22,13 +22,29 @@ fn resolve(repo: &Path, adapter: &str) -> PathBuf {
     }
 }
 
-fn ask(repo: &Path, adapter: &str, args: &[String], request: &Request) -> Result<Response> {
+/// Asks an adapter one thing and waits for the answer.
+///
+/// `saying` names whoever wants to know, when more than one of these is running at a time:
+/// an adapter talks to the user on its way through, and two of them sharing a terminal
+/// produce a progress report that belongs to nobody. Named, each line says whose it is.
+/// Unnamed, the adapter writes straight to the terminal as any command would.
+fn ask(
+    repo: &Path,
+    adapter: &str,
+    args: &[String],
+    request: &Request,
+    saying: Option<&str>,
+) -> Result<Response> {
     let program = resolve(repo, adapter);
     let mut child = Command::new(&program)
         .args(args)
         .current_dir(repo)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        .stderr(match saying {
+            Some(_) => Stdio::piped(),
+            None => Stdio::inherit(),
+        })
         .spawn()
         .with_context(|| format!("couldn't start {}", program.display()))?;
 
@@ -39,13 +55,32 @@ fn ask(repo: &Path, adapter: &str, args: &[String], request: &Request) -> Result
         .expect("stdin was piped")
         .write_all(&payload)?;
 
-    let output = child.wait_with_output()?;
+    /* Read as it arrives and passed on at once. Held until the end it would be a report of
+     * what already happened, and the waiting it exists to fill would be spent in silence. */
+    let output = match saying {
+        Some(name) => {
+            let said = child.stderr.take().expect("stderr was piped");
+            std::thread::scope(|threads| {
+                threads.spawn(|| relay(said, name));
+                child.wait_with_output()
+            })?
+        }
+        None => child.wait_with_output()?,
+    };
     if !output.status.success() {
         bail!("{} exited badly", program.display());
     }
 
     serde_json::from_slice(&output.stdout)
         .with_context(|| format!("{} said something we couldn't read", program.display()))
+}
+
+/// Passes on what an adapter says, one line at a time, with whose it is in front of it.
+fn relay(said: std::process::ChildStderr, name: &str) {
+    for line in std::io::BufReader::new(said).lines().map_while(Result::ok) {
+        // One write, so two of these can't land inside each other's line.
+        eprintln!("{name} · {line}");
+    }
 }
 
 /// What an adapter says about itself. Asking beats guessing from its name, which would
@@ -63,6 +98,7 @@ pub fn describe(
         &Request::Describe {
             settings: json(settings),
         },
+        None,
     )? {
         Response::Described {
             include,
@@ -116,7 +152,7 @@ pub fn revisions(repo: &Path, snapshots: &Adapter, asked: &[String]) -> Result<R
         asked: asked.to_vec(),
         settings: json(&snapshots.settings),
     };
-    match ask(repo, &snapshots.adapter, &snapshots.args, &request)? {
+    match ask(repo, &snapshots.adapter, &snapshots.args, &request, None)? {
         Response::Resolved { revisions } => Ok(revisions),
         // Worded by whoever understands the words, so it's passed on as it came.
         Response::Failed { message } => bail!("{message}"),
@@ -129,7 +165,7 @@ pub fn materialize(repo: &Path, snapshots: &Adapter, rev: &str) -> Result<Snapsh
         rev: rev.to_string(),
         settings: json(&snapshots.settings),
     };
-    match ask(repo, &snapshots.adapter, &snapshots.args, &request)? {
+    match ask(repo, &snapshots.adapter, &snapshots.args, &request, None)? {
         Response::Materialized {
             dir,
             temporary,
@@ -154,6 +190,7 @@ pub fn extract(
     files: &[String],
     changed: &[String],
     ripples: u32,
+    saying: &str,
 ) -> Result<(Extraction, Vec<Note>)> {
     let request = Request::Extract {
         dir: dir.to_string_lossy().into_owned(),
@@ -162,7 +199,13 @@ pub fn extract(
         ripples,
         settings: json(&extractor.settings),
     };
-    match ask(repo, &extractor.adapter, &extractor.args, &request)? {
+    match ask(
+        repo,
+        &extractor.adapter,
+        &extractor.args,
+        &request,
+        Some(saying),
+    )? {
         Response::Extracted { extraction, notes } => Ok((extraction, notes)),
         Response::Failed { message } => {
             bail!(

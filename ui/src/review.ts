@@ -120,6 +120,7 @@ export function digest(raw: Raw): Review {
     ripples: raw.review.ripples,
     cost: raw.ordering.cost,
     grouping: raw.grouping.name,
+    bands: new Map(Object.entries(raw.grouping.bands ?? {})),
     worries: [
       ...raw.review.diagnostics.map((diagnostic) => told(diagnostic, definitions)),
       /* An adapter's note is always about something it couldn't do, so whatever it was
@@ -436,22 +437,17 @@ function stacking(byPlace: Map<string, Definition[]>, edges: Edge[]) {
   };
 }
 
-/* Bands of boxes: whatever holds another box up is drawn in an earlier band. */
+/* Bands of boxes: whatever holds another box up is drawn in an earlier band.
+ *
+ * Which band is dagger's answer, not one worked out again here. The reading order goes by
+ * the same number — what leans on no other group is read before what leans on it — and a
+ * page that decided for itself would agree until it didn't, at which point the reading
+ * would run around a page laid out to a different plan and feel, to whoever was following
+ * it, like no plan at all. */
 function bands(boxes: Box[], review: Review) {
-  const groupOf = new Map<Identity, string>();
-  for (const box of boxes) for (const node of inside(box)) groupOf.set(node.id, box.key);
-
-  const leansOn = new Map<string, string[]>(boxes.map((box) => [box.key, []]));
-  for (const edge of review.edges) {
-    const from = groupOf.get(edge.from);
-    const to = groupOf.get(edge.to);
-    if (from && to && from !== to) leansOn.get(from)?.push(to);
-  }
-
-  const keys = new Set(boxes.map((box) => box.key));
   const found: Box[][] = [];
   for (const box of boxes) {
-    const row = depth(box.key, keys, leansOn, new Map());
+    const row = review.bands.get(box.key) ?? 0;
     (found[row] ||= []).push(box);
   }
 
@@ -568,6 +564,42 @@ export function namesIn(review: Review) {
   const only = new Map<string, Identity>();
   for (const [name, id] of seen) if (id !== null) only.set(name, id);
   return only;
+}
+
+/* How much of a file to show around a change.
+ *
+ * A definition can be a whole file, and a file can be ten thousand lines: a module holds
+ * its own prose and every import, and a generated one holds all of it. Drawing that to
+ * explain a change of four lines is slow to put on the page and slower to find anything
+ * in. Far enough away, unchanged code stops being context and becomes the haystack. */
+const REACH = 100;
+
+/** What's worth showing: everything near a change, and a mark where the rest was. */
+export function focused(lines: Shown[], reach = REACH): Shown[] {
+  const changed = lines.flatMap((one, at) => (one.mark === " " ? [] : [at]));
+  /* Nothing changed at all — a definition here because something it leans on moved — so
+   * there's no change to sit near. The top of it is the part worth having. */
+  const anchors = changed.length ? changed : [0];
+
+  const near = new Set<number>();
+  for (const at of anchors) {
+    const [from, to] = [Math.max(0, at - reach), Math.min(lines.length - 1, at + reach)];
+    for (let line = from; line <= to; line++) near.add(line);
+  }
+  if (near.size === lines.length) return lines;
+
+  const shown: Shown[] = [];
+  let standing = false;
+  for (let at = 0; at < lines.length; at++) {
+    if (near.has(at)) {
+      shown.push(lines[at]);
+      standing = false;
+    } else if (!standing) {
+      shown.push({ mark: " ", line: { at: null, text: "…" } });
+      standing = true;
+    }
+  }
+  return shown;
 }
 
 /** Line by line, marked as kept, gone, or new. */

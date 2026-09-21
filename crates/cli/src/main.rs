@@ -32,8 +32,9 @@ struct Args {
     explain: bool,
     list: bool,
     help: bool,
-    /// How far past what changed to follow what depends on it.
-    ripples: u32,
+    /// How far past what changed to follow what depends on it. Left unsaid, the repository
+    /// decides, and failing that so does dagger.
+    ripples: Option<u32>,
 }
 
 fn parse_args() -> Result<Args> {
@@ -42,17 +43,15 @@ fn parse_args() -> Result<Args> {
     let mut explain = false;
     let mut list = false;
     let mut help = false;
-    /* Far enough to answer "who breaks if this breaks", and no further. Past that, each
-     * hop is the same news arriving again from further away, and it costs the most: every
-     * definition reached so far asks the whole repository who uses it. */
-    let mut ripples = 1;
+    let mut ripples = None;
     let mut awaiting = false;
 
     for arg in std::env::args().skip(1) {
         if awaiting {
-            ripples = arg
-                .parse()
-                .with_context(|| format!("--ripples wants a number, not {arg}"))?;
+            ripples = Some(
+                arg.parse()
+                    .with_context(|| format!("--ripples wants a number, not {arg}"))?,
+            );
             awaiting = false;
             continue;
         }
@@ -94,8 +93,9 @@ fn help(repo: &Path, config: &Config) {
     println!();
     println!("Named nothing, dagger reads whatever you're working on.");
     println!();
-    println!("--ripples <n> follows what a change reaches n steps out, 1 by default.");
-    println!("Nought reads only what changed. Each step costs, so raise it knowingly.");
+    println!("--ripples <n> follows what a change reaches n steps out. Nought reads only");
+    println!("what changed. Each step costs, so raise it knowingly. A repository can say");
+    println!("where to start under [review] as ripples = <n>; failing both, it is 1.");
     println!();
 
     let understood = config.snapshots.as_ref().and_then(|snapshots| {
@@ -267,20 +267,42 @@ fn compare(
     let changed = assign::not_ignored(&config.review.ignore, differing(before.1, after.1)?)?;
     status(&format!("{} files differ", changed.len()));
 
+    /* What was asked for, else what the repository asks for, else far enough to answer
+     * "who breaks if this breaks" and no further. */
+    let ripples = args.ripples.or(config.review.ripples).unwrap_or(1);
+
     let (before_dir, after_dir) = (before.1.dir.clone(), after.1.dir.clone());
-    let (before, mut notes) = read(repo, config, claims, before, &changed, args.ripples)?;
-    let (after, mut later) = read(repo, config, claims, after, &changed, args.ripples)?;
+
+    /* One after the other, though neither reading looks at the other and both together are
+     * nearly the whole of what a run costs.
+     *
+     * Reading them at once was tried and taken out again. It ran a third faster and took
+     * 24GB to do it: a language server has to load the whole project before it can answer
+     * anything, so two of them is two of everything, and on a sixty gigabyte machine it
+     * came within a fifth of a percent of what the out-of-memory killer watches for. A
+     * review that might be killed partway is worse than a review that takes longer. */
+    let (before, mut notes) = read(repo, config, claims, before, &changed, ripples, "before")?;
+    let (after, mut later) = read(repo, config, claims, after, &changed, ripples, "after")?;
     notes.append(&mut later);
 
     let matched = match_snapshots(before, after);
-    let mut review = review(&matched.definitions, &matched.references, args.ripples);
+    let mut review = review(&matched.definitions, &matched.references, ripples);
 
     // One grouping at a time, and for now the first one written down. The reading order
     // leans on it to know whether the next definition takes the reader somewhere else.
-    let grouping = match config.groupings.first() {
+    let mut grouping = match config.groupings.first() {
         Some(wanted) => grouping::of(wanted, &after_dir, &matched.definitions),
         None => Grouping::default(),
     };
+    // How the groups sit relative to each other, which needs the edges and so can't be
+    // settled while grouping. Both the reading and the page go by it.
+    grouping.settle(
+        &review
+            .edges
+            .iter()
+            .map(|edge| (edge.from, edge.to))
+            .collect::<Vec<_>>(),
+    );
     let ordering = order(&review, &matched.definitions, &grouping);
 
     review.diagnostics.extend(completeness::check(
@@ -362,6 +384,9 @@ fn read(
     (rev, snapshot): (&str, &adapter::Snapshot),
     changed: &[String],
     ripples: u32,
+    // Which of the two this is. Both are read at once, so everything said on the way has
+    // to say whose it is or the two reports become one nobody can follow.
+    side: &str,
 ) -> Result<(Extraction, Vec<Note>)> {
     let dir = &snapshot.dir;
     let assignment = assign::assign(
@@ -389,12 +414,12 @@ fn read(
             continue;
         }
         status(&format!(
-            "reading {} files of {rev} with {}",
+            "{side} · reading {} files of {rev} with {}",
             files.len(),
             extractor.adapter
         ));
         let (mut extracted, mut said) =
-            adapter::extract(repo, extractor, dir, files, changed, ripples)?;
+            adapter::extract(repo, extractor, dir, files, changed, ripples, side)?;
         merged.occurrences.append(&mut extracted.occurrences);
         merged.mentions.append(&mut extracted.mentions);
         notes.append(&mut said);

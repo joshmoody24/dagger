@@ -384,11 +384,11 @@ impl Walk {
              * the walk stops one short of how far the reading was asked to go. Everything
              * reached from the last step is still recorded — it just isn't followed. */
             if away + 1 < self.ripples {
-                for (path, definition) in self.ask_about(&path, &wanted, &changed) {
+                for (path, definition) in self.ask_about(&path, &wanted, &changed, away) {
                     front.want(&path, Wanted::Just(BTreeSet::from([definition])), away + 1);
                 }
             } else {
-                self.ask_about(&path, &wanted, &changed);
+                self.ask_about(&path, &wanted, &changed, away);
             }
         }
     }
@@ -420,6 +420,7 @@ impl Walk {
         path: &str,
         wanted: &Wanted,
         changed: &BTreeSet<String>,
+        away: u32,
     ) -> Vec<(String, Locator)> {
         let questions: Vec<(Value, Locator)> = {
             let file = &self.seen[path];
@@ -463,7 +464,7 @@ impl Walk {
                 }
             };
 
-            onward.extend(self.record(&referrers, &to));
+            onward.extend(self.record(&referrers, &to, changed, away));
         }
 
         onward
@@ -471,7 +472,13 @@ impl Walk {
 
     /// Turns each place a definition is used into a mention, and says which of those
     /// places can carry a break onward — the file, and the one definition in it that does.
-    fn record(&mut self, referrers: &Value, to: &Locator) -> Vec<(String, Locator)> {
+    fn record(
+        &mut self,
+        referrers: &Value,
+        to: &Locator,
+        changed: &BTreeSet<String>,
+        away: u32,
+    ) -> Vec<(String, Locator)> {
         let places: Vec<(String, u32, u32)> = referrers
             .as_array()
             .map(Vec::as_slice)
@@ -489,7 +496,14 @@ impl Walk {
 
         let mut onward = Vec::new();
         for (path, line, column) in places {
-            if self.seen.len() >= self.open_limit || !self.look(&path) {
+            /* Opening a file is how a mention gets the name of the definition it sits in.
+             * Worth doing only where the mention can end up in the review: inside a file
+             * that changed, which anybody reads whatever they asked for, or near enough to
+             * the change to be reached at the distance they did ask for. Beyond that it's
+             * a file read, parsed and thrown away — which at no ripples at all was every
+             * file that so much as names something that changed. */
+            let worth_opening = changed.contains(&path) || away < self.ripples;
+            if !worth_opening || self.seen.len() >= self.open_limit || !self.look(&path) {
                 continue;
             }
 

@@ -1,7 +1,9 @@
 //! The order to read a change in.
 //!
-//! Two rules, and the second one is the whole idea. Don't read something before the
-//! things it leans on. And keep as little in the reader's head at once as possible.
+//! One rule above all others: don't read something before the things it leans on. After
+//! that, finish where you are before going elsewhere, and meet what everything stands on
+//! before the things standing on it. A reader led back and forth across a change spends
+//! their attention on finding their place rather than on the code.
 //!
 //! Something is *open* once it's been read and something still unread depends on it:
 //! it has to be kept in mind. It closes when the last thing depending on it is read,
@@ -9,9 +11,15 @@
 //! the opposite, a promise held about code not yet seen, which only happens when
 //! definitions depend on each other in a circle and there's no honest place to start.
 //!
-//! Candidates are compared in order — faith first, then how much is left open, then whether
-//! it drags the reader somewhere else — rather than scored and added up, so there are no
-//! weights to argue about.
+//! Candidates are compared in order rather than scored and added up, so there are no
+//! weights to argue about — `pick` lists the order, a line of reasoning each.
+//!
+//! There was for a while a second reading that left every foundation until the last
+//! moment, to carry as little as possible at once. Measured against this one it held no
+//! less in mind at the worst moment, moved the reader between packages half again as
+//! often, and began in whichever package the change happened to lean on hardest — which
+//! on a page laid out by what depends on what is the bottom. It's gone; what's left is
+//! the one reading, and the numbers it costs are in `Cost` for arguing with.
 
 use crate::group::Grouping;
 use crate::model::{Definition, Identity};
@@ -59,13 +67,28 @@ pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -
         .map(|(place, identity)| (*identity, place))
         .collect();
 
+    let files: BTreeMap<Identity, &String> = definitions
+        .iter()
+        .map(|definition| (definition.identity, &definition.sides.latest().file))
+        .collect();
+
+    let homes = homes(&members, definitions);
+    /* A module is the top of its own file: what it says it is, and what it brings in.
+     * Read after the things it holds, it's a header arriving once nobody needs it. */
+    let headers: Vec<bool> = {
+        let kinds: BTreeMap<Identity, &str> = definitions
+            .iter()
+            .map(|definition| (definition.identity, definition.sides.latest().kind.as_str()))
+            .collect();
+        members
+            .iter()
+            .map(|identity| kinds.get(identity) == Some(&"module"))
+            .collect()
+    };
+
     // Where each one sits, for judging whether reading the next takes the reader somewhere
     // else. A grouping says where if it has an opinion; failing that, the file it's in.
     let wheres: Vec<&[String]> = {
-        let files: BTreeMap<Identity, &String> = definitions
-            .iter()
-            .map(|definition| (definition.identity, &definition.sides.latest().file))
-            .collect();
         members
             .iter()
             .map(|identity| {
@@ -83,6 +106,12 @@ pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -
     };
 
     let (leans_on, holds_up) = relations(review, &places, members.len());
+    /* Worked out once, by whoever knows how the groups sit, and read here. The page reads
+     * the same numbers, which is what keeps a reading running down it. */
+    let bands: Vec<u32> = members
+        .iter()
+        .map(|identity| grouping.band_of(*identity))
+        .collect();
 
     let mut read = vec![false; members.len()];
     let mut unread_leans: Vec<usize> = leans_on.iter().map(BTreeSet::len).collect();
@@ -92,6 +121,7 @@ pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -
     let mut cost = Cost::default();
     let mut open = 0usize;
     let mut last_where: Option<&[String]> = None;
+    let mut last_home: Option<&str> = None;
 
     for _ in 0..members.len() {
         let Some(next) = pick(
@@ -99,8 +129,14 @@ pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -
             &unread_leans,
             &unread_holds,
             &leans_on,
-            &wheres,
-            last_where,
+            &headers,
+            Where {
+                groups: &wheres,
+                homes: &homes,
+                bands: &bands,
+                group: last_where,
+                home: last_home,
+            },
         ) else {
             break;
         };
@@ -129,6 +165,7 @@ pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -
             cost.jumps += 1;
         }
         last_where = Some(wheres[next]);
+        last_home = Some(homes[next].as_str());
         cost.peak_open = cost.peak_open.max(open);
         cost.total_open += open;
         cost.taken_on_faith += on_faith.len();
@@ -163,16 +200,96 @@ fn relations(
     (leans_on, holds_up)
 }
 
-/// The next one to read, judged on each count in turn: how much has to be taken on faith,
-/// then how much is left in the reader's head, then whether it means moving somewhere else.
-/// Position settles the rest so the same change always reads the same.
+/// The module each member belongs to, named so two can be told apart.
+///
+/// A module, not a file. They line up most of the time, which is why the file alone would
+/// nearly work — but a file holding two modules holds two trains of thought, and the reader
+/// knows it even when the filesystem doesn't.
+///
+/// Two things this has to get right, and got wrong first:
+///
+/// A module's own definition belongs to itself, not to what contains it. A file's module is
+/// written with the scope of its parent, and taken at face value that puts it somewhere
+/// other than everything it holds — so it was read after all of them, which is nobody's
+/// idea of reading a file.
+///
+/// And anything deeper than a module belongs to the module, not to the nearest thing that
+/// happens to enclose it. A reader moving between two methods of one type has not gone
+/// anywhere, and being told they have sends them away and brings them back for no reason.
+fn homes(members: &[Identity], definitions: &[Definition]) -> Vec<String> {
+    let known: Vec<(&str, Vec<String>)> = definitions
+        .iter()
+        .filter(|definition| definition.sides.latest().kind == "module")
+        .map(|definition| {
+            let shown = definition.sides.latest();
+            let mut path = shown.locator.scope.clone();
+            path.push(shown.locator.name.clone());
+            (shown.file.as_str(), path)
+        })
+        .collect();
+
+    // A file can't hold a null and neither can a path, so the two can't be confused.
+    let named = |file: &str, path: &[String]| format!("{file}\0{}", path.join("::"));
+    let inside: BTreeMap<Identity, String> = definitions
+        .iter()
+        .map(|definition| {
+            let shown = definition.sides.latest();
+            let mut own = shown.locator.scope.clone();
+            if shown.kind == "module" {
+                own.push(shown.locator.name.clone());
+            }
+
+            /* The innermost module this sits in, which is the longest module path the
+             * thing's own path starts with. A module matches itself. */
+            let home = known
+                .iter()
+                .filter(|(file, path)| *file == shown.file && own.starts_with(path))
+                .max_by_key(|(_, path)| path.len())
+                .map(|(file, path)| named(file, path))
+                .unwrap_or_else(|| named(&shown.file, &[]));
+            (definition.identity, home)
+        })
+        .collect();
+
+    members
+        .iter()
+        .map(|identity| inside.get(identity).cloned().unwrap_or_default())
+        .collect()
+}
+
+/// Where the reader is, and where everything else is, at every sense of the word.
+struct Where<'a> {
+    groups: &'a [&'a [String]],
+    homes: &'a [String],
+    bands: &'a [u32],
+    group: Option<&'a [String]>,
+    home: Option<&'a str>,
+}
+
+impl Where<'_> {
+    /// How far reading this one would take the reader: nowhere, out of the module, or out
+    /// of the package altogether. Counting only the package let a reading wander between
+    /// the modules inside one as freely as if they were the same place, which to whoever
+    /// is reading them they are not.
+    fn away(&self, candidate: usize) -> isize {
+        match (self.group, self.home) {
+            (Some(group), Some(home)) => {
+                isize::from(home != self.homes[candidate].as_str())
+                    + isize::from(group != self.groups[candidate])
+            }
+            _ => 0,
+        }
+    }
+}
+
+/// The next one to read, judged on each count in turn.
 fn pick(
     read: &[bool],
     unread_leans: &[usize],
     unread_holds: &[usize],
     leans_on: &[BTreeSet<usize>],
-    wheres: &[&[String]],
-    last_where: Option<&[String]>,
+    headers: &[bool],
+    at: Where,
 ) -> Option<usize> {
     (0..read.len())
         .filter(|&candidate| !read[candidate])
@@ -181,13 +298,27 @@ fn pick(
                 .iter()
                 .filter(|&&leaned| read[leaned] && unread_holds[leaned] == 1)
                 .count();
-            let opens = usize::from(unread_holds[candidate] > 0);
-
             (
+                // Never before what it leans on.
                 unread_leans[candidate],
-                opens as isize - closes as isize,
-                usize::from(last_where.is_some_and(|was| was != wheres[candidate])),
-                candidate,
+                // Stay in the module you're in: a reader pulled out of one has to come
+                // back to it later and find the thread again.
+                at.away(candidate),
+                // Then which group. Whatever leans on no other group is read before what
+                // leans on it, which is the order the page draws them in from the top. At
+                // the first step there's nowhere to stay, so this decides where to begin,
+                // and the page puts whatever is read first at the top left.
+                at.bands[candidate] as isize,
+                // Arriving somewhere, read what it says it is before what it holds: a
+                // module's own definition is its file's prose and what it brings in.
+                isize::from(!headers[candidate]),
+                // Then finish a branch, when one can be finished.
+                -(closes as isize),
+                // Then, among things equally free to read, whatever the most is waiting
+                // on — which is what "upstream" means once the names are taken away.
+                -(unread_holds[candidate] as isize),
+                // Position settles the rest, so the same change always reads the same.
+                candidate as isize,
             )
         })
 }
@@ -292,13 +423,14 @@ mod tests {
         );
     }
 
-    /// Reading something nothing depends on costs nothing, while reading a foundation
-    /// leaves a door open, so the free-standing bits come first. It's why a change to
-    /// a lockfile or a build script lands at the top, before any code.
+    /// What something stands on is read before it, and the branch is finished before
+    /// anything else is begun — so a definition that stands alone, owing nothing and owed
+    /// nothing, is read last rather than first. It can be read at any time, which is
+    /// exactly why it shouldn't interrupt something that can't.
     #[test]
-    fn what_nothing_leans_on_is_read_before_what_holds_things_up() {
+    fn a_foundation_is_read_first_and_what_stands_alone_last() {
         // 0 leans on 2, and 1 stands alone.
-        assert_eq!(reading(3, &[(0, 2)]), vec![1, 2, 0]);
+        assert_eq!(reading(3, &[(0, 2)]), vec![2, 0, 1]);
     }
 
     #[test]

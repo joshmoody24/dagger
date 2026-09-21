@@ -171,13 +171,17 @@ pre.code {
  * scrolling away from the column that says which lines changed, and a wrapped line is
  * indented past the mark so the continuation can't be mistaken for one of its own. */
 pre.code .ln {
-  display: block; padding: 0 12px 0 62px; position: relative;
+  display: block; padding: 0 12px 0 calc(32px + var(--gutter, 3ch)); position: relative;
   white-space: pre-wrap; overflow-wrap: anywhere; text-indent: 12px hanging;
 }
 /* Where the line is in the file. Held apart from the code and dim enough to read past,
- * since it's there to be quoted rather than read. */
+ * since it's there to be quoted rather than read.
+ *
+ * As wide as the largest number it has to hold, which the page works out and sets: a fixed
+ * width fits until a file is long enough that it doesn't, and then the digits pile up on
+ * each other in the one place a reader goes to be precise. */
 pre.code .ln u {
-  position: absolute; left: 22px; width: 30px; text-align: right;
+  position: absolute; left: 22px; width: var(--gutter, 3ch); text-align: right;
   text-decoration: none; color: var(--faint); text-indent: 0;
 }
 pre.code .ln .gap { color: var(--muted); }

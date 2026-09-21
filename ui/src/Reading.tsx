@@ -1,7 +1,7 @@
 import { createEffect, createMemo, For, Show } from "solid-js";
-import type { Box, Definition as Def, Identity, Review, Step } from "./dagger.ts";
+import type { Box, Definition as Def, Identity, Review, Shown, Step } from "./dagger.ts";
 import type { Painted } from "./colouring.ts";
-import { MARK, TINT, broke, compare, inside, stitch } from "./review.ts";
+import { MARK, TINT, broke, compare, focused, inside, stitch } from "./review.ts";
 import { colouring, painted, readied, speaks } from "./colouring.ts";
 import { dressing, wearing } from "./theme.ts";
 
@@ -302,9 +302,13 @@ function Diff(props: { definition: Def; names: Names; onOpen: (id: Identity) => 
   const lines = createMemo(() => {
     const [was, is] = [stitch(props.definition.before), stitch(props.definition.after)];
     if (!was && !is) return [];
-    if (!was) return is!.map((line) => ({ mark: "+", line }));
-    if (!is) return was.map((line) => ({ mark: "−", line }));
-    return compare(was, is);
+    const all: Shown[] =
+      !was
+        ? is!.map((line) => ({ mark: "+" as const, line }))
+        : !is
+          ? was.map((line) => ({ mark: "−" as const, line }))
+          : compare(was, is);
+    return focused(all);
   });
 
   /* Unchanged means unchanged: a definition in the review because something it depends on
@@ -317,8 +321,14 @@ function Diff(props: { definition: Def; names: Names; onOpen: (id: Identity) => 
     return painted(lines().map((one) => one.line.text), speaks(props.definition.file), wearing());
   });
 
+  /* Room for the largest line number this diff holds, and no more. */
+  const gutter = () => {
+    const most = Math.max(0, ...lines().map((one) => one.line.at ?? 0));
+    return `${Math.max(3, String(most).length)}ch`;
+  };
+
   return (
-    <pre class={`code${unchanged() ? " same" : ""}`}>
+    <pre class={`code${unchanged() ? " same" : ""}`} style={{ "--gutter": gutter() }}>
       <For each={lines()}>
         {(one, at) => (
           <span class={`ln ${one.mark === "+" ? "a" : one.mark === "−" ? "r" : ""}`}>

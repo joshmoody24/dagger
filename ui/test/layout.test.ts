@@ -8,6 +8,8 @@ import fs from "node:fs";
 import test from "node:test";
 import type { Box, Edge, Identity, Line, Raw } from "../src/dagger.ts";
 import { NODE_H, digest, layout, shorten, stitch, widthOf } from "../src/review.ts";
+import { phases, standing } from "../src/progress.ts";
+import { focused } from "../src/review.ts";
 
 const raw: Raw = JSON.parse(fs.readFileSync(new URL("./review.json", import.meta.url), "utf8"));
 const review = digest(raw);
@@ -188,4 +190,86 @@ test("every line says where it is in the file", () => {
       assert.equal(now.at, before.at + 1, `${definition.path} jumps from ${before.at} to ${now.at}`);
     }
   }
+});
+
+/* Both snapshots are read at once, so what dagger says about them arrives interleaved.
+ * Nothing here may be worked out from the order the lines turn up in. */
+test("a progress report reads the same however the two readings interleave", () => {
+  const said = [
+    "comparing aaa to bbb",
+    "12 files differ",
+    "after · reading 9 files of bbb with dagger-lsp",
+    "before · reading 9 files of aaa with dagger-lsp",
+    "after ·   walked 1 of 4 files, opened 6",
+    "before ·   walked 2 of 7 files, opened 9",
+    "after ·   read 40 files, found 99 definitions",
+  ];
+
+  const [laying, older, newer] = phases(said);
+  assert.equal(laying.done, true, "laying out is over once a reading has begun");
+
+  assert.equal(older.said, "reading aaa");
+  assert.deepEqual(older.through, [2, 7], "each side took the line naming it");
+  assert.equal(older.done, false);
+
+  assert.equal(newer.said, "reading bbb");
+  assert.equal(newer.done, true);
+  assert.equal(newer.detail, "99 definitions");
+});
+
+/* Both are under way together, so both beat. */
+test("every reading still going is shown as going", () => {
+  const found = phases([
+    "comparing aaa to bbb",
+    "before · reading 9 files of aaa with dagger-lsp",
+    "after · reading 9 files of bbb with dagger-lsp",
+  ]);
+  assert.deepEqual(
+    found.map((_, at) => standing(found, at)),
+    ["was", "at", "at"],
+  );
+});
+
+/* A definition can be a whole file, and a file can be ten thousand lines. What's near a
+ * change is context; what's far from one is a haystack. */
+test("a long diff is cut down to what sits near a change", () => {
+  const line = (at: number, text: string) => ({ at, text });
+  const lines = Array.from({ length: 500 }, (_, at) => ({
+    mark: at === 250 ? ("+" as const) : (" " as const),
+    line: line(at + 1, `line ${at + 1}`),
+  }));
+
+  const shown = focused(lines, 10);
+  const kept = shown.filter((one) => one.line.at !== null);
+  const gaps = shown.filter((one) => one.line.at === null);
+
+  assert.equal(kept.length, 21, "the changed line and ten either side");
+  assert.equal(gaps.length, 2, "one mark for each stretch stood down");
+  assert.ok(
+    kept.every((one) => Math.abs(one.line.at! - 251) <= 10),
+    "kept something far from the change",
+  );
+});
+
+/* Nothing changed, so there's nothing to sit near — but it still can't all be drawn. */
+test("a diff with no changes at all keeps its beginning", () => {
+  const lines = Array.from({ length: 500 }, (_, at) => ({
+    mark: " " as const,
+    line: { at: at + 1, text: `line ${at + 1}` },
+  }));
+
+  const shown = focused(lines, 10);
+  assert.deepEqual(
+    shown.filter((one) => one.line.at !== null).map((one) => one.line.at),
+    Array.from({ length: 11 }, (_, at) => at + 1),
+  );
+});
+
+/* Short enough to show whole, and it is: no marks where nothing was left out. */
+test("a short diff is left alone", () => {
+  const lines = [
+    { mark: " " as const, line: { at: 1, text: "one" } },
+    { mark: "+" as const, line: { at: 2, text: "two" } },
+  ];
+  assert.deepEqual(focused(lines, 10), lines);
 });

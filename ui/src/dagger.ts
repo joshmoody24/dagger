@@ -74,6 +74,8 @@ export interface Review {
   ripples: number;
   cost: Cost;
   grouping?: string;
+  /** How deep each group sits among the groups, worked out by dagger rather than here. */
+  bands: Map<string, number>;
   worries: Worry[];
 }
 
