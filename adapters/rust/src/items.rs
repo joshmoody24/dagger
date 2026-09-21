@@ -68,6 +68,30 @@ fn one(range: Range<usize>) -> Vec<Range<usize>> {
     vec![range]
 }
 
+/// What a caller can see, which is the whole of an item but its prose and its workings.
+///
+/// Taken from where the item starts rather than from where its name does, because what sits
+/// between the two is `pub` — and losing that means making something public reads as a
+/// change to its documentation, which is the mildest mark there is standing in for the most
+/// breaking edit there is. An attribute written above the prose is kept for the same reason:
+/// it's part of the declaration, and left out it would belong to nothing at all.
+fn declared(outer: &Range<usize>, prose: &[Range<usize>], until: usize) -> Vec<Range<usize>> {
+    let mut ranges = Vec::new();
+    if let Some(first) = prose.first().filter(|first| first.start > outer.start) {
+        ranges.push(outer.start..first.start);
+    }
+
+    let after = prose
+        .iter()
+        .map(|range| range.end)
+        .max()
+        .unwrap_or(outer.start);
+    if after < until {
+        ranges.push(after..until);
+    }
+    ranges
+}
+
 pub fn find(items: &[Item], scope: &[String]) -> Vec<Found> {
     merged(
         items
@@ -198,6 +222,7 @@ fn imports(items: &[Item]) -> (Vec<Range<usize>>, Vec<Range<usize>>) {
 fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
     match item {
         Item::Fn(function) => vec![callable(
+            range(function.span()),
             &function.sig,
             &function.attrs,
             Some(&function.block),
@@ -231,6 +256,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
             }];
             found.extend(item.items.iter().filter_map(|member| match member {
                 TraitItem::Fn(function) => Some(callable(
+                    range(function.span()),
                     &function.sig,
                     &function.attrs,
                     function.default.as_ref(),
@@ -247,6 +273,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
 
             found.extend(block.items.iter().filter_map(|member| match member {
                 ImplItem::Fn(function) => Some(callable(
+                    range(function.span()),
                     &function.sig,
                     &function.attrs,
                     Some(&function.block),
@@ -352,6 +379,7 @@ fn implementing(block: &syn::ItemImpl) -> String {
 /// in the gap. There isn't: it's a line ending. Parts divide a definition up; they aren't
 /// supposed to leave crumbs between them.
 fn callable(
+    outer: Range<usize>,
     signature: &syn::Signature,
     attrs: &[Attribute],
     body: Option<&syn::Block>,
@@ -359,18 +387,11 @@ fn callable(
     scope: &[String],
 ) -> Found {
     let prose = docs(attrs);
-    let signed = range(signature.span());
     let workings = body.map(|block| range(block.span()));
-
-    let starts = signed.start;
-    let told = prose
-        .first()
-        .map(|first| one(first.start..starts))
-        .unwrap_or_default();
-    let declared = match &workings {
-        Some(workings) => starts..workings.start,
-        None => signed.clone(),
-    };
+    let until = workings
+        .as_ref()
+        .map(|body| body.start)
+        .unwrap_or(outer.end);
 
     Found {
         scope: scope.to_vec(),
@@ -378,9 +399,9 @@ fn callable(
         name_at: range(signature.ident.span()),
         kind,
         parts: parts([
-            (Part::Type, one(declared)),
+            (Part::Type, declared(&outer, &prose, until)),
             (Part::Body, workings.map(one).unwrap_or_default()),
-            (Part::Docs, told),
+            (Part::Docs, prose),
         ]),
     }
 }
@@ -393,13 +414,8 @@ fn whole(
     attrs: &[Attribute],
     scope: &[String],
 ) -> Found {
-    let docs = docs(attrs);
+    let prose = docs(attrs);
     let full = range(item.to_token_stream().span());
-    let start = docs
-        .iter()
-        .map(|range| range.end)
-        .max()
-        .unwrap_or(full.start);
 
     Found {
         scope: scope.to_vec(),
@@ -407,9 +423,9 @@ fn whole(
         name_at: range(ident.span()),
         kind,
         parts: parts([
-            (Part::Type, one(start..full.end)),
+            (Part::Type, declared(&full, &prose, full.end)),
             (Part::Body, Vec::new()),
-            (Part::Docs, docs),
+            (Part::Docs, prose),
         ]),
     }
 }
@@ -450,5 +466,198 @@ fn type_name(ty: &syn::Type) -> String {
             .map(|segment| segment.ident.to_string())
             .unwrap_or_else(|| "?".to_string()),
         other => other.to_token_stream().to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Everything one file yields, the way the adapter asks for it: the module first, then
+    /// whatever it holds.
+    fn read(source: &str) -> Vec<Found> {
+        let file = syn::parse_file(source).expect("the source should parse");
+        let scope = vec!["thing".to_string()];
+        let mut found: Vec<Found> = module(&file.attrs, &file.items, &scope, 0..source.len())
+            .into_iter()
+            .collect();
+        found.extend(find(&file.items, &scope));
+        found
+    }
+
+    fn named<'a>(found: &'a [Found], name: &str) -> &'a Found {
+        found
+            .iter()
+            .find(|one| one.name == name)
+            .unwrap_or_else(|| panic!("nothing called {name} in {:?}", names(found)))
+    }
+
+    fn names(found: &[Found]) -> Vec<&str> {
+        found.iter().map(|one| one.name.as_str()).collect()
+    }
+
+    /// What a reader would be shown, with a marker wherever the parts don't meet. Anything
+    /// between two pieces of the same definition is a hole the page has to explain.
+    fn shown(source: &str, found: &Found) -> String {
+        let mut pieces: Vec<&Range<usize>> = found.parts.values().flatten().collect();
+        pieces.sort_by_key(|range| range.start);
+
+        let mut out = String::new();
+        let mut last = None;
+        for piece in pieces {
+            if last.is_some_and(|end| piece.start > end) {
+                out.push('…');
+            }
+            out.push_str(&source[piece.clone()]);
+            last = Some(piece.end);
+        }
+        out
+    }
+
+    /* The bug this file kept having: a part stopping exactly where the text of the thing
+     * stops, leaving the newline between it and the next part belonging to nobody. A reader
+     * is then told something was left out, and nothing was. */
+    #[test]
+    fn the_parts_of_a_definition_meet() {
+        let source = "/// Adds them up.\npub fn add(a: u8, b: u8) -> u8 {\n    a + b\n}\n";
+        let found = read(source);
+
+        assert_eq!(shown(source, named(&found, "add")), source.trim_end());
+    }
+
+    #[test]
+    fn prose_is_docs_and_the_signature_is_the_contract() {
+        let source = "/// Adds them up.\npub fn add(a: u8) -> u8 {\n    a\n}\n";
+        let found = read(source);
+        let add = named(&found, "add");
+
+        assert!(source[add.parts[&Part::Docs][0].clone()].contains("Adds them up"));
+        assert!(source[add.parts[&Part::Type][0].clone()].contains("pub fn add(a: u8) -> u8"));
+        assert!(source[add.parts[&Part::Body][0].clone()].starts_with('{'));
+    }
+
+    /* A struct is all contract: change any of it and a caller can break, so there's no
+     * body to tell apart. */
+    #[test]
+    fn a_struct_has_no_workings() {
+        let source = "/// Money.\npub struct Money {\n    pub pence: u8,\n}\n";
+        let found = read(source);
+        let money = named(&found, "Money");
+
+        assert!(!money.parts.contains_key(&Part::Body));
+        assert!(source[money.parts[&Part::Type][0].clone()].contains("pub pence"));
+        assert_eq!(shown(source, money), source.trim_end());
+    }
+
+    /* A field is part of the struct, not a definition beside it. */
+    #[test]
+    fn a_struct_holds_no_definitions_of_its_own() {
+        let found = read("pub struct Money {\n    pub pence: u8,\n}\n");
+        assert_eq!(names(&found), vec!["thing", "Money"]);
+    }
+
+    /* Declarations one after another are one stretch of the file. Claiming only the name of
+     * each left the `;` and the newline between them belonging to nobody, so a module of
+     * twenty of them read as twenty fragments. */
+    #[test]
+    fn a_run_of_declarations_is_one_stretch() {
+        let source = "pub mod one;\npub mod two;\npub mod three;\n";
+        let found = read(source);
+
+        assert_eq!(shown(source, named(&found, "thing")), source.trim_end());
+    }
+
+    /* Prose at the top of a file introduces whatever comes next, so it reaches it. */
+    #[test]
+    fn a_modules_prose_reaches_what_it_introduces() {
+        let source = "//! About this.\n\nuse std::fmt;\n";
+        let found = read(source);
+
+        assert_eq!(shown(source, named(&found, "thing")), source.trim_end());
+    }
+
+    /* What a module passes on is contract; what it keeps for itself is workings. */
+    #[test]
+    fn a_public_import_is_contract_and_a_private_one_is_not() {
+        let source = "pub use one::Thing;\nuse two::Other;\n";
+        let found = read(source);
+        let module = named(&found, "thing");
+
+        assert!(source[module.parts[&Part::Type][0].clone()].contains("pub use one::Thing"));
+        assert!(source[module.parts[&Part::Body][0].clone()].contains("use two::Other"));
+    }
+
+    /* An implementation is a claim about a type that callers rely on, so it's a definition.
+     * What's between its braces has definitions of its own, so it claims the header and the
+     * closing brace and leaves the middle alone — the one place a gap is honest. */
+    #[test]
+    fn an_implementation_claims_its_header_and_its_brace() {
+        let source = "impl Money {\n    pub fn pence(&self) -> u8 {\n        0\n    }\n}\n";
+        let found = read(source);
+
+        assert_eq!(names(&found), vec!["thing", "impl Money", "pence"]);
+        assert_eq!(shown(source, named(&found, "impl Money")), "impl Money…}");
+    }
+
+    /* Spelling out the trait is what keeps `Display::fmt` and `Debug::fmt` apart: scoped
+     * under plain `Money` they'd share one name, and two definitions answering to one name
+     * can't be told apart between snapshots. */
+    #[test]
+    fn an_implementation_says_what_it_implements() {
+        let found = read("impl fmt::Display for Money {\n    fn fmt(&self) {}\n}\n");
+
+        assert_eq!(named(&found, "impl Money as Display").kind, "impl");
+        assert_eq!(
+            named(&found, "fmt").scope,
+            vec!["thing", "Money as Display"]
+        );
+    }
+
+    /* A type's methods can be split across as many blocks as somebody felt like. Left as
+     * two definitions with one name, neither could be told from the other. */
+    #[test]
+    fn two_blocks_for_one_type_are_one_definition() {
+        let found =
+            read("impl Money {\n    fn a(&self) {}\n}\nimpl Money {\n    fn b(&self) {}\n}\n");
+
+        assert_eq!(
+            found.iter().filter(|one| one.name == "impl Money").count(),
+            1
+        );
+        assert_eq!(names(&found), vec!["thing", "impl Money", "a", "b"]);
+    }
+
+    /* Nothing writes the name of a file and nothing calls an `impl`, so neither has a name
+     * written down to ask a language server about. Asking anyway lands on whatever is
+     * nearby — for an `impl`, the type it's about, whose documentation and callers then
+     * arrive filed under the wrong definition. */
+    #[test]
+    fn a_module_and_an_implementation_cant_be_asked_about() {
+        let found = read("impl Money {\n    fn a(&self) {}\n}\n");
+
+        assert!(!named(&found, "thing").referenceable());
+        assert!(!named(&found, "impl Money").referenceable());
+        assert!(named(&found, "a").referenceable());
+    }
+
+    /* An inline module is a module like any other, and what's inside it is scoped under it
+     * rather than beside it. */
+    #[test]
+    fn an_inline_module_holds_its_own() {
+        let found = read("mod inner {\n    pub fn deep() {}\n}\n");
+
+        assert_eq!(named(&found, "inner").kind, "module");
+        assert_eq!(named(&found, "deep").scope, vec!["thing", "inner"]);
+    }
+
+    /* Where a caller can see it and where it can't. */
+    #[test]
+    fn a_declaration_wins_where_parts_overlap() {
+        let source = "pub fn add(a: u8) -> u8 {\n    a\n}\n";
+        let found = read(source);
+        let add = named(&found, "add");
+
+        assert_eq!(add.part_at(0), Some(Part::Type));
+        assert_eq!(add.part_at(source.find("    a").unwrap()), Some(Part::Body));
     }
 }
