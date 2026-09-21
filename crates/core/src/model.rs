@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 /// The pieces a definition's text is split into. A part can be missing when it
 /// doesn't apply, like a type alias that has no body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum Part {
     /// The contract. Changing it can break callers.
@@ -15,6 +16,7 @@ pub enum Part {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Span {
     pub start: u32,
     pub end: u32,
@@ -27,6 +29,7 @@ pub struct Span {
 /// allows them, which in most languages is anywhere. A C function can be declared at the
 /// top of a file and again further down.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Piece {
     pub text: String,
     pub span: Span,
@@ -39,6 +42,7 @@ pub struct Piece {
 /// merging things they can't tell apart, like an overload set. The name is kept
 /// apart from the scope because renaming breaks callers and moving doesn't.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Locator {
     pub scope: Vec<String>,
     pub name: String,
@@ -46,6 +50,7 @@ pub struct Locator {
 
 /// A definition as it exists in one snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Occurrence {
     pub locator: Locator,
     /// What the extractor calls this, like "function" or "test". We never read it.
@@ -109,11 +114,13 @@ impl Occurrence {
 
 /// Handed out by matching. Means nothing on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Identity(pub u32);
 
 /// Which snapshots a definition showed up in. Being missing on one side is the only
 /// thing that makes adding and removing different from any other change.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum Sides {
     Added(Occurrence),
@@ -149,6 +156,7 @@ impl Sides {
 
 /// One definition across both snapshots.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Definition {
     pub identity: Identity,
     pub sides: Sides,

@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 /// What happened to one definition between the two snapshots.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum Change {
     Added,
@@ -14,6 +15,7 @@ pub enum Change {
 
 /// What differs about a definition that stuck around. An empty one means it sat still.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Edits {
     /// How it looks to callers, including its name.
     pub contract: bool,

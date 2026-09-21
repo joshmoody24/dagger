@@ -83,10 +83,13 @@ const guessed = (path: string) => path.split("/").pop().replace(/\.[^.]+$/, "");
 export function digest(raw: Raw): Review {
   const definitions = new Map();
   for (const definition of raw.definitions) {
+    /* Which sides there are is the one thing the model won't let you get wrong: a
+     * definition is added, removed, or kept with both — never neither. Asked this way
+     * rather than by reaching for a field, the compiler holds that to it. */
     const sides = definition.sides;
-    const before = sides.kept ? sides.kept.before : sides.removed || null;
-    const after = sides.kept ? sides.kept.after : sides.added || null;
-    const shown = after || before;
+    const before = "kept" in sides ? sides.kept.before : "removed" in sides ? sides.removed : null;
+    const after = "kept" in sides ? sides.kept.after : "added" in sides ? sides.added : null;
+    const shown = (after || before)!;
 
     definitions.set(definition.identity, {
       id: definition.identity,

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 /// the answer came from worse information than it should have, and the reader
 /// deserves to hear about it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum Diagnostic {
     /// One snapshot had a compiler's view of this definition and the other didn't,

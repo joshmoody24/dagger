@@ -62,6 +62,7 @@ pub struct Revisions {
 /// it couldn't make sense of. Prose rather than a fixed set of cases, because dagger
 /// can't know in advance what a given language's tooling will run into.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Note {
     pub message: String,
     /// The file it's about, when it's about one.

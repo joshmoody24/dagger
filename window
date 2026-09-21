@@ -39,23 +39,48 @@ cargo build --workspace --quiet
 serving() { (exec 3<>"/dev/tcp/127.0.0.1/$port") >/dev/null 2>&1; }
 
 if serving; then
-  echo "something is already serving $port — stop it and try again:" >&2
-  ss -ltnp 2>/dev/null | grep ":$port " >&2 || lsof -i ":$port" >&2 || true
+  held=$(ss -ltnp 2>/dev/null | sed -n "s/.*127.0.0.1:$port .*pid=\([0-9]*\).*/\1/p" | head -1)
+  echo "something is already serving $port." >&2
+  if [ -n "$held" ]; then
+    echo "  it's pid $held: $(ps -o args= -p "$held" 2>/dev/null | cut -c1-70)" >&2
+    echo "  if it isn't yours:  kill $held" >&2
+  fi
   exit 1
 fi
 
 # The page reads the same pair this window was opened on, so a browser pointed at it shows
 # the change being looked at rather than a different one.
-(cd ui && DAGGER_BEFORE="${1:-}" DAGGER_AFTER="${2:-}" \
-  exec npx --no-install vite --port "$port" --strictPort >/dev/null 2>&1) &
-page=$!
-trap 'kill "$page" 2>/dev/null; wait "$page" 2>/dev/null' EXIT INT TERM
+#
+# Started straight rather than through npx, which spawns a shell which spawns the server:
+# taking away what this launched then left the server itself behind, reparented and holding
+# the port, which is the orphan this script exists to avoid.
+said="target/page.log"
 
-for _ in $(seq 50); do
-  serving && break
-  sleep 0.1
-done
-serving || { echo "the page never came up on $port" >&2; exit 1; }
+start() {
+  (cd ui && DAGGER_BEFORE="${1:-}" DAGGER_AFTER="${2:-}" \
+    exec ./node_modules/.bin/vite --port "$port" --strictPort >"../$said" 2>&1 </dev/null) &
+  page=$!
+  trap 'kill "$page" 2>/dev/null; wait "$page" 2>/dev/null' EXIT INT TERM
+
+  for _ in $(seq 50); do
+    serving && return 0
+    kill -0 "$page" 2>/dev/null || return 1
+    sleep 0.1
+  done
+  return 1
+}
+
+# Twice, because a port just let go of is held a little longer than it looks: nothing is
+# listening and nothing answers, so the check above says it's free, and binding to it fails
+# anyway. Waiting a moment and asking again costs a second and saves a puzzle.
+if ! start "$@"; then
+  sleep 1
+  if ! start "$@"; then
+    echo "the page never came up on $port:" >&2
+    sed 's/^/  /' "$said" >&2
+    exit 1
+  fi
+fi
 
 # The webview and its plumbing come from the dev shell, so the window has to run inside it.
 inside="PATH=$PWD/target/debug:\$PATH ./ui/src-tauri/target/debug/dagger-ui --repo '$repo' ${reading[*]}"

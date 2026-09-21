@@ -6,3 +6,9 @@ license.workspace = true
 
 [dependencies]
 serde.workspace = true
+# Only for writing the TypeScript the page reads. Nothing depending on this crate to review
+# code pulls it in, which is the point of it being optional.
+ts-rs = { version = "12", optional = true }
+
+[features]
+typescript = ["dep:ts-rs"]

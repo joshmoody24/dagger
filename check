@@ -6,6 +6,18 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
+# The page reads what dagger says, so what it's told must be what dagger says. Written out
+# again and compared: a field renamed in Rust doesn't fail in TypeScript, it just arrives
+# undefined at the one moment nobody is watching.
+said="ui/src/types.generated.ts"
+cargo run -p dagger-typescript --quiet -- "$said.check"
+if ! diff -u "$said" "$said.check"; then
+  mv "$said.check" "$said"
+  echo "$said no longer matched the types it comes from — rewritten, look at the diff above" >&2
+  exit 1
+fi
+rm -f "$said.check"
+
 # The page that reads a review. Skipped when nobody has installed it, since the tool itself
 # doesn't need it to work.
 if [ -d ui/node_modules ]; then

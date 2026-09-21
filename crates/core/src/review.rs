@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 /// nobody needs to read are left out, so an edge can stand in for a chain that ran
 /// through them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Edge {
     pub from: Identity,
     pub to: Identity,
@@ -20,6 +21,7 @@ pub struct Edge {
 
 /// Everything worth reading in a change, and how it hangs together.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Review {
     pub changes: BTreeMap<Identity, Change>,
     /// Didn't change, but sits downstream of something that did.

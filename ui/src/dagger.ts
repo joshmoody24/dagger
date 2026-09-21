@@ -5,91 +5,35 @@
  * disagreeing copy of the model.
  */
 
-export type Identity = number;
+import type * as said from "./types.generated.ts";
 
-export interface Span {
-  start: number;
-  end: number;
-}
+/* What dagger says is written from the types that say it, in types.generated.ts, and named here so
+ * the page has one place to look. What the page makes of it is further down and written by
+ * hand, because nothing in Rust knows about a box on a screen. */
+export type Identity = said.Identity;
+export type Span = said.Span;
+export type Piece = said.Piece;
+export type Locator = said.Locator;
+export type Occurrence = said.Occurrence;
+export type Sides = said.Sides;
+export type Change = said.Change;
+export type Edits = said.Edits;
+export type Edge = said.Edge;
+export type Cost = said.Cost;
+export type Step = said.Step;
+export type Diagnostic = said.Diagnostic;
+export type Note = said.Note;
 
-export interface Piece {
-  text: string;
-  span: Span;
-  file?: string;
-}
+/** One definition as it arrives: an identity, and what it was on each side. */
+export type RawDefinition = said.Definition;
 
-export interface Locator {
-  scope: string[];
-  name: string;
-}
-
-/** Everything true of a definition in one snapshot. */
-export interface Occurrence {
-  locator: Locator;
-  file: string;
-  kind: string;
-  contract?: string;
-  parts: Record<string, Piece[]>;
-}
-
-/** Added, removed, or kept with a before and an after. */
-export interface Sides {
-  added?: Occurrence;
-  removed?: Occurrence;
-  kept?: { before: Occurrence; after: Occurrence };
-}
-
-export interface RawDefinition {
-  identity: Identity;
-  sides: Sides;
-}
-
-export interface Edits {
-  contract: boolean;
-  moved: boolean;
-  parts: string[];
-}
-
-export type Change = "added" | "removed" | { kept: Edits };
-
-export interface Edge {
-  from: Identity;
-  to: Identity;
-  via?: Identity[];
-  part?: string | null;
-}
-
-export interface Cost {
-  peak_open: number;
-  total_open: number;
-  taken_on_faith: number;
-  jumps: number;
-}
-
-export interface Step {
-  definition: Identity;
-  on_faith: Identity[];
-}
-
-/** What dagger says it had to work around, one key naming the kind. */
-export type Diagnostic = Record<string, any>;
-
-export interface Note {
-  message: string;
-  file?: string | null;
-}
-
+/** Everything one reading of a repository comes to. */
 export interface Raw {
-  definitions: RawDefinition[];
-  review: {
-    edges: Edge[];
-    changes: Record<Identity, Change>;
-    affected: Identity[];
-    diagnostics: Diagnostic[];
-  };
-  ordering: { steps: Step[]; cost: Cost };
-  grouping: { name?: string; of?: Record<Identity, string[]> };
-  notes: Note[];
+  definitions: said.Definition[];
+  review: said.Review;
+  ordering: said.Ordering;
+  grouping: said.Grouping;
+  notes: said.Note[];
 }
 
 /* ---------------- what the page makes of it ---------------- */

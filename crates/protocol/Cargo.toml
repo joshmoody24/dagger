@@ -8,3 +8,7 @@ license.workspace = true
 dagger-core = { path = "../core" }
 serde.workspace = true
 serde_json.workspace = true
+ts-rs = { version = "12", optional = true }
+
+[features]
+typescript = ["dep:ts-rs", "dagger-core/typescript"]

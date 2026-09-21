@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 pub type Path = Vec<String>;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Grouping {
     /// What a reader would call this way of grouping: "package", "owner", "layer".
     pub name: String,

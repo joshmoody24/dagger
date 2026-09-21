@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Step {
     pub definition: Identity,
     /// What this leans on that hasn't been read yet. Only ever non-empty inside a
@@ -28,6 +29,7 @@ pub struct Step {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Ordering {
     pub steps: Vec<Step>,
     /// How this reading went, so one rule can be argued against another with numbers
@@ -36,6 +38,7 @@ pub struct Ordering {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Cost {
     /// The most that was in the reader's head at once.
     pub peak_open: usize,

@@ -1,0 +1,15 @@
+[package]
+name = "dagger-typescript"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "dagger-typescript"
+path = "src/main.rs"
+
+[dependencies]
+dagger-core = { path = "../core", features = ["typescript"] }
+dagger-protocol = { path = "../protocol", features = ["typescript"] }
+anyhow.workspace = true
+ts-rs = "12"
