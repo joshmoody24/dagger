@@ -43,8 +43,11 @@ fn main() -> Result<()> {
 
 fn answer(request: Request) -> Result<Response> {
     match request {
-        Request::Describe { .. } => Ok(Response::Described {
-            include: vec!["**/*.rs".to_string()],
+        Request::Describe { settings } => Ok(Response::Described {
+            // Nothing here needs them, but this is the first thing dagger asks, and a
+            // setting nobody understands is worth hearing about before a snapshot has been
+            // laid out rather than after.
+            include: settings_of(settings).map(|_| vec!["**/*.rs".to_string()])?,
             revisions: None,
             usage: Vec::new(),
         }),
@@ -54,8 +57,7 @@ fn answer(request: Request) -> Result<Response> {
             settings,
             ..
         } => {
-            let settings: Settings =
-                serde_json::from_value(settings).context("that isn't this adapter's settings")?;
+            let settings = settings_of(settings)?;
             let (extraction, notes) = extract(Path::new(&dir), &files, &settings)?;
             Ok(Response::Extracted { extraction, notes })
         }
@@ -66,7 +68,7 @@ fn answer(request: Request) -> Result<Response> {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct Settings {
     /// Cargo manifests to load besides the one at the root.
     ///
@@ -75,6 +77,17 @@ struct Settings {
     /// knows nothing about the files in it. Every definition there comes back with no
     /// contract and no callers, which is worse than slow.
     linked: Vec<String>,
+}
+
+/// What the repository told this adapter, refused if it isn't something this adapter
+/// knows. A setting quietly ignored is worse than one rejected: the run carries on and
+/// answers a question nobody asked.
+fn settings_of(settings: serde_json::Value) -> Result<Settings> {
+    if settings.is_null() {
+        return Ok(Settings::default());
+    }
+    serde_json::from_value(settings)
+        .context("dagger-rust was told something under settings that it doesn't know")
 }
 
 struct Parsed {

@@ -29,6 +29,7 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Settings {
     /// The language server, as you'd type it in a shell.
     server: Vec<String>,
@@ -108,8 +109,10 @@ fn answer(request: Request) -> Result<Response> {
 }
 
 fn settings_of(settings: Value) -> Result<Settings> {
-    serde_json::from_value(settings)
-        .context("this adapter needs to be told a server, like server = [\"tsc\", \"--lsp\"]")
+    serde_json::from_value(settings).context(
+        "dagger-lsp couldn't make sense of its settings; it needs at least a server, \
+         like server = [\"tsc\", \"--lsp\", \"--stdio\"]",
+    )
 }
 
 /// A file the adapter has looked at, and what it found there.

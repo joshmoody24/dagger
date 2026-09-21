@@ -34,7 +34,7 @@ fn main() -> Result<()> {
 
 /// What a repo can tell this adapter.
 #[derive(Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct Settings {
     /// Point the snapshot at the repository's ignored files — build output, installed
     /// packages — instead of leaving them out. On by default: without them, tooling that
@@ -62,7 +62,7 @@ fn answer(request: Request) -> Result<Response> {
             files: Some(current_files()?),
         }),
         Request::Materialize { rev, settings } => {
-            let settings: Settings = serde_json::from_value(settings).unwrap_or_default();
+            let settings = settings_of(settings)?;
             let dir = materialize(&rev, settings.carry_ignored)?;
             let files = Some(listing(&["ls-tree", "-r", "--name-only", "-z", &rev])?);
             Ok(Response::Materialized {
@@ -71,19 +71,40 @@ fn answer(request: Request) -> Result<Response> {
                 files,
             })
         }
-        Request::Describe { .. } => Ok(Response::Described {
-            include: Vec::new(),
+        Request::Describe { settings } => Ok(Response::Described {
+            include: {
+                // Nothing here needs them, but this is the first thing dagger asks, and a
+                // setting nobody understands is worth hearing about before a snapshot has
+                // been laid out rather than after.
+                settings_of(settings)?;
+                Vec::new()
+            },
             revisions: Some(worth_reviewing()?),
             usage: UNDERSTOOD.lines().map(str::to_string).collect(),
         }),
         Request::Resolve { asked, settings } => {
-            let settings: Settings = serde_json::from_value(settings).unwrap_or_default();
+            let settings = settings_of(settings)?;
             Ok(Response::Resolved {
                 revisions: resolve(&asked, &settings)?,
             })
         }
         Request::Extract { .. } => bail!("git only lays snapshots out, it doesn't read them"),
     }
+}
+
+/// What the repository told this adapter, refused if it isn't something this adapter
+/// knows.
+///
+/// A setting quietly ignored is worse than one rejected: the run carries on, answers a
+/// question nobody asked, and looks exactly like a run that did as it was told. This used
+/// to take whatever it could make sense of and shrug off the rest, which meant a typo in
+/// `dagger.toml` was invisible — and so was every setting written after it.
+fn settings_of(settings: serde_json::Value) -> Result<Settings> {
+    if settings.is_null() {
+        return Ok(Settings::default());
+    }
+    serde_json::from_value(settings)
+        .context("dagger-git was told something under settings that it doesn't know")
 }
 
 /// Not a revision git knows about, so we answer it ourselves.
