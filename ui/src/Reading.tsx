@@ -67,27 +67,21 @@ export function Reading(props) {
 
         {/* Everything you can press sits together on the right, each wearing the key that
           * does the same job — a hint is worth more on the thing it applies to than in a
-          * list somewhere else. Moving on and marking as viewed are one button, because
-          * they're one thing a reader does; the count doubles as the way to take it back. */}
+          * list somewhere else.
+          *
+          * Both directions mark as viewed, because both mean you're finished with what
+          * you're looking at. Moving without saying so is the exception, and an exception
+          * doesn't earn a button: n and p do it, and so do the arrow keys. */}
         <div class="nav">
           <div class="pair">
             <button
               class="nb"
               disabled={props.at === 0}
-              onClick={() => props.onStep(-1)}
-              aria-label="Back"
+              onClick={() => props.onRead(-1)}
+              aria-label="Viewed, and back"
             >
-              <span class="gl">‹</span>
+              <span class="gl">✓‹</span>
               <kbd>k</kbd>
-            </button>
-            <button
-              class="nb"
-              disabled={props.at === props.review.steps.length - 1}
-              onClick={() => props.onStep(1)}
-              aria-label="Skip ahead"
-            >
-              <span class="gl">›</span>
-              <kbd>n</kbd>
             </button>
             <button
               class={`pos${props.read ? " done" : ""}`}
@@ -97,7 +91,7 @@ export function Reading(props) {
               <span class="gl">{props.read ? "✓ " : ""}{props.at + 1}/{props.review.steps.length}</span>
               <kbd>m</kbd>
             </button>
-            <button class="go" onClick={props.onRead}>
+            <button class="go" onClick={() => props.onRead(1)} aria-label="Viewed, and next">
               <span class="gl">✓ next</span>
               <kbd>j</kbd>
             </button>

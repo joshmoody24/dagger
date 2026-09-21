@@ -77,12 +77,18 @@ export function App(props) {
   /* The same keys as the command line, because the point of both is to read a change
    * without taking a hand off the keyboard. Nothing here needs anything focused. */
   const keys = {
+    /* The way through a review: done with this one, on to the next. Back is the same move
+     * in the other direction — you're as finished with it either way, and a way forward
+     * that marks and a way back that doesn't is two different ideas wearing one pair of
+     * keys. */
     j: () => { markRead(); step(1); },
+    k: () => { markRead(); step(-1); },
+    /* The way around it, for when you want to look without saying you've looked. */
     n: () => step(1),
+    p: () => step(-1),
     ArrowDown: () => step(1),
-    " ": () => step(1),
-    k: () => step(-1),
     ArrowUp: () => step(-1),
+    " ": () => step(1),
     m: () => toggleRead(),
     g: () => setAt(0),
     G: () => setAt(steps().length - 1),
@@ -139,7 +145,7 @@ export function App(props) {
           step={stepping() ? steps()[at()] : undefined}
           at={at()}
           onStep={step}
-          onRead={() => { markRead(); step(1); }}
+          onRead={(by) => { markRead(); step(by); }}
           onOpen={goTo}
           names={names()}
           read={read().has(here())}
