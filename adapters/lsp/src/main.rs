@@ -653,3 +653,200 @@ fn fenced(hover: &Value) -> Option<String> {
 
     blocks.into_iter().rfind(|block| !block.is_empty())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Where a piece of text sits, as a server would say it: a line and a character.
+    fn spot(source: &str, at: usize) -> (u32, u32) {
+        let before = &source[..at];
+        let line = before.matches('\n').count() as u32;
+        let column = (at - before.rfind('\n').map_or(0, |found| found + 1)) as u32;
+        (line, column)
+    }
+
+    /// A symbol as a server reports one, found by looking for its own text in the source so
+    /// a test can be written as the code a reader would recognise.
+    fn reported(source: &str, name: &str, kind: u64, whole: &str) -> Value {
+        let from = source.find(whole).expect("the source should hold it");
+        let (line, column) = spot(source, from);
+        let (ends, at_end) = spot(source, from + whole.len());
+        let (named, at_name) = spot(source, source.find(name).expect("named"));
+
+        json!({
+            "name": name,
+            "kind": kind,
+            "range": {
+                "start": { "line": line, "character": column },
+                "end": { "line": ends, "character": at_end },
+            },
+            "selectionRange": {
+                "start": { "line": named, "character": at_name },
+                "end": { "line": named, "character": at_name + name.len() as u32 },
+            },
+        })
+    }
+
+    fn opened(source: &str, reported: Value) -> Opened {
+        let lines = Lines::new(source);
+        Opened {
+            path: "src/money.ts".to_string(),
+            symbols: symbols::read(&reported, &lines),
+            lines,
+        }
+    }
+
+    fn preambles(file: &Opened) -> Vec<String> {
+        let wholes: Vec<Range<usize>> = file
+            .symbols
+            .iter()
+            .map(|symbol| symbol.whole.clone())
+            .collect();
+
+        file.symbols
+            .iter()
+            .filter_map(|symbol| preamble(file, symbol, &wholes))
+            .map(|range| file.lines.slice(&range).to_string())
+            .collect()
+    }
+
+    /* A server reports a definition from its declaration and says nothing about the comment
+     * above explaining it. Left there, the comment belongs to nothing and falls through to
+     * the module, which ends up a pile of prose with holes where the definitions it
+     * describes ought to be. */
+    #[test]
+    fn what_is_written_above_a_definition_belongs_to_it() {
+        let source = "/** Money. */\nexport interface Money {\n  pence: number;\n}\n";
+        let file = opened(
+            source,
+            json!([reported(
+                source,
+                "Money",
+                11,
+                "export interface Money {\n  pence: number;\n}"
+            )]),
+        );
+
+        assert_eq!(preambles(&file), vec!["/** Money. */\n"]);
+    }
+
+    /* A blank line stops it, which is how anybody writes: prose is against the thing it
+     * describes and away from whatever came before. */
+    #[test]
+    fn a_blank_line_ends_the_preamble() {
+        let source = "// About the file.\n\n/** Money. */\nexport interface Money {}\n";
+        let file = opened(
+            source,
+            json!([reported(source, "Money", 11, "export interface Money {}")]),
+        );
+
+        assert_eq!(preambles(&file), vec!["/** Money. */\n"]);
+    }
+
+    /* The part that makes it safe in a language nobody wrote a rule for: a line that
+     * belongs to another definition stops the run, so this can never swallow the statement
+     * above it. */
+    #[test]
+    fn a_preamble_never_takes_another_definitions_line() {
+        let source = "export const one = 1;\nexport const two = 2;\n";
+        let file = opened(
+            source,
+            json!([
+                reported(source, "one", 13, "export const one = 1;"),
+                reported(source, "two", 13, "export const two = 2;"),
+            ]),
+        );
+
+        assert!(preambles(&file).is_empty());
+    }
+
+    /* What the module is left holding: the file's own prose and its imports, and not the
+     * comments that belong to the definitions below them. */
+    #[test]
+    fn a_module_keeps_only_what_nobody_else_claims() {
+        let source = "import { a } from \"./a\";\n\n/** Money. */\nexport interface Money {}\n";
+        let file = opened(
+            source,
+            json!([reported(source, "Money", 11, "export interface Money {}")]),
+        );
+
+        let left: Vec<String> = leftovers(&file)
+            .iter()
+            .map(|range| file.lines.slice(range).to_string())
+            .collect();
+        assert_eq!(left, vec!["import { a } from \"./a\";\n\n"]);
+    }
+
+    #[test]
+    fn a_module_is_named_after_its_file() {
+        let source = "import { a } from \"./a\";\n";
+        let module = module(&opened(source, json!([]))).expect("a module");
+
+        assert_eq!(module.locator.name, "money");
+        assert_eq!(module.locator.scope, vec!["src"]);
+    }
+
+    /* Nothing to say, nothing to report: a file where every line belongs to a definition
+     * has no module of its own to read. */
+    #[test]
+    fn a_file_with_nothing_left_over_has_no_module() {
+        let source = "export interface Money {}\n";
+        let file = opened(
+            source,
+            json!([reported(source, "Money", 11, "export interface Money {}")]),
+        );
+
+        assert!(module(&file).is_none());
+    }
+
+    /* Hover is markdown: the signature in a fenced block, then a rule, then documentation.
+     * Documentation is where examples live, and an example is fenced code too — so reading
+     * past the rule means editing an example reads as breaking every caller. */
+    #[test]
+    fn a_contract_stops_at_the_documentation() {
+        let hover = json!({
+            "contents": { "value": "```ts\nfunction add(a: number): number\n```\n---\nAdds.\n\n```ts\nadd(1)\n```" }
+        });
+
+        assert_eq!(
+            fenced(&hover).as_deref(),
+            Some("function add(a: number): number")
+        );
+    }
+
+    /* Servers often put the module the definition lives in in a block of its own first. */
+    #[test]
+    fn the_last_block_before_the_rule_is_the_declaration() {
+        let hover = json!({
+            "contents": { "value": "```ts\nmodule \"money\"\n```\n```ts\nconst pence: number\n```" }
+        });
+
+        assert_eq!(fenced(&hover).as_deref(), Some("const pence: number"));
+    }
+
+    #[test]
+    fn a_hover_with_nothing_fenced_says_nothing() {
+        assert_eq!(fenced(&json!({ "contents": { "value": "Adds." } })), None);
+    }
+
+    #[test]
+    fn a_uri_comes_back_as_a_path_inside_the_snapshot() {
+        let root = Path::new("/tmp/dagger-1");
+
+        assert_eq!(
+            relative("file:///tmp/dagger-1/src/money.ts", root).as_deref(),
+            Some("src/money.ts")
+        );
+        assert_eq!(relative("file:///elsewhere/money.ts", root), None);
+    }
+
+    #[test]
+    fn a_language_is_guessed_from_the_extension() {
+        assert_eq!(language_of("src/money.ts"), "typescript");
+        assert_eq!(language_of("src/App.tsx"), "typescriptreact");
+        assert_eq!(language_of("main.rs"), "rust");
+        assert_eq!(language_of("Makefile"), "plaintext");
+    }
+}
