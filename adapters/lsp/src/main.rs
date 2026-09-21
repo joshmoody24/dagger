@@ -38,15 +38,29 @@ struct Settings {
     /// Files this adapter speaks for, when the repo hasn't said.
     #[serde(default)]
     include: Vec<String>,
-    /// How many files to read before giving up and saying so. A change to something the
-    /// whole repository leans on genuinely does affect everything, and at some point
-    /// telling the reader that is more use than carrying on.
-    #[serde(default = "a_few_hundred")]
-    max_files: usize,
+    /// How many files to chase users of before giving up and saying so. A change to
+    /// something the whole repository leans on genuinely does affect everything, and at
+    /// some point telling the reader that is more use than carrying on.
+    ///
+    /// This is the expensive budget: walking one file means asking the server what each
+    /// definition in it looks like from outside and who uses it, which is two requests per
+    /// definition. Raise it for a large change and expect to wait.
+    #[serde(default = "files_to_walk")]
+    max_walk: usize,
+    /// How many files to open at all. Opening is cheap — it buys the name of whichever
+    /// definition a mention sits inside — and a change of any size reaches far more files
+    /// this way than it ever walks, so this sits well above `max_walk`. It's here to stop
+    /// a runaway rather than to shape the reading.
+    #[serde(default = "files_to_open")]
+    max_open: usize,
 }
 
-fn a_few_hundred() -> usize {
-    300
+fn files_to_walk() -> usize {
+    500
+}
+
+fn files_to_open() -> usize {
+    5000
 }
 
 fn main() -> Result<()> {
@@ -125,7 +139,8 @@ fn extract(
         mentions: Vec::new(),
         contracts: BTreeMap::new(),
         notes: Vec::new(),
-        limit: settings.max_files,
+        walk_limit: settings.max_walk,
+        open_limit: settings.max_open,
     };
     walk.spread(changed);
 
@@ -154,7 +169,63 @@ struct Walk {
     mentions: Vec<Mention>,
     contracts: BTreeMap<Locator, String>,
     notes: Vec<Note>,
-    limit: usize,
+    /// Files whose users we chase, and files we open at all. Two budgets because they cost
+    /// wildly different amounts: with one, the cheap thing spends what the dear thing needs.
+    walk_limit: usize,
+    open_limit: usize,
+}
+
+/* Which files are still to be walked, and which have been.
+ *
+ * A file earns its place here once, however many times it turns up: one that uses a changed
+ * definition in twenty signatures is twenty answers from the server and one file to walk.
+ * Letting those through put twenty copies on the queue, which cost nothing to skip later but
+ * made the count of what's left meaningless — it went up and down as copies drained.
+ */
+#[derive(Default)]
+struct Frontier {
+    queue: VecDeque<String>,
+    /// Every path that has ever been queued, walked or not. Membership is what stops a
+    /// path being queued twice, so nothing is ever removed from it.
+    known: BTreeSet<String>,
+    walked: usize,
+}
+
+impl Frontier {
+    fn from(paths: impl Iterator<Item = String>) -> Self {
+        let mut front = Frontier::default();
+        for path in paths {
+            front.push(path);
+        }
+        front
+    }
+
+    fn push(&mut self, path: String) {
+        if self.known.insert(path.clone()) {
+            self.queue.push_back(path);
+        }
+    }
+
+    fn waiting(&self) -> Vec<String> {
+        self.queue.iter().cloned().collect()
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    fn next(&mut self) -> Option<String> {
+        let path = self.queue.pop_front()?;
+        self.walked += 1;
+        Some(path)
+    }
+
+    /// How many have been walked, and how many are known to want walking. The second only
+    /// ever grows, which is what makes it worth showing: it's what we know, not a guess.
+    fn walked(&self) -> usize {
+        self.walked
+    }
+
+    fn known(&self) -> usize {
+        self.known.len()
+    }
 }
 
 impl Walk {
@@ -169,41 +240,40 @@ impl Walk {
     /// unreadable. One widely used name answers with a thousand places; each of those
     /// files holds dozens of definitions; asking all of theirs in turn walks the monorepo.
     fn spread(&mut self, changed: &[String]) {
-        let mut queue: VecDeque<String> = changed
-            .iter()
-            .filter(|path| self.ours.contains(path.as_str()))
-            .cloned()
-            .collect();
-        let mut asked: BTreeSet<String> = BTreeSet::new();
+        let mut front = Frontier::from(
+            changed
+                .iter()
+                .filter(|path| self.ours.contains(path.as_str()))
+                .cloned(),
+        );
 
         // Open every changed file before asking anything about any of them. A server
         // answers "who uses this" out of the projects it has loaded, and telling it about
         // a file is what loads that file's project. Asking one package's question while
         // the package that calls it is still unknown gets a truthful answer about a
         // smaller world: the change looks self-contained when it isn't.
-        for path in queue.clone() {
+        for path in front.waiting() {
             self.look(&path);
         }
 
-        while let Some(path) = queue.pop_front() {
-            if !asked.insert(path.clone()) {
-                continue;
-            }
+        while let Some(path) = front.next() {
             /* How far the walk has got. There's no total to count towards — what's left to
-             * open is whatever the files opened so far turn out to mention — so this says
+             * walk is whatever the files walked so far turn out to mention — so this says
              * how much has been done and how much is known to be left, which is the truth
-             * and changes as it goes. */
+             * and changes as it goes. Opened files are counted apart because they're the
+             * cheap half: a change reaches far more files than it ever walks. */
             eprintln!(
-                "  read {} of {} files",
-                asked.len(),
-                asked.len() + queue.len()
+                "  walked {} of {} files, opened {}",
+                front.walked(),
+                front.known(),
+                self.seen.len()
             );
-            if self.seen.len() >= self.limit {
+            if front.walked() > self.walk_limit {
                 self.notes.push(Note {
                     message: format!(
-                        "stopped after {} files. This change reaches further than that, so \
-                         some of what it affects is missing",
-                        self.limit
+                        "stopped after chasing users of {} files. This change reaches \
+                         further than that, so some of what it affects is missing",
+                        self.walk_limit
                     ),
                     file: None,
                 });
@@ -214,7 +284,7 @@ impl Walk {
             }
 
             for onward in self.ask_about(&path) {
-                queue.push_back(onward);
+                front.push(onward);
             }
         }
     }
@@ -300,7 +370,7 @@ impl Walk {
 
         let mut onward = Vec::new();
         for (path, line, column) in places {
-            if self.seen.len() >= self.limit || !self.look(&path) {
+            if self.seen.len() >= self.open_limit || !self.look(&path) {
                 continue;
             }
 
@@ -721,6 +791,49 @@ fn fenced(hover: &Value) -> Option<String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_file_is_walked_once_however_often_it_turns_up() {
+        let mut front = Frontier::from(["a.ts".to_string()].into_iter());
+        for _ in 0..20 {
+            front.push("b.ts".to_string());
+        }
+
+        let mut walked = Vec::new();
+        while let Some(path) = front.next() {
+            walked.push(path);
+        }
+        assert_eq!(walked, vec!["a.ts", "b.ts"]);
+        assert_eq!(front.walked(), 2);
+    }
+
+    #[test]
+    fn a_file_already_walked_is_never_queued_again() {
+        let mut front = Frontier::from(["a.ts".to_string()].into_iter());
+        assert_eq!(front.next().as_deref(), Some("a.ts"));
+
+        front.push("a.ts".to_string());
+        assert_eq!(front.next(), None, "a walked file came back around");
+    }
+
+    /* What's left to walk is the one number a reader can lean on, so it may not shrink
+     * because duplicates drained out of the queue. */
+    #[test]
+    fn what_is_known_only_ever_grows() {
+        let mut front = Frontier::from(["a.ts".to_string(), "b.ts".to_string()].into_iter());
+        let mut seen = Vec::new();
+        while front.next().is_some() {
+            seen.push(front.known());
+            front.push("b.ts".to_string());
+            front.push("c.ts".to_string());
+        }
+
+        assert_eq!(front.known(), 3);
+        assert!(
+            seen.windows(2).all(|pair| pair[1] >= pair[0]),
+            "the count of known files went backwards: {seen:?}"
+        );
+    }
 
     /// Where a piece of text sits, as a server would say it: a line and a character.
     fn spot(source: &str, at: usize) -> (u32, u32) {
