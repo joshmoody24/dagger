@@ -59,6 +59,13 @@ pub enum Request {
         /// rather than reading a whole repository to describe a few lines.
         #[serde(default)]
         changed: Vec<String>,
+        /// How far past a changed file to follow what uses it. Nought means not at all.
+        ///
+        /// A hint like `changed`, and the one that decides what a reading costs: each hop
+        /// outward is every definition reached so far asking the whole repository who uses
+        /// it. An adapter that reads whole files regardless has nothing to do with this.
+        #[serde(default)]
+        ripples: u32,
         #[serde(default)]
         settings: serde_json::Value,
     },

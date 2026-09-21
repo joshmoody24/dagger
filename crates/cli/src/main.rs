@@ -13,7 +13,7 @@ mod grouping;
 mod report;
 mod walk;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use config::Config;
 use dagger_core::group::Grouping;
 use dagger_core::matching::{Extraction, match_snapshots};
@@ -32,6 +32,8 @@ struct Args {
     explain: bool,
     list: bool,
     help: bool,
+    /// How far past what changed to follow what depends on it.
+    ripples: u32,
 }
 
 fn parse_args() -> Result<Args> {
@@ -40,9 +42,22 @@ fn parse_args() -> Result<Args> {
     let mut explain = false;
     let mut list = false;
     let mut help = false;
+    /* Far enough to answer "who breaks if this breaks", and no further. Past that, each
+     * hop is the same news arriving again from further away, and it costs the most: every
+     * definition reached so far asks the whole repository who uses it. */
+    let mut ripples = 1;
+    let mut awaiting = false;
 
     for arg in std::env::args().skip(1) {
+        if awaiting {
+            ripples = arg
+                .parse()
+                .with_context(|| format!("--ripples wants a number, not {arg}"))?;
+            awaiting = false;
+            continue;
+        }
         match arg.as_str() {
+            "--ripples" => awaiting = true,
             "--json" => json = true,
             "--explain" => explain = true,
             "--list" => list = true,
@@ -54,9 +69,14 @@ fn parse_args() -> Result<Args> {
         }
     }
 
+    if awaiting {
+        bail!("--ripples wants a number after it");
+    }
+
     Ok(Args {
         asked: positional,
         help,
+        ripples,
         json,
         explain,
         list,
@@ -70,9 +90,12 @@ fn parse_args() -> Result<Args> {
 /// a list that goes wrong in one of them. A repository with no adapter, or one that won't
 /// answer, simply has nothing extra to say.
 fn help(repo: &Path, config: &Config) {
-    println!("dagger [--json] [--explain] [--list] [what to read]");
+    println!("dagger [--json] [--explain] [--list] [--ripples <n>] [what to read]");
     println!();
     println!("Named nothing, dagger reads whatever you're working on.");
+    println!();
+    println!("--ripples <n> follows what a change reaches n steps out, 1 by default.");
+    println!("Nought reads only what changed. Each step costs, so raise it knowingly.");
     println!();
 
     let understood = config.snapshots.as_ref().and_then(|snapshots| {
@@ -245,12 +268,12 @@ fn compare(
     status(&format!("{} files differ", changed.len()));
 
     let (before_dir, after_dir) = (before.1.dir.clone(), after.1.dir.clone());
-    let (before, mut notes) = read(repo, config, claims, before, &changed)?;
-    let (after, mut later) = read(repo, config, claims, after, &changed)?;
+    let (before, mut notes) = read(repo, config, claims, before, &changed, args.ripples)?;
+    let (after, mut later) = read(repo, config, claims, after, &changed, args.ripples)?;
     notes.append(&mut later);
 
     let matched = match_snapshots(before, after);
-    let mut review = review(&matched.definitions, &matched.references);
+    let mut review = review(&matched.definitions, &matched.references, args.ripples);
 
     // One grouping at a time, and for now the first one written down. The reading order
     // leans on it to know whether the next definition takes the reader somewhere else.
@@ -338,6 +361,7 @@ fn read(
     claims: &[Vec<String>],
     (rev, snapshot): (&str, &adapter::Snapshot),
     changed: &[String],
+    ripples: u32,
 ) -> Result<(Extraction, Vec<Note>)> {
     let dir = &snapshot.dir;
     let assignment = assign::assign(
@@ -369,7 +393,8 @@ fn read(
             files.len(),
             extractor.adapter
         ));
-        let (mut extracted, mut said) = adapter::extract(repo, extractor, dir, files, changed)?;
+        let (mut extracted, mut said) =
+            adapter::extract(repo, extractor, dir, files, changed, ripples)?;
         merged.occurrences.append(&mut extracted.occurrences);
         merged.mentions.append(&mut extracted.mentions);
         notes.append(&mut said);

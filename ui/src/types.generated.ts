@@ -95,9 +95,21 @@ at: Array<number>, } };
 
 export type Review = { changes: { [key in Identity]: Change }, 
 /**
- * Didn't change, but sits downstream of something that did.
+ * What a change reached by following what uses what, and how many hops away each one
+ * sits. One means it uses a changed definition itself; two means it uses something
+ * that does, and so on outward.
+ *
+ * Something that changed can be reached as well, and is worth saying so: a definition
+ * that broke on its own account and also stands downstream of another break is a
+ * different thing to read than one that merely broke.
  */
-affected: Array<Identity>, 
+affected: { [key in Identity]: number }, 
+/**
+ * How far this reading followed a change outward. What the page offers to show is
+ * bounded by what was actually looked for, so it's said here rather than guessed at
+ * from the deepest thing that happens to have turned up.
+ */
+ripples: number, 
 /**
  * Worth reading: what changed, and what a change reached.
  */

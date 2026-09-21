@@ -24,8 +24,18 @@ pub struct Edge {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Review {
     pub changes: BTreeMap<Identity, Change>,
-    /// Didn't change, but sits downstream of something that did.
-    pub affected: BTreeSet<Identity>,
+    /// What a change reached by following what uses what, and how many hops away each one
+    /// sits. One means it uses a changed definition itself; two means it uses something
+    /// that does, and so on outward.
+    ///
+    /// Something that changed can be reached as well, and is worth saying so: a definition
+    /// that broke on its own account and also stands downstream of another break is a
+    /// different thing to read than one that merely broke.
+    pub affected: BTreeMap<Identity, u32>,
+    /// How far this reading followed a change outward. What the page offers to show is
+    /// bounded by what was actually looked for, so it's said here rather than guessed at
+    /// from the deepest thing that happens to have turned up.
+    pub ripples: u32,
     /// Worth reading: what changed, and what a change reached.
     pub members: BTreeSet<Identity>,
     /// Not worth reading, but the reading doesn't make sense without it on the page.
@@ -41,7 +51,7 @@ pub struct Review {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-pub fn review(definitions: &[Definition], references: &[Reference]) -> Review {
+pub fn review(definitions: &[Definition], references: &[Reference], ripples: u32) -> Review {
     let mut diagnostics = Vec::new();
     let changes: BTreeMap<Identity, Change> = definitions
         .iter()
@@ -52,14 +62,14 @@ pub fn review(definitions: &[Definition], references: &[Reference]) -> Review {
         })
         .collect();
 
-    let (affected, mut found) = affected(&changes, references);
+    let (affected, mut found) = affected(&changes, references, ripples);
     diagnostics.append(&mut found);
 
     let members: BTreeSet<Identity> = changes
         .iter()
         .filter(|(_, change)| change.worth_reading())
         .map(|(identity, _)| *identity)
-        .chain(affected.iter().copied())
+        .chain(affected.keys().copied())
         .collect();
 
     let context = surrounding(definitions, &members);
@@ -71,6 +81,7 @@ pub fn review(definitions: &[Definition], references: &[Reference]) -> Review {
     Review {
         changes,
         affected,
+        ripples,
         members,
         context,
         edges,
@@ -178,7 +189,11 @@ mod tests {
 
     #[test]
     fn only_definitions_worth_reading_get_in() {
-        let review = review(&[edited(0, "lookupPrice"), untouched(1, "withRetry")], &[]);
+        let review = review(
+            &[edited(0, "lookupPrice"), untouched(1, "withRetry")],
+            &[],
+            1,
+        );
 
         assert_eq!(review.members, BTreeSet::from([Identity(0)]));
     }
@@ -194,7 +209,7 @@ mod tests {
         ];
         let references = [reference(0, 1, Part::Body), reference(1, 2, Part::Body)];
 
-        let review = review(&definitions, &references);
+        let review = review(&definitions, &references, u32::MAX);
 
         assert_eq!(
             review.edges,
@@ -209,7 +224,7 @@ mod tests {
     #[test]
     fn a_direct_mention_has_nothing_in_between() {
         let definitions = [edited(0, "cartTotal"), edited(1, "lineTotal")];
-        let review = review(&definitions, &[reference(0, 1, Part::Body)]);
+        let review = review(&definitions, &[reference(0, 1, Part::Body)], u32::MAX);
 
         assert_eq!(
             review.edges,
@@ -235,7 +250,7 @@ mod tests {
             reference(2, 3, Part::Body),
         ];
 
-        let review = review(&definitions, &references);
+        let review = review(&definitions, &references, u32::MAX);
 
         assert_eq!(review.edges[0].via, vec![Identity(1), Identity(2)]);
     }
@@ -243,7 +258,7 @@ mod tests {
     #[test]
     fn a_dead_end_helper_produces_no_edge() {
         let definitions = [edited(0, "cartTotal"), untouched(1, "log")];
-        let review = review(&definitions, &[reference(0, 1, Part::Body)]);
+        let review = review(&definitions, &[reference(0, 1, Part::Body)], u32::MAX);
 
         assert!(review.edges.is_empty());
     }

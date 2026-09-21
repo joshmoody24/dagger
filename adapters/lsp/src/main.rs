@@ -38,13 +38,12 @@ struct Settings {
     /// Files this adapter speaks for, when the repo hasn't said.
     #[serde(default)]
     include: Vec<String>,
-    /// How many files to chase users of before giving up and saying so. A change to
-    /// something the whole repository leans on genuinely does affect everything, and at
-    /// some point telling the reader that is more use than carrying on.
+    /// How many files to chase users of before giving up and saying so.
     ///
-    /// This is the expensive budget: walking one file means asking the server what each
-    /// definition in it looks like from outside and who uses it, which is two requests per
-    /// definition. Raise it for a large change and expect to wait.
+    /// A backstop, not a setting anybody should have to reach for: how far a reading goes
+    /// is `--ripples`, and someone who asks for ten steps and gets six because of a number
+    /// they never chose has been told something untrue about their own change. So this
+    /// sits high enough to catch a runaway and nothing else.
     #[serde(default = "files_to_walk")]
     max_walk: usize,
     /// How many files to open at all. Opening is cheap — it buys the name of whichever
@@ -56,11 +55,11 @@ struct Settings {
 }
 
 fn files_to_walk() -> usize {
-    500
+    100_000
 }
 
 fn files_to_open() -> usize {
-    5000
+    500_000
 }
 
 fn main() -> Result<()> {
@@ -90,10 +89,16 @@ fn answer(request: Request) -> Result<Response> {
             dir,
             files,
             changed,
+            ripples,
             settings,
         } => {
-            let (extraction, notes) =
-                extract(Path::new(&dir), &files, &changed, settings_of(settings)?)?;
+            let (extraction, notes) = extract(
+                Path::new(&dir),
+                &files,
+                &changed,
+                ripples,
+                settings_of(settings)?,
+            )?;
             Ok(Response::Extracted { extraction, notes })
         }
         Request::Materialize { .. } | Request::Resolve { .. } => {
@@ -118,6 +123,7 @@ fn extract(
     dir: &Path,
     files: &[String],
     changed: &[String],
+    ripples: u32,
     settings: Settings,
 ) -> Result<(Extraction, Vec<Note>)> {
     let binder = BinderId(
@@ -144,6 +150,7 @@ fn extract(
         notes: Vec::new(),
         walk_limit: settings.max_walk,
         open_limit: settings.max_open,
+        ripples,
     };
     walk.spread(changed);
 
@@ -176,9 +183,24 @@ struct Walk {
     /// wildly different amounts: with one, the cheap thing spends what the dear thing needs.
     walk_limit: usize,
     open_limit: usize,
+    /// How far past a changed file to carry on. Walking a file at one remove is what
+    /// turns up what sits at two, so the walk stops one short of what's asked for.
+    ripples: u32,
 }
 
-/* Which files are still to be walked, and which have been.
+/// What a file is on the frontier for.
+#[derive(Debug, Clone, PartialEq)]
+enum Wanted {
+    /// Every definition in it. What a changed file gets: any of them might have changed,
+    /// and until they're compared there's no telling which.
+    Everything,
+    /// Only these. A file reached by following a break is here because one definition in
+    /// it wears the changed thing in its own signature — asking after the other thirty is
+    /// thirty searches of the repository for an answer nobody reads.
+    Just(BTreeSet<Locator>),
+}
+
+/* Which files are still to be walked, what each is wanted for, and how much has been done.
  *
  * A file earns its place here once, however many times it turns up: one that uses a changed
  * definition in twenty signatures is twenty answers from the server and one file to walk.
@@ -188,24 +210,71 @@ struct Walk {
 #[derive(Default)]
 struct Frontier {
     queue: VecDeque<String>,
-    /// Every path that has ever been queued, walked or not. Membership is what stops a
-    /// path being queued twice, so nothing is ever removed from it.
+    /// How far from a changed file each one sits, by the shortest way found to it.
+    away: BTreeMap<String, u32>,
+    /// What each queued file still wants asked, with whatever has been asked already
+    /// taken off it.
+    pending: BTreeMap<String, Wanted>,
+    /// What each file has been asked about, so a second visit only covers what's new.
+    asked: BTreeMap<String, Wanted>,
+    /// Every path ever queued. Only grows, which is what makes it worth showing.
     known: BTreeSet<String>,
-    walked: usize,
 }
 
 impl Frontier {
-    fn from(paths: impl Iterator<Item = String>) -> Self {
-        let mut front = Frontier::default();
-        for path in paths {
-            front.push(path);
+    /// Says a file wants asking about, and what for. Anything already asked or already
+    /// waiting is dropped here rather than discovered again later.
+    fn want(&mut self, path: &str, wanted: Wanted, away: u32) {
+        let nearer = match self.away.get(path) {
+            Some(known) => away < *known,
+            None => true,
+        };
+        if nearer {
+            self.away.insert(path.to_string(), away);
         }
-        front
+        if self.covered(path, &wanted) {
+            return;
+        }
+
+        let fresh = match wanted {
+            Wanted::Everything => Wanted::Everything,
+            Wanted::Just(names) => match self.asked.get(path) {
+                Some(Wanted::Just(already)) => {
+                    let left: BTreeSet<Locator> = names.difference(already).cloned().collect();
+                    if left.is_empty() {
+                        return;
+                    }
+                    Wanted::Just(left)
+                }
+                _ => Wanted::Just(names),
+            },
+        };
+
+        self.known.insert(path.to_string());
+        match self.pending.get_mut(path) {
+            Some(Wanted::Everything) => {}
+            Some(Wanted::Just(waiting)) => match fresh {
+                Wanted::Everything => {
+                    self.pending.insert(path.to_string(), Wanted::Everything);
+                }
+                Wanted::Just(more) => waiting.extend(more),
+            },
+            None => {
+                self.pending.insert(path.to_string(), fresh);
+                self.queue.push_back(path.to_string());
+            }
+        }
     }
 
-    fn push(&mut self, path: String) {
-        if self.known.insert(path.clone()) {
-            self.queue.push_back(path);
+    /// Whether this has been settled already, either asked or waiting to be.
+    fn covered(&self, path: &str, wanted: &Wanted) -> bool {
+        let everything = |held: Option<&Wanted>| matches!(held, Some(Wanted::Everything));
+        if everything(self.asked.get(path)) || everything(self.pending.get(path)) {
+            return true;
+        }
+        match wanted {
+            Wanted::Everything => false,
+            Wanted::Just(names) => names.is_empty(),
         }
     }
 
@@ -214,16 +283,31 @@ impl Frontier {
     }
 
     #[allow(clippy::should_implement_trait)]
-    fn next(&mut self) -> Option<String> {
+    fn next(&mut self) -> Option<(String, Wanted, u32)> {
         let path = self.queue.pop_front()?;
-        self.walked += 1;
-        Some(path)
+        let wanted = self.pending.remove(&path)?;
+        let away = self.away.get(&path).copied().unwrap_or(0);
+
+        match (self.asked.get_mut(&path), &wanted) {
+            (Some(Wanted::Everything), _) | (_, Wanted::Everything) => {
+                self.asked.insert(path.clone(), Wanted::Everything);
+            }
+            (Some(Wanted::Just(done)), Wanted::Just(now)) => done.extend(now.iter().cloned()),
+            (None, Wanted::Just(now)) => {
+                self.asked.insert(path.clone(), Wanted::Just(now.clone()));
+            }
+        }
+
+        Some((path, wanted, away))
     }
 
-    /// How many have been walked, and how many are known to want walking. The second only
-    /// ever grows, which is what makes it worth showing: it's what we know, not a guess.
+    /// How many files have been walked, and how many are known to want walking.
+    ///
+    /// Files, not visits: one already walked comes round again when something new in it
+    /// turns out to carry a break, and counting those made the walk look further along
+    /// than the thing it was counting towards.
     fn walked(&self) -> usize {
-        self.walked
+        self.asked.len()
     }
 
     fn known(&self) -> usize {
@@ -243,12 +327,22 @@ impl Walk {
     /// unreadable. One widely used name answers with a thousand places; each of those
     /// files holds dozens of definitions; asking all of theirs in turn walks the monorepo.
     fn spread(&mut self, changed: &[String]) {
-        let mut front = Frontier::from(
-            changed
-                .iter()
-                .filter(|path| self.ours.contains(path.as_str()))
-                .cloned(),
-        );
+        let mut front = Frontier::default();
+        /* A changed file wants asking about whole: which of its definitions actually moved
+         * is dagger's to work out later, by comparing the two snapshots, and from in here
+         * they all look equally suspect. */
+        for path in changed
+            .iter()
+            .filter(|path| self.ours.contains(path.as_str()))
+        {
+            front.want(path, Wanted::Everything, 0);
+        }
+
+        /* Which files changed is the same list on both snapshots, so asking after their
+         * contracts and nobody else's is a rule that lands the same way twice. Letting the
+         * walk decide instead meant a definition could be asked on one side and not the
+         * other, and come back looking like its contract had changed when nothing had. */
+        let changed: BTreeSet<String> = changed.iter().cloned().collect();
 
         // Open every changed file before asking anything about any of them. A server
         // answers "who uses this" out of the projects it has loaded, and telling it about
@@ -259,7 +353,7 @@ impl Walk {
             self.look(&path);
         }
 
-        while let Some(path) = front.next() {
+        while let Some((path, wanted, away)) = front.next() {
             /* How far the walk has got. There's no total to count towards — what's left to
              * walk is whatever the files walked so far turn out to mention — so this says
              * how much has been done and how much is known to be left, which is the truth
@@ -286,8 +380,15 @@ impl Walk {
                 continue;
             }
 
-            for onward in self.ask_about(&path) {
-                front.push(onward);
+            /* Walking a file one step out is what turns up what sits two steps out, so
+             * the walk stops one short of how far the reading was asked to go. Everything
+             * reached from the last step is still recorded — it just isn't followed. */
+            if away + 1 < self.ripples {
+                for (path, definition) in self.ask_about(&path, &wanted, &changed) {
+                    front.want(&path, Wanted::Just(BTreeSet::from([definition])), away + 1);
+                }
+            } else {
+                self.ask_about(&path, &wanted, &changed);
             }
         }
     }
@@ -314,21 +415,36 @@ impl Walk {
 
     /// Asks what each definition in this file looks like from outside and who uses it,
     /// recording the mentions. Returns the files a break can travel on to.
-    fn ask_about(&mut self, path: &str) -> Vec<String> {
+    fn ask_about(
+        &mut self,
+        path: &str,
+        wanted: &Wanted,
+        changed: &BTreeSet<String>,
+    ) -> Vec<(String, Locator)> {
         let questions: Vec<(Value, Locator)> = {
             let file = &self.seen[path];
             file.symbols
                 .iter()
                 .map(|symbol| (position(&self.root, file, symbol), locator(file, symbol)))
+                .filter(|(_, to)| match wanted {
+                    Wanted::Everything => true,
+                    Wanted::Just(names) => names.contains(to),
+                })
                 .collect()
         };
+
+        // Only where a contract could differ between the snapshots, which is where the
+        // file differs. Everywhere else the answer is the same on both sides by
+        // construction, and asking is a round trip to hear so.
+        let worth_asking = changed.contains(path);
 
         let mut onward = Vec::new();
         for (at, to) in questions {
             // Hover is a summary written for a person, not a statement of what callers can
             // see, so it's worth having but not worth trusting on its own. Dagger takes it
             // alongside the written declaration rather than instead of it.
-            if let Ok(hover) = self.server.request("textDocument/hover", at.clone())
+            if worth_asking
+                && let Ok(hover) = self.server.request("textDocument/hover", at.clone())
                 && let Some(contract) = fenced(&hover)
             {
                 self.contracts.insert(to.clone(), contract);
@@ -354,8 +470,8 @@ impl Walk {
     }
 
     /// Turns each place a definition is used into a mention, and says which of those
-    /// places can carry a break onward.
-    fn record(&mut self, referrers: &Value, to: &Locator) -> Vec<String> {
+    /// places can carry a break onward — the file, and the one definition in it that does.
+    fn record(&mut self, referrers: &Value, to: &Locator) -> Vec<(String, Locator)> {
         let places: Vec<(String, u32, u32)> = referrers
             .as_array()
             .map(Vec::as_slice)
@@ -386,8 +502,9 @@ impl Walk {
                 continue;
             };
 
+            let inside = locator(file, from);
             self.mentions.push(Mention {
-                from: locator(file, from),
+                from: inside.clone(),
                 to: Target::Known(to.clone()),
                 site: Site {
                     part,
@@ -399,10 +516,11 @@ impl Walk {
                 },
             });
 
-            // Callers of this one can be broken by what broke it, so the trail carries on.
+            // Callers of this one can be broken by what broke it, so the trail carries on
+            // — through this definition, and not through everything else sharing its file.
             // A mention inside a body stops here: nobody outside can tell it changed.
             if part == Part::Type {
-                onward.push(path);
+                onward.push((path, inside));
             }
         }
 
@@ -795,49 +913,6 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    #[test]
-    fn a_file_is_walked_once_however_often_it_turns_up() {
-        let mut front = Frontier::from(["a.ts".to_string()].into_iter());
-        for _ in 0..20 {
-            front.push("b.ts".to_string());
-        }
-
-        let mut walked = Vec::new();
-        while let Some(path) = front.next() {
-            walked.push(path);
-        }
-        assert_eq!(walked, vec!["a.ts", "b.ts"]);
-        assert_eq!(front.walked(), 2);
-    }
-
-    #[test]
-    fn a_file_already_walked_is_never_queued_again() {
-        let mut front = Frontier::from(["a.ts".to_string()].into_iter());
-        assert_eq!(front.next().as_deref(), Some("a.ts"));
-
-        front.push("a.ts".to_string());
-        assert_eq!(front.next(), None, "a walked file came back around");
-    }
-
-    /* What's left to walk is the one number a reader can lean on, so it may not shrink
-     * because duplicates drained out of the queue. */
-    #[test]
-    fn what_is_known_only_ever_grows() {
-        let mut front = Frontier::from(["a.ts".to_string(), "b.ts".to_string()].into_iter());
-        let mut seen = Vec::new();
-        while front.next().is_some() {
-            seen.push(front.known());
-            front.push("b.ts".to_string());
-            front.push("c.ts".to_string());
-        }
-
-        assert_eq!(front.known(), 3);
-        assert!(
-            seen.windows(2).all(|pair| pair[1] >= pair[0]),
-            "the count of known files went backwards: {seen:?}"
-        );
-    }
-
     /// Where a piece of text sits, as a server would say it: a line and a character.
     fn spot(source: &str, at: usize) -> (u32, u32) {
         let before = &source[..at];
@@ -891,10 +966,141 @@ mod tests {
             .collect()
     }
 
-    /* A server reports a definition from its declaration and says nothing about the comment
-     * above explaining it. Left there, the comment belongs to nothing and falls through to
-     * the module, which ends up a pile of prose with holes where the definitions it
-     * describes ought to be. */
+    fn named(name: &str) -> Locator {
+        Locator {
+            scope: Vec::new(),
+            name: name.to_string(),
+        }
+    }
+
+    fn just(names: &[&str]) -> Wanted {
+        Wanted::Just(names.iter().map(|name| named(name)).collect())
+    }
+
+    #[test]
+    fn a_file_is_walked_once_however_often_it_turns_up() {
+        let mut front = Frontier::default();
+        front.want("a.ts", Wanted::Everything, 0);
+        for _ in 0..20 {
+            front.want("b.ts", just(&["one"]), 0);
+        }
+
+        let mut walked = Vec::new();
+        while let Some((path, _, _)) = front.next() {
+            walked.push(path);
+        }
+        assert_eq!(walked, vec!["a.ts", "b.ts"]);
+        assert_eq!(front.walked(), 2);
+    }
+
+    /* What's been done can't be more than what there is to do, however many times a file
+     * comes round again for something new in it. */
+    #[test]
+    fn what_is_walked_never_outruns_what_is_known() {
+        let mut front = Frontier::default();
+        front.want("a.ts", just(&["one"]), 0);
+
+        for step in 0..5 {
+            front.next();
+            let more = format!("more{step}");
+            front.want("a.ts", just(&[&more]), 0);
+            assert!(
+                front.walked() <= front.known(),
+                "walked {} of {}",
+                front.walked(),
+                front.known()
+            );
+        }
+    }
+
+    /* The whole point of carrying a name along: a file reached by following a break is
+     * there for one definition, and asking after the rest is a search of the repository
+     * for every other thing that happens to share the file. */
+    #[test]
+    fn a_file_reached_by_a_break_is_asked_only_about_what_carried_it() {
+        let mut front = Frontier::default();
+        front.want("b.ts", just(&["carries"]), 0);
+
+        let (path, wanted, _) = front.next().expect("something to walk");
+        assert_eq!(path, "b.ts");
+        assert_eq!(wanted, just(&["carries"]));
+    }
+
+    /* Two definitions in one file can each carry a break, and both want asking about. */
+    #[test]
+    fn what_several_breaks_want_is_gathered_into_one_visit() {
+        let mut front = Frontier::default();
+        front.want("b.ts", just(&["one"]), 0);
+        front.want("b.ts", just(&["two"]), 0);
+
+        assert_eq!(front.next().unwrap().1, just(&["one", "two"]));
+        assert_eq!(front.next(), None, "one file, one visit");
+    }
+
+    /* A changed file is read whole, and nothing narrower takes that away again. */
+    #[test]
+    fn wanting_everything_beats_wanting_one_thing() {
+        let mut front = Frontier::default();
+        front.want("a.ts", Wanted::Everything, 0);
+        front.want("a.ts", just(&["one"]), 0);
+        assert_eq!(front.next().unwrap().1, Wanted::Everything);
+
+        let mut later = Frontier::default();
+        later.want("a.ts", just(&["one"]), 0);
+        later.want("a.ts", Wanted::Everything, 0);
+        assert_eq!(later.next().unwrap().1, Wanted::Everything);
+    }
+
+    #[test]
+    fn a_file_already_walked_is_never_asked_the_same_thing_twice() {
+        let mut front = Frontier::default();
+        front.want("a.ts", just(&["one"]), 0);
+        assert_eq!(front.next().unwrap().1, just(&["one"]));
+
+        front.want("a.ts", just(&["one"]), 0);
+        assert_eq!(
+            front.next(),
+            None,
+            "asked again for what it already answered"
+        );
+    }
+
+    /* But something genuinely new in a file already visited still gets asked. */
+    #[test]
+    fn a_file_already_walked_is_revisited_for_something_new() {
+        let mut front = Frontier::default();
+        front.want("a.ts", just(&["one"]), 0);
+        front.next();
+
+        front.want("a.ts", just(&["one", "two"]), 0);
+        assert_eq!(
+            front.next().unwrap().1,
+            just(&["two"]),
+            "should ask only for the part it hasn't"
+        );
+    }
+
+    /* Reached two ways round, a file is as near as the nearest way to it — which is what
+     * decides whether the walk carries on through it. */
+    #[test]
+    fn a_file_keeps_the_shortest_distance_found_to_it() {
+        let mut front = Frontier::default();
+        front.want("a.ts", just(&["one"]), 3);
+        front.want("a.ts", just(&["two"]), 1);
+
+        assert_eq!(front.next().unwrap().2, 1);
+    }
+
+    #[test]
+    fn nothing_more_is_wanted_of_a_file_read_whole() {
+        let mut front = Frontier::default();
+        front.want("a.ts", Wanted::Everything, 0);
+        front.next();
+
+        front.want("a.ts", just(&["anything"]), 0);
+        assert_eq!(front.next(), None);
+    }
+
     #[test]
     fn what_is_written_above_a_definition_belongs_to_it() {
         let source = "/** Money. */\nexport interface Money {\n  pence: number;\n}\n";

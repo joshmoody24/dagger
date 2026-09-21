@@ -2,15 +2,23 @@ use crate::change::Change;
 use crate::diagnostic::Diagnostic;
 use crate::model::{Identity, Part};
 use crate::reference::{Reference, Target};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 
 /// Definitions that didn't change but sit downstream of something that did, reached
 /// by following type parts only. A body can call whatever it likes without its own
 /// callers caring, so the trail stops at the first body.
+///
+/// Each comes back with how many hops away it is, because that's the thing a reader wants
+/// to turn down: the definitions that call a change directly are usually worth seeing, and
+/// the ones five removes away are the same news arriving for the fifth time. Told the
+/// distance, a page can show as much of it as somebody asks for.
+///
+/// `depth` is how far to follow. Nought means don't: what changed is the whole review.
 pub fn affected(
     changes: &BTreeMap<Identity, Change>,
     references: &[Reference],
-) -> (BTreeSet<Identity>, Vec<Diagnostic>) {
+    depth: u32,
+) -> (BTreeMap<Identity, u32>, Vec<Diagnostic>) {
     let mut callers: BTreeMap<Identity, Vec<Identity>> = BTreeMap::new();
     let mut diagnostics = Vec::new();
 
@@ -24,17 +32,25 @@ pub fn affected(
         }
     }
 
-    let mut reached = BTreeSet::new();
-    let mut queue: VecDeque<Identity> = changes
+    let mut reached: BTreeMap<Identity, u32> = BTreeMap::new();
+    let mut queue: VecDeque<(Identity, u32)> = changes
         .iter()
         .filter(|(_, change)| change.breaks_callers())
-        .map(|(identity, _)| *identity)
+        .map(|(identity, _)| (*identity, 0))
         .collect();
 
-    while let Some(broken) = queue.pop_front() {
+    /* Breadth first, so the first time a definition is reached is by the shortest way to
+     * it. Reached again further round, it keeps the nearer distance — which is the honest
+     * one: something both called directly and called again through a chain is, to a
+     * reader, called directly. */
+    while let Some((broken, away)) = queue.pop_front() {
+        if away >= depth {
+            continue;
+        }
         for caller in callers.get(&broken).into_iter().flatten() {
-            if reached.insert(*caller) {
-                queue.push_back(*caller);
+            if let std::collections::btree_map::Entry::Vacant(spot) = reached.entry(*caller) {
+                spot.insert(away + 1);
+                queue.push_back((*caller, away + 1));
             }
         }
     }
@@ -53,6 +69,7 @@ mod tests {
     use super::*;
     use crate::change::Edits;
     use crate::testing::reference;
+    use std::collections::BTreeSet;
 
     /// A contract break at `0`, and nothing else changed.
     fn broken_at_zero() -> BTreeMap<Identity, Change> {
@@ -65,8 +82,17 @@ mod tests {
         )])
     }
 
+    /// As far as it goes, which is what these are about unless they say otherwise.
     fn reached(references: &[Reference]) -> BTreeSet<Identity> {
-        affected(&broken_at_zero(), references).0
+        affected(&broken_at_zero(), references, u32::MAX)
+            .0
+            .into_keys()
+            .collect()
+    }
+
+    /// How far out each one sits.
+    fn away(references: &[Reference], depth: u32) -> BTreeMap<Identity, u32> {
+        affected(&broken_at_zero(), references, depth).0
     }
 
     #[test]
@@ -111,9 +137,10 @@ mod tests {
         let untouched = BTreeMap::from([(Identity(0), Change::Kept(Edits::default()))]);
         let references = [reference(1, 0, Part::Type)];
 
-        assert!(affected(&untouched, &references).0.is_empty());
+        assert!(affected(&untouched, &references, u32::MAX).0.is_empty());
     }
 
+    /* Round and back again without going round again. */
     #[test]
     fn a_cycle_settles() {
         let references = [reference(1, 0, Part::Type), reference(0, 1, Part::Type)];
@@ -124,6 +151,56 @@ mod tests {
         );
     }
 
+    /* The distance is what a reader turns down, so it has to be the honest one. */
+    #[test]
+    fn each_one_says_how_far_out_it_sits() {
+        let references = [
+            reference(1, 0, Part::Type),
+            reference(2, 1, Part::Type),
+            reference(3, 2, Part::Type),
+        ];
+
+        assert_eq!(
+            away(&references, u32::MAX),
+            BTreeMap::from([(Identity(1), 1), (Identity(2), 2), (Identity(3), 3)])
+        );
+    }
+
+    #[test]
+    fn following_no_distance_at_all_reaches_nobody() {
+        let references = [reference(1, 0, Part::Type)];
+
+        assert!(away(&references, 0).is_empty());
+    }
+
+    #[test]
+    fn the_trail_stops_where_it_was_told_to() {
+        let references = [
+            reference(1, 0, Part::Type),
+            reference(2, 1, Part::Type),
+            reference(3, 2, Part::Type),
+        ];
+
+        assert_eq!(away(&references, 1), BTreeMap::from([(Identity(1), 1)]));
+        assert_eq!(
+            away(&references, 2),
+            BTreeMap::from([(Identity(1), 1), (Identity(2), 2)])
+        );
+    }
+
+    /* Reached two ways, something is as near as the nearest way to it: a reader who asks
+     * for what calls the change directly wants this, whatever else also leads there. */
+    #[test]
+    fn the_shortest_way_is_the_one_that_counts() {
+        let references = [
+            reference(1, 0, Part::Type),
+            reference(2, 1, Part::Type),
+            reference(2, 0, Part::Type),
+        ];
+
+        assert_eq!(away(&references, u32::MAX)[&Identity(2)], 1);
+    }
+
     #[test]
     fn a_name_we_could_not_place_is_reported() {
         let mut unbound = reference(1, 0, Part::Type);
@@ -131,7 +208,7 @@ mod tests {
             symbol: "Money".to_string(),
         };
 
-        let (_, diagnostics) = affected(&broken_at_zero(), &[unbound]);
+        let (_, diagnostics) = affected(&broken_at_zero(), &[unbound], u32::MAX);
         assert_eq!(
             diagnostics,
             vec![Diagnostic::UnboundInContract {

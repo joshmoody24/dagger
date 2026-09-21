@@ -65,6 +65,12 @@ header { padding: 12px 16px 8px; flex: none; }
   width: 30px; height: 30px; flex: none; display: grid; place-items: center;
   border-radius: 8px; color: var(--muted);
 }
+/* The mark and how far out the ripples go, side by side: the number is what the reader
+ * just changed, so it belongs where they're already looking. */
+.worry.steps {
+  width: auto; padding: 0 7px; grid-auto-flow: column; gap: 3px;
+}
+.worry.steps b { font: 600 11.5px/1 var(--mono); }
 .worry.bad { color: var(--chg); }
 .worry.on { color: var(--lean); }
 .worry:hover { background: var(--raised); }

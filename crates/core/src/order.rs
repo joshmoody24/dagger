@@ -229,7 +229,8 @@ mod tests {
                     )
                 })
                 .collect(),
-            affected: BTreeSet::new(),
+            affected: BTreeMap::new(),
+            ripples: 1,
             members: (0..count).map(Identity).collect(),
             context: BTreeSet::new(),
             edges: leans

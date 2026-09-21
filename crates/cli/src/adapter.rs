@@ -153,11 +153,13 @@ pub fn extract(
     dir: &Path,
     files: &[String],
     changed: &[String],
+    ripples: u32,
 ) -> Result<(Extraction, Vec<Note>)> {
     let request = Request::Extract {
         dir: dir.to_string_lossy().into_owned(),
         files: files.to_vec(),
         changed: changed.to_vec(),
+        ripples,
         settings: json(&extractor.settings),
     };
     match ask(repo, &extractor.adapter, &extractor.args, &request)? {

@@ -103,6 +103,7 @@ export function digest(raw: Raw): Review {
       before,
       after,
       mark: marking(raw.review, definition.identity),
+      away: raw.review.affected[definition.identity] ?? 0,
       group: (raw.grouping.of || {})[definition.identity] || [],
     });
   }
@@ -112,10 +113,11 @@ export function digest(raw: Raw): Review {
     steps: raw.ordering.steps.filter((step) => definitions.has(step.definition)),
     edges: raw.review.edges.filter((e) => definitions.has(e.from) && definitions.has(e.to)),
     changes: raw.review.changes,
-    /* Didn't change, but sits downstream of something that did. Kept apart so a reader can
-     * put them away: a change to something everything leans on brings hundreds of these,
-     * and they're the same news over and over. */
-    affected: new Set(raw.review.affected),
+    /* What the change reached, and how far out each one sits. Kept apart so a reader can
+     * turn it down: a change to something everything leans on reaches hundreds of these,
+     * and the ones furthest out are the same news arriving again. */
+    affected: new Map(Object.entries(raw.review.affected).map(([id, away]) => [Number(id), away])),
+    ripples: raw.review.ripples,
     cost: raw.ordering.cost,
     grouping: raw.grouping.name,
     worries: [
@@ -140,7 +142,7 @@ function marking(review: Raw["review"], id: Identity) {
   if (edits.contract) return "contract";
   if (edits.parts.includes("body") || edits.parts.includes("type")) return "body";
   if (edits.parts.includes("docs")) return "docs";
-  return review.affected.includes(id) ? "affected" : "still";
+  return review.affected[id] !== undefined ? "affected" : "still";
 }
 
 /** Whether a change to this one means its callers have to change too. */
@@ -225,6 +227,14 @@ export function layout(review: Review): Laid {
     if (leansOn.has(edge.to)) leansOn.get(edge.from)?.push(edge.to);
   }
 
+  /* Where each definition falls in the reading. The page can't always put things in that
+   * order — what holds something up is drawn above it, and that's what the lines mean —
+   * but wherever the shape leaves a choice, the choice goes to the reading. A reader
+   * working down the list shouldn't have their eye thrown across the page and back. */
+  const reading = new Map(review.steps.map((step, at) => [step.definition, at]));
+  const soonest = (held: Definition[]) =>
+    Math.min(...held.map((one) => reading.get(one.id) ?? Infinity));
+
   const byPlace = collect(nodes, (node) => node.file);
   /* A file whose only changed definition is its own module still needs a box: the module is
    * drawn as its file, so without one there's nothing on the page to stand for it — nothing
@@ -247,14 +257,18 @@ export function layout(review: Review): Laid {
     const stacked = laning(under);
 
     const inner = [...under]
-      .sort((a, b) => stacked(a) - stacked(b))
+      .sort(
+        (a, b) =>
+          stacked(a) - stacked(b) ||
+          soonest(byPlace.get(a) ?? []) - soonest(byPlace.get(b) ?? []),
+      )
       .map((path) => {
         const module = modules.get(path) || null;
         return sized({
           key: path,
           module,
           label: module ? module.name : guessed(path),
-          rows: layer(byPlace.get(path) ?? [], leansOn),
+          rows: layer(byPlace.get(path) ?? [], leansOn, reading),
           lanes: [],
         });
       });
@@ -362,14 +376,24 @@ export function* inside(box: Box): Generator<Definition> {
 }
 
 /* Rows within a box: something sits below everything it leans on. */
-function layer(nodes: Definition[], leansOn: Map<Identity, Identity[]>) {
+function layer(
+  nodes: Definition[],
+  leansOn: Map<Identity, Identity[]>,
+  reading: Map<Identity, number>,
+) {
   const here = new Set(nodes.map((n) => n.id));
   const rows: Definition[][] = [];
   for (const node of nodes) {
     const row = depth(node.id, here, leansOn, new Map());
     (rows[row] ||= []).push(node);
   }
-  for (const row of rows) if (row) row.sort(byLoudness);
+  /* Nothing in a row leans on anything else in it, so their order is free — and free means
+   * it should go to the reading rather than to how loud each one is. Sorting by loudness
+   * put the noisiest first and sent the reader back and forth across a file they were
+   * being walked through in order. Anything with no place in the reading is drawn but
+   * never stopped at, so it goes last and out of the way. */
+  const at = (one: Definition) => reading.get(one.id) ?? Infinity;
+  for (const row of rows) if (row) row.sort((a, b) => at(a) - at(b) || byLoudness(a, b));
   /* Row nought is whatever leans on nothing, and it goes at the top: a reader meets what
    * holds things up before the things it holds. */
   return rows.filter(Boolean).flatMap(folded);
@@ -430,6 +454,15 @@ function bands(boxes: Box[], review: Review) {
     const row = depth(box.key, keys, leansOn, new Map());
     (found[row] ||= []).push(box);
   }
+
+  /* Side by side in a band, nothing holds anything else up, so which comes first is free
+   * — and goes to whichever is read first, left to right, the way the list is worked
+   * through. */
+  const reading = new Map(review.steps.map((step, at) => [step.definition, at]));
+  const soonest = (box: Box) =>
+    Math.min(...[...inside(box)].map((one) => reading.get(one.id) ?? Infinity));
+  for (const band of found) if (band) band.sort((a, b) => soonest(a) - soonest(b));
+
   return found.filter(Boolean);
 }
 

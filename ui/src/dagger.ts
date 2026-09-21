@@ -51,6 +51,8 @@ export interface Definition {
   before: Occurrence | null;
   after: Occurrence | null;
   mark: Mark;
+  /** How far out the change reached it, or nought for something that changed itself. */
+  away: number;
   group: string[];
 }
 
@@ -66,7 +68,10 @@ export interface Review {
   steps: Step[];
   edges: Edge[];
   changes: Record<Identity, Change>;
-  affected: Set<Identity>;
+  /** What the change reached, and how many hops out each one sits. */
+  affected: Map<Identity, number>;
+  /** How far this reading followed a change, which is as far as the page can offer. */
+  ripples: number;
   cost: Cost;
   grouping?: string;
   worries: Worry[];

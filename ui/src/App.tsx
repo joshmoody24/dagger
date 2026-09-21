@@ -9,19 +9,25 @@ import { next as another, wear, wearing } from "./theme.ts";
 export function App(props: { raw: Raw }) {
   const whole = createMemo(() => digest(props.raw));
 
-  /* Whether to show what a change reached as well as what it changed.
+  /* How far out to show what a change reached.
    *
-   * A change to something everything leans on reaches hundreds of definitions, and each of
-   * them says the same thing: this didn't change, but the ground under it did. Worth seeing
-   * when that's the question; in the way when it isn't. */
-  const [ripples, setRipples] = createSignal(false);
+   * Never further than the reading went — whoever ran dagger said how far to follow with
+   * --ripples, and a page offering more than that would be offering to show nothing. Within
+   * that it's the reader's: the definitions that use a change directly are usually the
+   * point, and the ones several removes out are the same news arriving again. */
+  const [ripples, setRipples] = createSignal(0);
+  createEffect(() => setRipples(whole().ripples));
+  const further = () => setRipples((was) => (was >= whole().ripples ? 0 : was + 1));
 
   const review = createMemo(() => {
     const all = whole();
-    if (ripples()) return all;
+    const far = ripples();
+    if (far >= whole().ripples) return all;
 
     const gone = new Set(
-      [...all.definitions.values()].filter((one) => one.mark === "affected").map((one) => one.id),
+      [...all.definitions.values()]
+        .filter((one) => one.mark === "affected" && one.away > far)
+        .map((one) => one.id),
     );
     if (!gone.size) return all;
 
@@ -165,7 +171,7 @@ export function App(props: { raw: Raw }) {
     /* Away, and nothing left behind to say so. A strip down the side saying "there's a
      * thing here" is the thing, taking up room. */
     d: () => (showing() ? shut() : open()),
-    r: () => setRipples((was) => !was),
+    r: () => further(),
     /* Trying colours on. Every one is somebody's editor, so the question is which, and the
      * only way to answer it is to look. */
     t: () => void wear(another(wearing())),
@@ -225,18 +231,18 @@ export function App(props: { raw: Raw }) {
             <ChartColumn size={17} />
           </button>
 
-          {/* What the change reached, as well as what it changed. Off to begin with: the
-            * definitions that actually changed are the review, and the ones that only sit
-            * downstream of one are a second, larger question to ask on purpose. */}
-          <Show when={whole().affected.size}>
+          {/* How far out what the change reached is shown. The number is the point — a
+            * reader turning it down wants to know what they've turned it down to — so it
+            * sits beside the mark rather than hiding in a tooltip. */}
+          <Show when={whole().ripples > 0 && whole().affected.size}>
             <button
-              class={`worry${ripples() ? " on" : ""}`}
-              onClick={() => setRipples((was) => !was)}
-              title="Ripple mode: show unchanged definitions whose dependencies changed (r)"
-              aria-label="Ripple mode: show unchanged definitions whose dependencies changed"
-              aria-pressed={ripples()}
+              class={`worry steps${ripples() ? " on" : ""}`}
+              onClick={further}
+              title={`Ripples: showing what the change reached ${ripples()} of ${whole().ripples} steps out (r)`}
+              aria-label={`Ripples: ${ripples()} of ${whole().ripples} steps out`}
             >
               <Waves size={17} />
+              <b>{ripples()}</b>
             </button>
           </Show>
         </div>

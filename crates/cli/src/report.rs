@@ -76,7 +76,7 @@ pub fn print(review: &Review, ordering: &Ordering, definitions: &[Definition], n
             Some(change) if change.worth_reading() => glyph(change),
             _ => '=',
         };
-        let affected = if review.affected.contains(identity) {
+        let affected = if review.affected.contains_key(identity) {
             " (affected)"
         } else {
             ""
