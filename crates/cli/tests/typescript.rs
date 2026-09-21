@@ -12,10 +12,23 @@ fn the_typescript_fixture_reads_as_expected() {
     let fixture = fixture();
     let adapter = target().join("dagger-lsp");
 
-    // The fixture is about this adapter, and a missing TypeScript compiler says nothing
-    // about whether dagger works. Skipping beats failing on someone else's machine.
+    /* A skipped test looks exactly like a passing one, and this is the only test that puts
+     * the whole thing together — so it says so rather than going quiet. The dev shell
+     * provides the compiler, which means an absence here is a broken setup, not a fact
+     * about somebody's machine. Anyone genuinely without one can say so and get the rest of
+     * the suite. */
     if !on_path("tsc") || !adapter.exists() {
-        eprintln!("skipped: needs tsc on PATH and a built dagger-lsp");
+        let missing = if on_path("tsc") {
+            format!("{} hasn't been built — run ./build", adapter.display())
+        } else {
+            "tsc isn't on PATH — this needs the dev shell, or nix develop".to_string()
+        };
+        assert!(
+            std::env::var_os("DAGGER_WITHOUT_TSC").is_some(),
+            "the one test that reads a repository end to end can't run: {missing}.\n\
+             Set DAGGER_WITHOUT_TSC=1 to skip it on purpose."
+        );
+        eprintln!("skipped on purpose: {missing}");
         return;
     }
 
