@@ -33,6 +33,13 @@ pub struct Span {
 pub struct Piece {
     pub text: String,
     pub span: Span,
+    /// Which line of the file this starts on, counting from one.
+    ///
+    /// A span is where the bytes are, which is what the machinery needs and nothing a
+    /// person can use. A reader points at a line — "the check on line 31" — and only
+    /// whoever read the file can say which line that is, so it's said here rather than
+    /// worked out later from text nobody kept.
+    pub line: u32,
     /// Set when this piece lives somewhere other than the definition's own file, the
     /// way a C declaration sits in a header away from its body.
     pub file: Option<String>,

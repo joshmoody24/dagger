@@ -47,6 +47,7 @@ fn occurrence(dir: &Path, file: &str) -> Option<Occurrence> {
             vec![Piece {
                 text,
                 span,
+                line: 1,
                 file: None,
             }],
         )]),

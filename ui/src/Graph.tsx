@@ -1,7 +1,8 @@
-import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount, untrack } from "solid-js";
 import { select } from "d3-selection";
 import { zoom as zooming, zoomIdentity, zoomTransform } from "d3-zoom";
-import { MARK, NODE_H, RADIUS, TINT, inside, shorten } from "./review.ts";
+import { MARK, NODE_H, RADIUS, TINT, shorten } from "./review.ts";
+import { wearing } from "./theme.ts";
 
 /* Breathing room around the whole drawing when it's sat in the window. */
 const EDGE = 24;
@@ -43,9 +44,9 @@ export function Graph(props) {
    * half of what a canvas buys — there's no element to hit-test, and no flicker when the
    * answer is a node sitting on top of the box it belongs to. */
   const [over, setOver] = createSignal(null);
+  const [touching, setTouching] = createSignal(null);
 
   const behaviour = zooming()
-    .translateExtent([[0, 0], [props.laid.w, props.laid.h]])
     /* Wheels are handled below instead. */
     .filter((event) => event.type !== "wheel" && !event.ctrlKey && !event.button)
     .on("zoom", () => redraw());
@@ -68,10 +69,18 @@ export function Graph(props) {
       .scale(k);
   };
 
+  /* How far the reader may pull out and push around, both of which are answers about this
+   * drawing and not about zooming in general. The drawing changes size — putting the
+   * ripples away makes it smaller — so these have to be asked again when it does, or the
+   * view stays penned in by the shape of a graph that isn't on screen any more. */
+  const bounded = () => {
+    behaviour.translateExtent([[0, 0], [props.laid.w, props.laid.h]]);
+    behaviour.scaleExtent([whole().k, CLOSEST]);
+  };
+
   const fit = () => {
-    const shown = whole();
-    behaviour.scaleExtent([shown.k, CLOSEST]);
-    select(paper).call(behaviour.transform, shown);
+    bounded();
+    select(paper).call(behaviour.transform, whole());
   };
 
   /* The same view, moved so one definition sits in the middle of it. */
@@ -137,21 +146,6 @@ export function Graph(props) {
   };
 
   const every = (boxes) => boxes.flatMap((box) => [box, ...every(box.boxes)]);
-  const holding = () => (props.review.definitions.get(props.here) || {}).file;
-
-  /* Everything a box stands over: itself, its module's file, and the same again for every
-   * box inside it. A box lights for anything in any of them, which is what stacks the
-   * tints as you point deeper in. */
-  const covers = (box) =>
-    [box.key, (box.module || {}).file, ...box.boxes.flatMap(covers)].filter(Boolean);
-
-  /* Where pressing a box takes you: its own module if it has one, else the first definition
-   * it holds at any depth. A place you can't point at reads as broken. */
-  const opens = (box) => {
-    if (box.module) return box.module.id;
-    for (const node of inside(box)) return node.id;
-    return null;
-  };
 
   /* What's under a point, in the drawing's own units. A definition wins over the box it's
    * in, and the innermost box wins over the ones around it. */
@@ -182,6 +176,7 @@ export function Graph(props) {
   const onPointerMove = (event) => {
     const what = at(pointing(event));
     setOver(what && what.file);
+    setTouching(what && what.node !== undefined ? what.node : null);
     frame.style.cursor = what ? "pointer" : "grab";
     frame.title = what && what.node !== undefined ? props.review.definitions.get(what.node).path : "";
   };
@@ -189,8 +184,13 @@ export function Graph(props) {
   const onClick = (event) => {
     const what = at(pointing(event));
     if (!what) return;
-    const id = what.node !== undefined ? what.node : opens(what.box);
-    if (id !== null && id !== undefined) props.onOpen(id);
+    if (what.node !== undefined) return props.onOpen(what.node);
+
+    /* A box that answers to a module opens that module. One that's only a place — a folder
+     * holding definitions that belong to it no more than to each other — opens as itself,
+     * rather than reaching inside and picking one of its contents at random. */
+    const module = what.box.module;
+    return module ? props.onOpen(module.id) : props.onOpenBox(what.box.key);
   };
 
   /* ---------------- drawing ---------------- */
@@ -202,7 +202,7 @@ export function Graph(props) {
     const had = getComputedStyle(document.documentElement);
     const of = (name) => had.getPropertyValue(`--${name}`).trim();
     paint = {
-      raised: of("raised"), ink: of("ink"), muted: of("muted"), faint: of("faint"),
+      paper: of("paper"), ink: of("ink"), muted: of("muted"), faint: of("faint"),
       rule: of("rule"), lean: of("lean"), path: of("path"),
       add: of("add"), del: of("del"), chg: of("chg"), aff: of("muted"),
     };
@@ -246,27 +246,26 @@ export function Graph(props) {
     for (const [id, spot] of props.laid.at) node(id, spot, near);
   }
 
-  const lit = (box) => covers(box).some((key) => key === over() || key === holding());
+  /* Only what the pointer is actually in, and only the innermost of those. Lighting every
+   * box around it too made a stack of ever-paler grounds, and lighting the box holding
+   * whatever is selected left a patch of the page bright for as long as you read — which is
+   * a lot of lightness to say something the outline round the node already says. */
+  const lit = (box) => box.key === over();
 
   function place(box, deep) {
     const radius = Math.max(RADIUS.node, RADIUS.box - deep * RADIUS.step);
     const module = box.module;
 
-    /* Laid on with alpha rather than a flat colour, so a box inside a lit box adds to it
-     * instead of replacing it: the deepest place the pointer is in is the brightest. */
-    if (lit(box) && opens(box) !== null) {
-      ink.globalAlpha = 0.4;
-      ink.fillStyle = paint.raised;
-      round(box.x, box.y, box.w, box.h, radius);
-      ink.fill();
-      ink.globalAlpha = 1;
-    }
-
-    const here = module && module.id === props.here;
+    const here = (module && module.id === props.here) || box.key === props.box;
     const soon = module && module.id === props.next;
+    const under = lit(box);
+
+    /* Nothing is filled, here or anywhere. A drawing whose only bright things are edges and
+     * words stays legible however many boxes are stacked up, and leaves the page its own
+     * colour rather than a pile of ever-paler grounds. */
     ink.setLineDash(soon ? [5, 3] : deep && !here ? [3, 3] : []);
-    ink.lineWidth = here || soon ? 1.8 : 1;
-    ink.strokeStyle = here ? paint.lean : soon ? paint.path : paint.rule;
+    ink.lineWidth = here || soon ? 1.8 : under ? 1.4 : 1;
+    ink.strokeStyle = here ? paint.lean : soon ? paint.path : under ? paint.muted : paint.rule;
     round(box.x, box.y, box.w, box.h, radius);
     ink.stroke();
     ink.setLineDash([]);
@@ -293,19 +292,26 @@ export function Graph(props) {
     const dim = near.size > 0 && !near.has(id) && !here && !soon;
     const tint = paint[TINT[definition.mark]];
 
-    ink.globalAlpha = here || soon ? 1 : read && dim ? 0.42 : read ? 0.6 : dim ? 0.55 : 1;
+    /* Filled with the page's own colour, which adds no light but stops the lines running
+     * behind a node from crossing its name. Nodes are drawn last, so they're the only thing
+     * that hides anything. */
+    ink.fillStyle = paint.paper;
+    round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);
+    ink.fill();
 
-    /* A node that's been read is emptied out — it keeps its coloured edge, so what happened
-     * to it is still legible, but it stops being a solid thing on the page. */
-    if (!read || here) {
-      ink.fillStyle = paint.raised;
-      round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);
-      ink.fill();
-    }
+    /* Under the pointer it comes back to full strength and thickens, which is all a shape
+     * with nothing bright inside it has to say with. */
+    const under = id === touching();
+    ink.globalAlpha = here || soon || under ? 1 : read && dim ? 0.42 : read ? 0.6 : dim ? 0.55 : 1;
+
+    /* The outline and the name are the same colour: a node is a word in a box, and two
+     * colours there read as two things being said. Read ones fade by alpha instead, which
+     * takes the whole node down together rather than greying the name off its own edge. */
+    const edge = here ? paint.lean : soon ? paint.path : tint;
 
     ink.setLineDash(soon ? [5, 3] : []);
-    ink.lineWidth = here ? 2 : soon ? 1.8 : 1.2;
-    ink.strokeStyle = here ? paint.lean : soon ? paint.path : tint;
+    ink.lineWidth = here ? 2 : soon ? 1.8 : under ? 2 : 1.2;
+    ink.strokeStyle = edge;
     round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);
     ink.stroke();
     ink.setLineDash([]);
@@ -314,7 +320,7 @@ export function Graph(props) {
     const mark = `${MARK[definition.mark]}`;
     ink.fillStyle = tint;
     ink.fillText(mark, spot.x + 10, spot.y + 18.5);
-    ink.fillStyle = here ? paint.lean : read ? paint.muted : paint.ink;
+    ink.fillStyle = edge;
     ink.fillText(
       shorten(definition.name),
       spot.x + 10 + ink.measureText(`${mark} `).width,
@@ -428,12 +434,18 @@ export function Graph(props) {
      * move with it or the reader gets stuck too close in. */
     const resized = new ResizeObserver(() => {
       sized();
-      const shown = whole();
-      behaviour.scaleExtent([shown.k, CLOSEST]);
-      if (seen().k < shown.k) fit();
+      bounded();
+      if (seen().k < whole().k) fit();
       else redraw();
     });
     resized.observe(frame);
+
+    /* A different graph — the ripples going away, a reload — is a different set of limits
+     * and a view worth starting over from. */
+    createEffect(() => {
+      props.laid;
+      untrack(fit);
+    });
 
     document.addEventListener("keydown", onKey);
     onCleanup(() => {
@@ -444,9 +456,19 @@ export function Graph(props) {
   });
 
   /* Everything the drawing depends on, watched in one place: read it here, and a change to
-   * it draws again. */
+   * it draws again. A stylesheet can't reach what's painted, so a change of theme is read
+   * the same way and the palette is fetched afresh. */
   createEffect(() => {
-    void [props.here, props.next, props.read, props.review, props.laid, over()];
+    void [props.here, props.next, props.read, props.review, props.laid, props.box,
+      over(), touching()];
+    redraw();
+  });
+
+  /* Asking the page for its colours means asking it to settle its styles first, which is
+   * not a thing to do on every move of the mouse. Only a change of theme changes them. */
+  createEffect(() => {
+    void wearing();
+    readPaint();
     redraw();
   });
 
@@ -471,7 +493,10 @@ export function Graph(props) {
       class="canvas"
       ref={frame}
       onPointerMove={onPointerMove}
-      onPointerLeave={() => setOver(null)}
+      onPointerLeave={() => {
+        setOver(null);
+        setTouching(null);
+      }}
       onClick={onClick}
     >
       <canvas ref={paper} />
@@ -491,7 +516,7 @@ export function Graph(props) {
       </ul>
 
       <div class="viewkeys">
-        scroll to zoom · drag to move · <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current
+        <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current · <kbd>t</kbd> {wearing()}
       </div>
     </div>
   );

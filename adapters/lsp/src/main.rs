@@ -189,6 +189,15 @@ impl Walk {
             if !asked.insert(path.clone()) {
                 continue;
             }
+            /* How far the walk has got. There's no total to count towards — what's left to
+             * open is whatever the files opened so far turn out to mention — so this says
+             * how much has been done and how much is known to be left, which is the truth
+             * and changes as it goes. */
+            eprintln!(
+                "  read {} of {} files",
+                asked.len(),
+                asked.len() + queue.len()
+            );
             if self.seen.len() >= self.limit {
                 self.notes.push(Note {
                     message: format!(
@@ -426,19 +435,28 @@ fn definitions(
 ) -> Vec<Occurrence> {
     seen.values()
         .flat_map(|file| {
-            let wholes: Vec<Range<usize>> = file
-                .symbols
-                .iter()
-                .map(|symbol| symbol.whole.clone())
-                .collect();
+            let lines = claimed(file);
 
             let symbols = file.symbols.iter().map(move |symbol| {
+                /* Shown from the start of its line, because that's where the reader's eye
+                 * starts and because what a server leaves out is what matters most: `export`
+                 * in front of a definition is the difference between a change nobody can see
+                 * and one that breaks every caller. */
+                let text = file.lines.text();
+                let body = symbol.body();
+                let from = line_start(text, symbol.whole.start);
+                let until = match &body {
+                    Some(body) => body.start,
+                    None => line_end(text, symbol.whole.end),
+                };
+
+                let declared = from..until;
                 let mut parts =
-                    BTreeMap::from([(Part::Type, pieces(file, &[symbol.declaration()]))]);
-                if let Some(body) = symbol.body() {
+                    BTreeMap::from([(Part::Type, pieces(file, std::slice::from_ref(&declared)))]);
+                if let Some(body) = body {
                     parts.insert(Part::Body, pieces(file, &[body]));
                 }
-                if let Some(told) = preamble(file, symbol, &wholes) {
+                if let Some(told) = preamble(file, symbol, &lines) {
                     parts.insert(Part::Docs, pieces(file, &[told]));
                 }
 
@@ -507,8 +525,19 @@ fn preamble(file: &Opened, symbol: &Symbol, claimed: &[Range<usize>]) -> Option<
     let text = file.lines.text();
     let mut start = line_start(text, symbol.whole.start);
 
+    /* How far back this may reach. What's written above a method is inside the class the
+     * method is in, so the walk stops below the line the class opens on: prose belongs to
+     * whatever it's written inside, and can't be taken from it. */
+    let floor = claimed
+        .iter()
+        .filter(|range| range.start <= symbol.whole.start && range.end >= symbol.whole.end)
+        .filter(|range| range.start < line_start(text, symbol.whole.start))
+        .map(|range| line_end(text, range.start))
+        .max()
+        .unwrap_or(0);
+
     loop {
-        if start == 0 {
+        if start <= floor {
             break;
         }
         let above = line_start(text, start - 1);
@@ -517,8 +546,15 @@ fn preamble(file: &Opened, symbol: &Symbol, claimed: &[Range<usize>]) -> Option<
         if line.trim().is_empty() {
             break;
         }
-        if claimed
+        /* What stops the walk is another definition's line — not the one this sits inside.
+         * A method is written inside its class, so the class's lines cover the comment
+         * above the method too; letting that stop the walk means a documented method in a
+         * class never has any documentation at all. */
+        let barred = claimed
             .iter()
+            .filter(|range| !(range.start <= symbol.whole.start && range.end >= symbol.whole.end));
+        if barred
+            .clone()
             .any(|range| range.start < start && range.end > above)
         {
             break;
@@ -526,27 +562,53 @@ fn preamble(file: &Opened, symbol: &Symbol, claimed: &[Range<usize>]) -> Option<
         start = above;
     }
 
-    (start < line_start(text, symbol.whole.start)).then_some(start..symbol.whole.start)
+    /* Stopping at the line, not at the name. A server reports a definition from its own
+     * token, which on `const [said, setSaid] = …` is somewhere in the middle of the line —
+     * so ending here would hand `const [` to the prose above and leave the declaration to
+     * claim the line a second time. */
+    let owned = line_start(text, symbol.whole.start);
+    (start < owned).then_some(start..owned)
 }
 
 fn line_start(text: &str, at: usize) -> usize {
     text[..at].rfind('\n').map(|found| found + 1).unwrap_or(0)
 }
 
+fn line_end(text: &str, at: usize) -> usize {
+    text[at..]
+        .find('\n')
+        .map(|found| at + found + 1)
+        .unwrap_or(text.len())
+}
+
+/// The lines each definition sits on, which is more than the span a server reports.
+///
+/// A server describes a definition from its name outwards — `EDGE = 24` — and leaves the
+/// `const` in front of it and the `;` behind it belonging to nobody. Those crumbs fall to
+/// the module, which ends up holding a heap of punctuation with holes where the definitions
+/// were. Worse, the line above one definition is then unclaimed, so the line before it
+/// reads as its documentation: an import turning up as prose about the thing below it.
+///
+/// A line is the smallest thing anybody writes on purpose, so a line is what a definition
+/// holds.
+fn claimed(file: &Opened) -> Vec<Range<usize>> {
+    let text = file.lines.text();
+    file.symbols
+        .iter()
+        .map(|symbol| line_start(text, symbol.whole.start)..line_end(text, symbol.whole.end))
+        .collect()
+}
+
 /// The stretches of a file no definition covers, blank ones left out. A definition can't be
 /// asked to account for the space around it.
 fn leftovers(file: &Opened) -> Vec<Range<usize>> {
-    let wholes: Vec<Range<usize>> = file
-        .symbols
-        .iter()
-        .map(|symbol| symbol.whole.clone())
-        .collect();
+    let lines = claimed(file);
 
     let mut claimed: Vec<Range<usize>> = file
         .symbols
         .iter()
-        .flat_map(|symbol| preamble(file, symbol, &wholes))
-        .chain(wholes.iter().cloned())
+        .flat_map(|symbol| preamble(file, symbol, &lines))
+        .chain(lines.iter().cloned())
         .collect();
     claimed.sort_by_key(|range| range.start);
 
@@ -576,6 +638,7 @@ fn pieces(file: &Opened, ranges: &[Range<usize>]) -> Vec<Piece> {
                 start: range.start as u32,
                 end: range.end as u32,
             },
+            line: file.lines.position(range.start).0 + 1,
             file: None,
         })
         .collect()
@@ -764,6 +827,51 @@ mod tests {
 
     /* What the module is left holding: the file's own prose and its imports, and not the
      * comments that belong to the definitions below them. */
+    /* A server reports a definition from its own name, which on a destructured binding
+     * sits in the middle of its line. Ending the prose there handed `const [` to the
+     * comment above and left the declaration to claim the line a second time. */
+    #[test]
+    fn a_preamble_stops_at_the_line_not_the_name() {
+        let source = "/** Both. */\nconst [one, two] = pair();\n";
+        let file = opened(
+            source,
+            json!([
+                reported(source, "one", 13, "one"),
+                reported(source, "two", 13, "two"),
+            ]),
+        );
+
+        assert_eq!(preambles(&file), vec!["/** Both. */\n", "/** Both. */\n"]);
+    }
+
+    /* Prose sits where the thing it describes sits, so what's taken keeps its indentation
+     * and doesn't reach back to the margin. */
+    #[test]
+    fn a_preamble_inside_something_else_keeps_its_place() {
+        let source = "class Money {\n  /** Pence. */\n  pence() {}\n}\n";
+        let mut money = reported(source, "Money", 5, source.trim_end());
+        money["children"] = json!([reported(source, "pence", 6, "pence() {}")]);
+        let file = opened(source, json!([money]));
+
+        assert_eq!(preambles(&file), vec!["  /** Pence. */\n"]);
+    }
+
+    /* Two definitions written one after the other with nothing between them: the second
+     * takes nothing, because the line above it belongs to the first. */
+    #[test]
+    fn nothing_is_taken_from_the_definition_above() {
+        let source = "/** One. */\nconst one = 1;\nconst two = 2;\n";
+        let file = opened(
+            source,
+            json!([
+                reported(source, "one", 13, "one = 1"),
+                reported(source, "two", 13, "two = 2"),
+            ]),
+        );
+
+        assert_eq!(preambles(&file), vec!["/** One. */\n"]);
+    }
+
     #[test]
     fn a_module_keeps_only_what_nobody_else_claims() {
         let source = "import { a } from \"./a\";\n\n/** Money. */\nexport interface Money {}\n";

@@ -20,6 +20,17 @@ pub enum Diagnostic {
     },
     /// An extractor reported a mention coming from a definition it never reported.
     MentionFromNowhere { from: Locator },
+    /// A definition whose own pieces overlap, or run backwards.
+    ///
+    /// Pieces are the definition cut into parts, so they divide it up rather than covering
+    /// each other. Two pieces over the same text means the same line is shown twice — and
+    /// when they're in different parts, that one line is both contract and prose, so a
+    /// comment change reads as breaking every caller or the other way about.
+    Tangled {
+        definition: Locator,
+        /// Where the trouble starts, in bytes.
+        at: u32,
+    },
     /// Two definitions in one snapshot answering to the same name.
     ///
     /// A definition has to be addressable by name, or it can't be told from its twin in the

@@ -2,8 +2,13 @@
 # The pinned review the UI tests run against. The page never reads this — it asks dagger,
 # through the window or through the dev server — so this changes only when we mean it to.
 #
-#   ./sample                 the working changes
-#   ./sample HEAD~4 HEAD     some other pair
+#   ./sample                 the pinned pair below
+#   ./sample HEAD~4 HEAD     some other pair, when you mean to move the pin
+#
+# Pinned rather than "whatever's uncommitted", which is what it used to be: a fixture whose
+# contents depend on what you happen to have open isn't a fixture, and regenerating it once
+# with a big change in the tree turned a fifty-step review into a hundred-and-thirty-step
+# one and quadrupled the file.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -17,7 +22,8 @@ written="$(mktemp "${TMPDIR:-/tmp}/dagger-sample.XXXXXX")"
 trap 'rm -f "$written"' EXIT
 
 ./build
-./dagger --json "$@" > "$written"
+pinned=(4b780ce aab9d5a)
+./dagger --json "${@:-${pinned[@]}}" > "$written"
 mv "$written" "$fixture"
 
 python3 - "$fixture" <<'PY'

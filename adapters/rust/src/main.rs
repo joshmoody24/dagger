@@ -147,6 +147,7 @@ fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
                         start: range.start as u32,
                         end: range.end as u32,
                     },
+                    line: file.lines.position(range.start).0 + 1,
                     file: None,
                 })
                 .collect();
@@ -207,7 +208,16 @@ fn bind(
     let mut mentions = Vec::new();
     let mut contracts: BTreeMap<Locator, String> = BTreeMap::new();
 
-    for file in parsed {
+    /* Said every so often rather than every time: this is the slow half of a reading and a
+     * reader deserves to know it's moving, but a line per file on a large tree is noise
+     * rather than news. Anything watching can take the two numbers as a fraction. */
+    let files = parsed.len();
+    let every = (files / 20).max(1);
+
+    for (done, file) in parsed.iter().enumerate() {
+        if done % every == 0 {
+            eprintln!("  asked about {done} of {files} files");
+        }
         let uri = lsp::uri(&root.join(&file.path));
 
         for found in file.found.iter().filter(|found| found.referenceable()) {

@@ -1,16 +1,25 @@
 import { render } from "solid-js/web";
-import { createResource, Match, Switch } from "solid-js";
+import { createResource, createSignal, Match, Switch } from "solid-js";
 import { App } from "./App.tsx";
-import { paint } from "./theme.ts";
+import { Waiting } from "./Waiting.tsx";
+import { themes, wear } from "./theme.ts";
 import "./style.css";
 
-paint();
+await wear(themes[0]);
 
 /* Tauri puts this on the window when the page is running inside one; in a browser it
  * simply isn't there, which is how the page tells where it is. */
 declare global {
   interface Window {
-    __TAURI__?: { core: { invoke: (command: string, args?: unknown) => Promise<any> } };
+    __TAURI__?: {
+      core: { invoke: (command: string, args?: unknown) => Promise<any> };
+      event: {
+        listen: (
+          name: string,
+          heard: (sent: { payload: string }) => void,
+        ) => Promise<() => void>;
+      };
+    };
   }
 }
 
@@ -21,19 +30,51 @@ declare global {
  * the same command. Nothing here reads a saved review — one that's written down is out of
  * date as soon as anything changes, and the page can't tell.
  */
-async function load() {
+async function load(_: unknown, { refetching }: { refetching: unknown }) {
   const tauri = window.__TAURI__;
   if (!tauri) {
     /* Whatever the address asks for is passed straight on, so a link to one change is a
      * link somebody else can open. */
     const said = await fetch(`/review${window.location.search}`);
     if (!said.ok) throw new Error(await said.text());
-    return said.json();
+    return await streamed(said);
   }
 
-  const said = await tauri.core.invoke("review", await tauri.core.invoke("opened"));
-  return JSON.parse(said);
+  const off = await tauri.event.listen("dagger://said", (sent) => setSaid((was) => [...was, sent.payload]));
+  try {
+    const said = await tauri.core.invoke("review", await tauri.core.invoke("opened"));
+    return JSON.parse(said);
+  } finally {
+    off();
+  }
 }
+
+/* A line of JSON at a time: whatever dagger said as it said it, and the review last. */
+async function streamed(said: Response) {
+  const reader = said.body!.getReader();
+  const words = new TextDecoder();
+  let left = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    left += value ? words.decode(value, { stream: true }) : "";
+
+    const lines = left.split("\n");
+    left = done ? "" : (lines.pop() ?? "");
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const sent = JSON.parse(line);
+      if (sent.review) return sent.review;
+      if (sent.wrong) throw new Error(sent.wrong);
+      setSaid((was) => [...was, sent.note]);
+    }
+    if (done) throw new Error("dagger stopped without saying anything");
+  }
+}
+
+/* What dagger has said so far, which is how far along it is. */
+const [said, setSaid] = createSignal<string[]>([]);
 
 function Root() {
   const [review] = createResource(load);
@@ -41,7 +82,7 @@ function Root() {
   return (
     <Switch>
       <Match when={review.loading}>
-        <p class="waiting">reading the change…</p>
+        <Waiting said={said()} />
       </Match>
       <Match when={review.error}>
         <p class="waiting">{String(review.error)}</p>

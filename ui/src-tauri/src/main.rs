@@ -7,8 +7,10 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::io::{BufRead, BufReader, Read};
+use tauri::Emitter;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 /// Runs a review and gives back what dagger said, verbatim.
 ///
@@ -21,25 +23,59 @@ use std::process::Command;
 /// its own and the window stays alive while it happens.
 #[tauri::command]
 async fn review(
+    window: tauri::Window,
     repo: String,
     before: Option<String>,
     after: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut dagger = Command::new(found());
-        dagger.arg("--json").current_dir(&repo);
+        dagger
+            .arg("--json")
+            .current_dir(&repo)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         if let (Some(before), Some(after)) = (before, after) {
             dagger.args([before, after]);
         }
 
-        let run = dagger
-            .output()
+        let mut run = dagger
+            .spawn()
             .map_err(|error| format!("couldn't run dagger in {repo}: {error}"))?;
 
-        if !run.status.success() {
-            return Err(String::from_utf8_lossy(&run.stderr).trim().to_string());
+        /* Passed along as it arrives rather than kept until the end. A reading takes long
+         * enough that a window with nothing on it looks like a window that has stopped, and
+         * dagger already says what it's doing — which snapshot, which extractor, how far
+         * through. All that was missing was somewhere for it to go. */
+        let told = run.stderr.take().map(|stderr| {
+            let window = window.clone();
+            std::thread::spawn(move || {
+                let mut kept = String::new();
+                for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                    kept.push_str(&line);
+                    kept.push('\n');
+                    let _ = window.emit("dagger://said", &line);
+                }
+                kept
+            })
+        });
+
+        let mut said = String::new();
+        if let Some(mut stdout) = run.stdout.take() {
+            stdout
+                .read_to_string(&mut said)
+                .map_err(|error| format!("dagger said something odd: {error}"))?;
         }
-        String::from_utf8(run.stdout).map_err(|error| format!("dagger said something odd: {error}"))
+
+        let ended = run
+            .wait()
+            .map_err(|error| format!("dagger didn't finish: {error}"))?;
+        let wrong = told.and_then(|told| told.join().ok()).unwrap_or_default();
+
+        if !ended.success() {
+            return Err(wrong.trim().to_string());
+        }
+        Ok(said)
     })
     .await
     .map_err(|error| format!("the reading didn't finish: {error}"))?

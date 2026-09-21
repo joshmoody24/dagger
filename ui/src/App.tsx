@@ -1,16 +1,57 @@
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { ChartColumn, Info, TriangleAlert, Waves } from "lucide-solid";
 import { Graph } from "./Graph.tsx";
 import { Reading } from "./Reading.tsx";
 import { digest, layout, namesIn } from "./review.ts";
+import { next as another, wear, wearing } from "./theme.ts";
 
 export function App(props) {
-  const review = createMemo(() => digest(props.raw));
+  const whole = createMemo(() => digest(props.raw));
+
+  /* Whether to show what a change reached as well as what it changed.
+   *
+   * A change to something everything leans on reaches hundreds of definitions, and each of
+   * them says the same thing: this didn't change, but the ground under it did. Worth seeing
+   * when that's the question; in the way when it isn't. */
+  const [ripples, setRipples] = createSignal(false);
+
+  const review = createMemo(() => {
+    const all = whole();
+    if (ripples()) return all;
+
+    const gone = new Set(
+      [...all.definitions.values()].filter((one) => one.mark === "affected").map((one) => one.id),
+    );
+    if (!gone.size) return all;
+
+    /* A module that's only here to hold something goes when that something does. These are
+     * the context tier — drawn, never read — and a file earns one by having members in the
+     * review. Take the members away and what's left is an empty box labelled after a file
+     * nothing in the reading mentions. */
+    const holds = new Set(
+      [...all.definitions.values()]
+        .filter((one) => one.kind !== "module" && !gone.has(one.id))
+        .map((one) => one.file),
+    );
+    for (const one of all.definitions.values()) {
+      if (one.kind === "module" && one.mark === "still" && !holds.has(one.file)) gone.add(one.id);
+    }
+
+    return {
+      ...all,
+      definitions: new Map([...all.definitions].filter(([id]) => !gone.has(id))),
+      steps: all.steps.filter((step) => !gone.has(step.definition)),
+      edges: all.edges.filter((edge) => !gone.has(edge.from) && !gone.has(edge.to)),
+    };
+  });
+
   const laid = createMemo(() => layout(review()));
   const names = createMemo(() => namesIn(review()));
 
   const [at, setAt] = createSignal(0);
   const [read, setRead] = createSignal(new Set());
   const [worriesOpen, setWorriesOpen] = createSignal(false);
+  const [costOpen, setCostOpen] = createSignal(false);
 
   /* Narrow enough that the sheet has to cover the graph rather than sit beside it. The
    * sheet is then a drawer with three heights, and the graph is only worth looking at while
@@ -19,11 +60,11 @@ export function App(props) {
   const [sheet, setSheet] = createSignal("closed");
 
   onMount(() => {
-    const beside = window.matchMedia("(min-width: 900px)");
-    const settle = () => setWide(beside.matches);
+    const room = window.matchMedia("(min-width: 900px)");
+    const settle = () => setWide(room.matches);
     settle();
-    beside.addEventListener("change", settle);
-    onCleanup(() => beside.removeEventListener("change", settle));
+    room.addEventListener("change", settle);
+    onCleanup(() => room.removeEventListener("change", settle));
   });
 
   const hiding = () => review().worries.filter((worry) => worry.hides);
@@ -33,11 +74,25 @@ export function App(props) {
       ? `${hiding().length} this review might not be showing`
       : `${weaker().length} worked out a weaker way`;
 
-  const showing = () => wide() || sheet() !== "closed";
-  const open = () => !wide() && sheet() === "closed" && setSheet("half");
-  const shut = () => !wide() && setSheet("closed");
+  const spread = (one) => [one, ...one.boxes.flatMap(spread)];
+  /* Beside the graph it's a column you can put away and drag wider; over the graph it's a
+   * drawer. Either way, doing anything at all brings it back — you might skip past
+   * something you hadn't read, but you asked to go there, and a tool that argues about
+   * that is worse than one that does as it's told. */
+  const [beside, setBeside] = createSignal(true);
+  const [width, setWidth] = createSignal(0);
 
+  const showing = () => (wide() ? beside() : sheet() !== "closed");
+  const open = () => {
+    setBeside(true);
+    if (!wide() && sheet() === "closed") setSheet("half");
+  };
+  const shut = () => (wide() ? setBeside(false) : setSheet("closed"));
+  const facing = () => (wide() ? (beside() ? "beside" : "away") : sheet());
+
+  /* Putting the ripples away can leave the reading past its end. */
   const steps = () => review().steps;
+  createEffect(() => setAt((was) => Math.min(was, Math.max(steps().length - 1, 0))));
 
   /* What's being looked at, which isn't always a step.
    *
@@ -47,12 +102,16 @@ export function App(props) {
    * something else. So the reading has a position, and looking has a subject, and stepping
    * puts the two back together. */
   const [aside, setAside] = createSignal(null);
-  const here = () => aside() ?? (steps()[at()] || {}).definition;
+  /* A box that stands for no definition — a folder full of them — can still be looked at,
+   * and looking at it shows the box rather than something inside it. */
+  const [box, setBox] = createSignal(null);
+  const here = () => (box() ? null : aside() ?? (steps()[at()] || {}).definition);
   const next = () => (steps()[at() + 1] || {}).definition;
   const stepping = () => aside() === null;
 
   const step = (by) => {
     setAside(null);
+    setBox(null);
     setAt((was) => Math.min(Math.max(was + by, 0), steps().length - 1));
     open();
   };
@@ -64,6 +123,7 @@ export function App(props) {
       return now;
     });
   const goTo = (id) => {
+    setBox(null);
     const found = steps().findIndex((step) => step.definition === id);
     if (found >= 0) {
       setAside(null);
@@ -71,6 +131,12 @@ export function App(props) {
     } else {
       setAside(id);
     }
+    open();
+  };
+
+  const goToBox = (key) => {
+    setAside(null);
+    setBox(key);
     open();
   };
 
@@ -89,10 +155,21 @@ export function App(props) {
     ArrowDown: () => step(1),
     ArrowUp: () => step(-1),
     " ": () => step(1),
-    m: () => toggleRead(),
+    m: () => { toggleRead(); open(); },
+    /* Away, and nothing left behind to say so. A strip down the side saying "there's a
+     * thing here" is the thing, taking up room. */
+    d: () => (showing() ? shut() : open()),
+    r: () => setRipples((was) => !was),
+    /* Trying colours on. Every one is somebody's editor, so the question is which, and the
+     * only way to answer it is to look. */
+    t: () => wear(another(wearing())),
     g: () => setAt(0),
     G: () => setAt(steps().length - 1),
-    Escape: () => (worriesOpen() ? setWorriesOpen(false) : shut()),
+    Escape: () => {
+      if (!worriesOpen() && !costOpen()) return shut();
+      setWorriesOpen(false);
+      setCostOpen(false);
+    },
   };
 
   const onKey = (event) => {
@@ -110,38 +187,69 @@ export function App(props) {
     <>
       <header>
         <div class="t">
-          <span class="what">{steps().length} to read, grouped by {review().grouping || "module"}</span>
-          <span class="prog">{at() + 1} of {steps().length}</span>
+          <span class="prog">{at() + 1}/{steps().length}</span>
           {/* Only there when there's something to say, and only a warning when something
             * might be missing. A review worked out a weaker way is worth knowing about and
             * isn't worth alarm — told as alarm, it teaches you to ignore the alarm. */}
           <Show when={review().worries.length}>
             <button
               class={`worry${hiding().length ? " bad" : ""}`}
-              onClick={() => setWorriesOpen((was) => !was)}
+              onClick={() => { setCostOpen(false); setWorriesOpen((was) => !was); }}
               title={said()}
               aria-label={said()}
             >
-              {hiding().length ? "⚠" : "ⓘ"}
+              <Show when={hiding().length} fallback={<Info size={17} />}>
+                <TriangleAlert size={17} />
+              </Show>
+            </button>
+          </Show>
+
+          {/* What the reading cost, kept behind the same corner as everything else that's
+            * worth a look but isn't worth a line of the page. It doesn't change while you
+            * read, so it doesn't need to sit there while you do. */}
+          <button
+            class="worry"
+            onClick={() => { setWorriesOpen(false); setCostOpen((was) => !was); }}
+            title="Cognitive load metrics"
+            aria-label="Cognitive load metrics"
+          >
+            <ChartColumn size={17} />
+          </button>
+
+          {/* What the change reached, as well as what it changed. Off to begin with: the
+            * definitions that actually changed are the review, and the ones that only sit
+            * downstream of one are a second, larger question to ask on purpose. */}
+          <Show when={whole().affected.size}>
+            <button
+              class={`worry${ripples() ? " on" : ""}`}
+              onClick={() => setRipples((was) => !was)}
+              title="Ripple mode: show unchanged definitions whose dependencies changed (r)"
+              aria-label="Ripple mode: show unchanged definitions whose dependencies changed"
+              aria-pressed={ripples()}
+            >
+              <Waves size={17} />
             </button>
           </Show>
         </div>
-        <div class="d">
-          {review().cost.peak_open} definitions in mind at once
-          {" · "}{review().cost.taken_on_faith} out of order
-          {" · "}{review().cost.jumps} module jumps
-        </div>
-        <Legend />
       </header>
 
       <main class={showing() ? `has-sheet ${sheet()}` : ""}>
-        {/* Tapping past the graph puts the drawer away, the way tapping off any sheet does. */}
-        <div class="stage" onClick={(event) => !event.target.closest(".nd, .box text") && shut()}>
-          <Graph review={review()} laid={laid()} here={here()} next={next()} read={read()} onOpen={goTo} />
+        <div class="stage">
+          <Graph
+            review={review()}
+            laid={laid()}
+            here={here()}
+            next={next()}
+            read={read()}
+            box={box()}
+            onOpen={goTo}
+            onOpenBox={goToBox}
+          />
         </div>
         <Reading
           review={review()}
           here={here()}
+          box={box() && laid().boxes.flatMap(spread).find((one) => one.key === box())}
           step={stepping() ? steps()[at()] : undefined}
           at={at()}
           onStep={step}
@@ -149,52 +257,72 @@ export function App(props) {
           onOpen={goTo}
           names={names()}
           read={read().has(here())}
+          viewed={read()}
           onToggle={toggleRead}
-          sheet={wide() ? "beside" : sheet()}
+          sheet={facing()}
+          width={width()}
+          onWiden={setWidth}
           onExpand={() => setSheet((was) => (was === "full" ? "half" : "full"))}
           onClose={shut}
         />
       </main>
 
-      <Show when={worriesOpen()}>
-        <aside class="notes">
-          <button class="ib" onClick={() => setWorriesOpen(false)} aria-label="Close">×</button>
+      {/* A dialog rather than a floating box: the browser puts it above everything, traps
+        * the keyboard inside it, closes it on Escape and dims what's behind — all of which
+        * would otherwise be ours to get wrong. */}
+      <Panel open={costOpen()} onClose={() => setCostOpen(false)} title="Cognitive load metrics">
+        <ul>
+          <li>{review().cost.peak_open} definitions in mind at once</li>
+          <li>{review().cost.taken_on_faith} definitions out of order</li>
+          <li>{review().cost.jumps} {review().grouping || "module"} jumps</li>
+          <li>{review().steps.length} definitions to read</li>
+        </ul>
+      </Panel>
 
+      <Panel
+        open={worriesOpen()}
+        onClose={() => setWorriesOpen(false)}
+        title={hiding().length ? "This review might not be showing" : "Worked out a weaker way"}
+      >
+        <Show when={hiding().length}>
+          <ul>
+            <For each={hiding()}>{(worry) => <li>{worry.said}</li>}</For>
+          </ul>
+        </Show>
+        <Show when={weaker().length}>
           <Show when={hiding().length}>
-            <h2>This review might not be showing</h2>
-            <ul>
-              <For each={hiding()}>{(worry) => <li>{worry.said}</li>}</For>
-            </ul>
+            <h3>Worked out a weaker way</h3>
           </Show>
+          <ul>
+            <For each={weaker()}>{(worry) => <li>{worry.said}</li>}</For>
+          </ul>
+        </Show>
+      </Panel>
 
-          <Show when={weaker().length}>
-            <h2 class="lesser">Worked out a weaker way</h2>
-            <ul>
-              <For each={weaker()}>{(worry) => <li>{worry.said}</li>}</For>
-            </ul>
-          </Show>
-        </aside>
-      </Show>
     </>
   );
 }
 
-function Legend() {
-  const marks = [
-    ["add", "+", "new"],
-    ["del", "−", "gone"],
-    ["chg", "!", "callers affected"],
-    ["chg", "~", "body"],
-    ["chg", '"', "docs"],
-    ["aff", "≈", "affected by something else"],
-  ];
+/* Anything the page wants to say beside itself. Native, so Escape and the click outside are
+ * the browser's job rather than ours to reimplement badly. */
+function Panel(props) {
+  let box: HTMLDialogElement | undefined;
+
+  createEffect(() => {
+    if (!box) return;
+    if (props.open && !box.open) box.showModal();
+    if (!props.open && box.open) box.close();
+  });
+
   return (
-    <div class="lg">
-      <For each={marks}>
-        {([tint, mark, said]) => (
-          <span><b class={`ch ${tint}`}>{mark}</b>{said}</span>
-        )}
-      </For>
-    </div>
+    <dialog
+      class="panel"
+      ref={box}
+      onClose={props.onClose}
+      onClick={(event) => event.target === box && props.onClose()}
+    >
+      <h2>{props.title}</h2>
+      {props.children}
+    </dialog>
   );
 }

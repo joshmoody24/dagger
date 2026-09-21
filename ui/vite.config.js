@@ -29,28 +29,40 @@ function live() {
 
         const dagger = spawn("target/debug/dagger", ["--json", ...reading], { cwd: ".." });
 
+        /* Sent as it happens rather than all at once at the end. Dagger says what it's
+         * doing on the way — which snapshot, which extractor, how far through — and a
+         * reader waiting a minute deserves to see that rather than a still page. One line
+         * of JSON per thing said, and the review itself as the last of them. */
+        response.setHeader("content-type", "application/x-ndjson");
+        response.setHeader("cache-control", "no-store");
+
         let said = "";
         let wrong = "";
+        let left = "";
+
         dagger.stdout.on("data", (chunk) => (said += chunk));
-        // Dagger says what it's up to on the way, and it takes long enough to be worth
-        // seeing rather than watching a blank page.
         dagger.stderr.on("data", (chunk) => {
           wrong += chunk;
           process.stderr.write(chunk);
+
+          left += chunk;
+          const lines = left.split("\n");
+          left = lines.pop() ?? "";
+          for (const note of lines) response.write(`${JSON.stringify({ note })}\n`);
         });
 
         dagger.on("error", (error) => {
-          response.statusCode = 500;
-          response.end(`couldn't run dagger: ${error.message}`);
+          response.write(`${JSON.stringify({ wrong: `couldn't run dagger: ${error.message}` })}\n`);
+          response.end();
         });
         dagger.on("close", (code) => {
           if (code !== 0) {
-            response.statusCode = 500;
-            response.end(wrong.trim() || `dagger gave up with ${code}`);
-            return;
+            const why = wrong.trim() || `dagger gave up with ${code}`;
+            response.write(`${JSON.stringify({ wrong: why })}\n`);
+          } else {
+            response.write(`${JSON.stringify({ review: JSON.parse(said) })}\n`);
           }
-          response.setHeader("content-type", "application/json");
-          response.end(said);
+          response.end();
         });
       });
     },

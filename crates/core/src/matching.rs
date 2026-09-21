@@ -1,5 +1,5 @@
 use crate::diagnostic::Diagnostic;
-use crate::model::{Definition, Identity, Locator, Occurrence, Part, Sides};
+use crate::model::{Definition, Identity, Locator, Occurrence, Part, Piece, Sides};
 use crate::reference::{Mention, Reference, Site, Target};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -24,8 +24,8 @@ pub fn match_snapshots(before: Extraction, after: Extraction) -> Matched {
     /* Checked before anything is done with them, because everything after this takes a
      * name for an identity. Left unsaid, a repeated name doesn't fail — it quietly matches
      * one of the twins and reports the others as arriving or leaving. */
-    let mut diagnostics = twins(&before.occurrences);
-    diagnostics.append(&mut twins(&after.occurrences));
+    let mut diagnostics = checked(&before.occurrences);
+    diagnostics.append(&mut checked(&after.occurrences));
 
     let pairs = pair_up(&before.occurrences, &after.occurrences);
     let definitions = build_definitions(pairs, before.occurrences, after.occurrences);
@@ -46,6 +46,37 @@ pub fn match_snapshots(before: Extraction, after: Extraction) -> Matched {
         references,
         diagnostics,
     }
+}
+
+/// What has to be true of what an extractor hands over, checked before anything leans on
+/// it.
+///
+/// An extractor is the one piece of this that can't be written once and left alone: there's
+/// a new one for every language, each reconstructing structure out of whatever its tools
+/// happen to say. The mistakes they make are quiet — a comment filed as a declaration, a
+/// line claimed twice — and they surface a long way from here, as a review that reads
+/// oddly rather than as anything failing. Said plainly at the boundary, they're a line in a
+/// panel instead of an afternoon.
+fn checked(occurrences: &[Occurrence]) -> Vec<Diagnostic> {
+    let mut found = twins(occurrences);
+    found.extend(occurrences.iter().filter_map(tangled));
+    found
+}
+
+/// Whether a definition's pieces divide it up, or trip over each other.
+fn tangled(occurrence: &Occurrence) -> Option<Diagnostic> {
+    let mut pieces: Vec<&Piece> = occurrence.parts.values().flatten().collect();
+    pieces.sort_by_key(|piece| piece.span.start);
+
+    let over = pieces.windows(2).find(|pair| {
+        // Pieces of different files sit in different files, so they can't overlap.
+        pair[0].file == pair[1].file && pair[1].span.start < pair[0].span.end
+    })?;
+
+    Some(Diagnostic::Tangled {
+        definition: occurrence.locator.clone(),
+        at: over[1].span.start,
+    })
 }
 
 /// Names more than one definition in a snapshot answers to.
@@ -275,6 +306,63 @@ fn collect_references(
 
 #[cfg(test)]
 mod tests {
+    use crate::model::Span;
+
+    /* Each of these was a live bug in an extractor at some point, found by reading a
+     * review and wondering. Said here, they'd have been a line in a panel. */
+    #[test]
+    fn pieces_that_cover_each_other_are_reported() {
+        let mut occurrence = crate::testing::occurrence("one", &[]);
+        occurrence.parts.insert(
+            Part::Docs,
+            vec![Piece {
+                text: "/** One. */\nconst ".to_string(),
+                span: Span { start: 0, end: 19 },
+                line: 1,
+                file: None,
+            }],
+        );
+        occurrence.parts.insert(
+            Part::Type,
+            vec![Piece {
+                text: "const one = 1;".to_string(),
+                span: Span { start: 13, end: 27 },
+                line: 2,
+                file: None,
+            }],
+        );
+
+        let said = checked(std::slice::from_ref(&occurrence));
+        assert!(
+            matches!(said.as_slice(), [Diagnostic::Tangled { at: 13, .. }]),
+            "expected the overlap to be reported, got {said:?}"
+        );
+    }
+
+    #[test]
+    fn pieces_that_divide_a_definition_up_are_fine() {
+        let mut occurrence = crate::testing::occurrence("one", &[]);
+        occurrence.parts.insert(
+            Part::Docs,
+            vec![Piece {
+                text: "/** One. */\n".to_string(),
+                span: Span { start: 0, end: 12 },
+                line: 1,
+                file: None,
+            }],
+        );
+        occurrence.parts.insert(
+            Part::Type,
+            vec![Piece {
+                text: "const one = 1;".to_string(),
+                span: Span { start: 12, end: 26 },
+                line: 2,
+                file: None,
+            }],
+        );
+
+        assert!(checked(std::slice::from_ref(&occurrence)).is_empty());
+    }
     use super::*;
     use crate::change::{Change, classify};
     use crate::model::Part;

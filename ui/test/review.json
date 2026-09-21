@@ -1,15 +1,412 @@
 {
   "definitions": [
     {
-      "identity": 32,
+      "identity": 14,
       "sides": {
         "kept": {
           "after": {
             "contract": null,
-            "file": "ui/src/style.css",
-            "kind": "file",
+            "file": "adapters/lsp/src/main.rs",
+            "kind": "module",
             "locator": {
-              "name": "style.css",
+              "name": "dagger_lsp_adapter",
+              "scope": []
+            },
+            "parts": {
+              "body": [
+                {
+                  "file": null,
+                  "line": 15,
+                  "span": {
+                    "end": 572,
+                    "start": 558
+                  },
+                  "text": "mod symbols;\n\n"
+                },
+                {
+                  "file": null,
+                  "line": 17,
+                  "span": {
+                    "end": 600,
+                    "start": 572
+                  },
+                  "text": "use crate::symbols::Symbol;\n"
+                },
+                {
+                  "file": null,
+                  "line": 18,
+                  "span": {
+                    "end": 637,
+                    "start": 600
+                  },
+                  "text": "use anyhow::{Context, Result, bail};\n"
+                },
+                {
+                  "file": null,
+                  "line": 19,
+                  "span": {
+                    "end": 676,
+                    "start": 637
+                  },
+                  "text": "use dagger_core::matching::Extraction;\n"
+                },
+                {
+                  "file": null,
+                  "line": 20,
+                  "span": {
+                    "end": 742,
+                    "start": 676
+                  },
+                  "text": "use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};\n"
+                },
+                {
+                  "file": null,
+                  "line": 21,
+                  "span": {
+                    "end": 805,
+                    "start": 742
+                  },
+                  "text": "use dagger_core::reference::{BinderId, Mention, Site, Target};\n"
+                },
+                {
+                  "file": null,
+                  "line": 22,
+                  "span": {
+                    "end": 858,
+                    "start": 805
+                  },
+                  "text": "use dagger_lsp_client::{self as lsp, Lines, Server};\n"
+                },
+                {
+                  "file": null,
+                  "line": 23,
+                  "span": {
+                    "end": 906,
+                    "start": 858
+                  },
+                  "text": "use dagger_protocol::{Note, Request, Response};\n"
+                },
+                {
+                  "file": null,
+                  "line": 24,
+                  "span": {
+                    "end": 930,
+                    "start": 906
+                  },
+                  "text": "use serde::Deserialize;\n"
+                },
+                {
+                  "file": null,
+                  "line": 25,
+                  "span": {
+                    "end": 961,
+                    "start": 930
+                  },
+                  "text": "use serde_json::{Value, json};\n"
+                },
+                {
+                  "file": null,
+                  "line": 26,
+                  "span": {
+                    "end": 1015,
+                    "start": 961
+                  },
+                  "text": "use std::collections::{BTreeMap, BTreeSet, VecDeque};\n"
+                },
+                {
+                  "file": null,
+                  "line": 27,
+                  "span": {
+                    "end": 1042,
+                    "start": 1015
+                  },
+                  "text": "use std::io::{self, Read};\n"
+                },
+                {
+                  "file": null,
+                  "line": 28,
+                  "span": {
+                    "end": 1063,
+                    "start": 1042
+                  },
+                  "text": "use std::ops::Range;\n"
+                },
+                {
+                  "file": null,
+                  "line": 29,
+                  "span": {
+                    "end": 1094,
+                    "start": 1063
+                  },
+                  "text": "use std::path::{Path, PathBuf};"
+                },
+                {
+                  "file": null,
+                  "line": 657,
+                  "span": {
+                    "end": 22267,
+                    "start": 22245
+                  },
+                  "text": "#[cfg(test)]\nmod tests"
+                }
+              ],
+              "docs": [
+                {
+                  "file": null,
+                  "line": 1,
+                  "span": {
+                    "end": 558,
+                    "start": 0
+                  },
+                  "text": "//! Reads a snapshot through any language server that speaks LSP.\n//!\n//! Configured with the server to run, and nothing else:\n//!\n//! ```toml\n//! [extractors.settings]\n//! server = [\"tsc\", \"--lsp\", \"--stdio\"]\n//! ```\n//!\n//! Works outward from the files that differ rather than reading a whole repository: ask\n//! who refers to a changed definition, and whoever does is worth reading too, and worth\n//! asking the same question of. That closure is exactly the set a reviewer has to look\n//! at, so being lazy and being right turn out to be the same thing.\n\n"
+                }
+              ]
+            }
+          },
+          "before": {
+            "contract": null,
+            "file": "adapters/lsp/src/main.rs",
+            "kind": "module",
+            "locator": {
+              "name": "dagger_lsp_adapter",
+              "scope": []
+            },
+            "parts": {
+              "body": [
+                {
+                  "file": null,
+                  "line": 15,
+                  "span": {
+                    "end": 572,
+                    "start": 558
+                  },
+                  "text": "mod symbols;\n\n"
+                },
+                {
+                  "file": null,
+                  "line": 17,
+                  "span": {
+                    "end": 600,
+                    "start": 572
+                  },
+                  "text": "use crate::symbols::Symbol;\n"
+                },
+                {
+                  "file": null,
+                  "line": 18,
+                  "span": {
+                    "end": 637,
+                    "start": 600
+                  },
+                  "text": "use anyhow::{Context, Result, bail};\n"
+                },
+                {
+                  "file": null,
+                  "line": 19,
+                  "span": {
+                    "end": 676,
+                    "start": 637
+                  },
+                  "text": "use dagger_core::matching::Extraction;\n"
+                },
+                {
+                  "file": null,
+                  "line": 20,
+                  "span": {
+                    "end": 742,
+                    "start": 676
+                  },
+                  "text": "use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};\n"
+                },
+                {
+                  "file": null,
+                  "line": 21,
+                  "span": {
+                    "end": 805,
+                    "start": 742
+                  },
+                  "text": "use dagger_core::reference::{BinderId, Mention, Site, Target};\n"
+                },
+                {
+                  "file": null,
+                  "line": 22,
+                  "span": {
+                    "end": 858,
+                    "start": 805
+                  },
+                  "text": "use dagger_lsp_client::{self as lsp, Lines, Server};\n"
+                },
+                {
+                  "file": null,
+                  "line": 23,
+                  "span": {
+                    "end": 906,
+                    "start": 858
+                  },
+                  "text": "use dagger_protocol::{Note, Request, Response};\n"
+                },
+                {
+                  "file": null,
+                  "line": 24,
+                  "span": {
+                    "end": 930,
+                    "start": 906
+                  },
+                  "text": "use serde::Deserialize;\n"
+                },
+                {
+                  "file": null,
+                  "line": 25,
+                  "span": {
+                    "end": 961,
+                    "start": 930
+                  },
+                  "text": "use serde_json::{Value, json};\n"
+                },
+                {
+                  "file": null,
+                  "line": 26,
+                  "span": {
+                    "end": 1015,
+                    "start": 961
+                  },
+                  "text": "use std::collections::{BTreeMap, BTreeSet, VecDeque};\n"
+                },
+                {
+                  "file": null,
+                  "line": 27,
+                  "span": {
+                    "end": 1042,
+                    "start": 1015
+                  },
+                  "text": "use std::io::{self, Read};\n"
+                },
+                {
+                  "file": null,
+                  "line": 28,
+                  "span": {
+                    "end": 1063,
+                    "start": 1042
+                  },
+                  "text": "use std::ops::Range;\n"
+                },
+                {
+                  "file": null,
+                  "line": 29,
+                  "span": {
+                    "end": 1094,
+                    "start": 1063
+                  },
+                  "text": "use std::path::{Path, PathBuf};"
+                }
+              ],
+              "docs": [
+                {
+                  "file": null,
+                  "line": 1,
+                  "span": {
+                    "end": 558,
+                    "start": 0
+                  },
+                  "text": "//! Reads a snapshot through any language server that speaks LSP.\n//!\n//! Configured with the server to run, and nothing else:\n//!\n//! ```toml\n//! [extractors.settings]\n//! server = [\"tsc\", \"--lsp\", \"--stdio\"]\n//! ```\n//!\n//! Works outward from the files that differ rather than reading a whole repository: ask\n//! who refers to a changed definition, and whoever does is worth reading too, and worth\n//! asking the same question of. That closure is exactly the set a reviewer has to look\n//! at, so being lazy and being right turn out to be the same thing.\n\n"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "identity": 409,
+      "sides": {
+        "kept": {
+          "after": {
+            "contract": "function App(props: any): JSX.Element",
+            "file": "ui/src/App.tsx",
+            "kind": "function",
+            "locator": {
+              "name": "App",
+              "scope": [
+                "ui",
+                "src",
+                "App"
+              ]
+            },
+            "parts": {
+              "body": [
+                {
+                  "file": null,
+                  "line": 6,
+                  "span": {
+                    "end": 6907,
+                    "start": 245
+                  },
+                  "text": "{\n  const review = createMemo(() => digest(props.raw));\n  const laid = createMemo(() => layout(review()));\n  const names = createMemo(() => namesIn(review()));\n\n  const [at, setAt] = createSignal(0);\n  const [read, setRead] = createSignal(new Set());\n  const [worriesOpen, setWorriesOpen] = createSignal(false);\n\n  /* Narrow enough that the sheet has to cover the graph rather than sit beside it. The\n   * sheet is then a drawer with three heights, and the graph is only worth looking at while\n   * it's out of the way — so it starts shut. Beside the graph there's nothing to shut. */\n  const [wide, setWide] = createSignal(true);\n  const [sheet, setSheet] = createSignal(\"closed\");\n\n  onMount(() => {\n    const beside = window.matchMedia(\"(min-width: 900px)\");\n    const settle = () => setWide(beside.matches);\n    settle();\n    beside.addEventListener(\"change\", settle);\n    onCleanup(() => beside.removeEventListener(\"change\", settle));\n  });\n\n  const hiding = () => review().worries.filter((worry) => worry.hides);\n  const weaker = () => review().worries.filter((worry) => !worry.hides);\n  const said = () =>\n    hiding().length\n      ? `${hiding().length} this review might not be showing`\n      : `${weaker().length} worked out a weaker way`;\n\n  const showing = () => wide() || sheet() !== \"closed\";\n  const open = () => !wide() && sheet() === \"closed\" && setSheet(\"half\");\n  const shut = () => !wide() && setSheet(\"closed\");\n\n  const steps = () => review().steps;\n\n  /* What's being looked at, which isn't always a step.\n   *\n   * Most of the page is the reading order, and `at` is where in it you are. But a module\n   * that didn't itself change is on the page without being in that order — it's the box\n   * around things that did — and picking one has to show it rather than quietly show\n   * something else. So the reading has a position, and looking has a subject, and stepping\n   * puts the two back together. */\n  const [aside, setAside] = createSignal(null);\n  const here = () => aside() ?? (steps()[at()] || {}).definition;\n  const next = () => (steps()[at() + 1] || {}).definition;\n  const stepping = () => aside() === null;\n\n  const step = (by) => {\n    setAside(null);\n    setAt((was) => Math.min(Math.max(was + by, 0), steps().length - 1));\n    open();\n  };\n  const markRead = () => setRead((was) => new Set(was).add(here()));\n  const toggleRead = () =>\n    setRead((was) => {\n      const now = new Set(was);\n      if (!now.delete(here())) now.add(here());\n      return now;\n    });\n  const goTo = (id) => {\n    const found = steps().findIndex((step) => step.definition === id);\n    if (found >= 0) {\n      setAside(null);\n      setAt(found);\n    } else {\n      setAside(id);\n    }\n    open();\n  };\n\n  /* The same keys as the command line, because the point of both is to read a change\n   * without taking a hand off the keyboard. Nothing here needs anything focused. */\n  const keys = {\n    /* The way through a review: done with this one, on to the next. Back is the same move\n     * in the other direction — you're as finished with it either way, and a way forward\n     * that marks and a way back that doesn't is two different ideas wearing one pair of\n     * keys. */\n    j: () => { markRead(); step(1); },\n    k: () => { markRead(); step(-1); },\n    /* The way around it, for when you want to look without saying you've looked. */\n    n: () => step(1),\n    p: () => step(-1),\n    ArrowDown: () => step(1),\n    ArrowUp: () => step(-1),\n    \" \": () => step(1),\n    m: () => toggleRead(),\n    g: () => setAt(0),\n    G: () => setAt(steps().length - 1),\n    Escape: () => (worriesOpen() ? setWorriesOpen(false) : shut()),\n  };\n\n  const onKey = (event) => {\n    if (event.metaKey || event.ctrlKey || event.altKey) return;\n    const pressed = keys[event.key];\n    if (!pressed) return;\n    pressed();\n    event.preventDefault();\n  };\n\n  document.addEventListener(\"keydown\", onKey);\n  onCleanup(() => document.removeEventListener(\"keydown\", onKey));\n\n  return (\n    <>\n      <header>\n        <div class=\"t\">\n          <span class=\"what\">{steps().length} to read, grouped by {review().grouping || \"module\"}</span>\n          <span class=\"prog\">{at() + 1} of {steps().length}</span>\n          {/* Only there when there's something to say, and only a warning when something\n            * might be missing. A review worked out a weaker way is worth knowing about and\n            * isn't worth alarm — told as alarm, it teaches you to ignore the alarm. */}\n          <Show when={review().worries.length}>\n            <button\n              class={`worry${hiding().length ? \" bad\" : \"\"}`}\n              onClick={() => setWorriesOpen((was) => !was)}\n              title={said()}\n              aria-label={said()}\n            >\n              {hiding().length ? \"⚠\" : \"ⓘ\"}\n            </button>\n          </Show>\n        </div>\n        <div class=\"d\">\n          {review().cost.peak_open} definitions in mind at once\n          {\" · \"}{review().cost.taken_on_faith} out of order\n          {\" · \"}{review().cost.jumps} module jumps\n        </div>\n        <Legend />\n      </header>\n\n      <main class={showing() ? `has-sheet ${sheet()}` : \"\"}>\n        {/* Tapping past the graph puts the drawer away, the way tapping off any sheet does. */}\n        <div class=\"stage\" onClick={(event) => !event.target.closest(\".nd, .box text\") && shut()}>\n          <Graph review={review()} laid={laid()} here={here()} next={next()} read={read()} onOpen={goTo} />\n        </div>\n        <Reading\n          review={review()}\n          here={here()}\n          step={stepping() ? steps()[at()] : undefined}\n          at={at()}\n          onStep={step}\n          onRead={(by) => { markRead(); step(by); }}\n          onOpen={goTo}\n          names={names()}\n          read={read().has(here())}\n          onToggle={toggleRead}\n          sheet={wide() ? \"beside\" : sheet()}\n          onExpand={() => setSheet((was) => (was === \"full\" ? \"half\" : \"full\"))}\n          onClose={shut}\n        />\n      </main>\n\n      <Show when={worriesOpen()}>\n        <aside class=\"notes\">\n          <button class=\"ib\" onClick={() => setWorriesOpen(false)} aria-label=\"Close\">×</button>\n\n          <Show when={hiding().length}>\n            <h2>This review might not be showing</h2>\n            <ul>\n              <For each={hiding()}>{(worry) => <li>{worry.said}</li>}</For>\n            </ul>\n          </Show>\n\n          <Show when={weaker().length}>\n            <h2 class=\"lesser\">Worked out a weaker way</h2>\n            <ul>\n              <For each={weaker()}>{(worry) => <li>{worry.said}</li>}</For>\n            </ul>\n          </Show>\n        </aside>\n      </Show>\n    </>\n  );\n}"
+                }
+              ],
+              "type": [
+                {
+                  "file": null,
+                  "line": 6,
+                  "span": {
+                    "end": 245,
+                    "start": 218
+                  },
+                  "text": "export function App(props) "
+                }
+              ]
+            }
+          },
+          "before": {
+            "contract": "function App(props: any): JSX.Element",
+            "file": "ui/src/App.tsx",
+            "kind": "function",
+            "locator": {
+              "name": "App",
+              "scope": [
+                "ui",
+                "src",
+                "App"
+              ]
+            },
+            "parts": {
+              "body": [
+                {
+                  "file": null,
+                  "line": 6,
+                  "span": {
+                    "end": 6492,
+                    "start": 245
+                  },
+                  "text": "{\n  const review = createMemo(() => digest(props.raw));\n  const laid = createMemo(() => layout(review()));\n  const names = createMemo(() => namesIn(review()));\n\n  const [at, setAt] = createSignal(0);\n  const [read, setRead] = createSignal(new Set());\n  const [worriesOpen, setWorriesOpen] = createSignal(false);\n\n  /* Narrow enough that the sheet has to cover the graph rather than sit beside it. The\n   * sheet is then a drawer with three heights, and the graph is only worth looking at while\n   * it's out of the way — so it starts shut. Beside the graph there's nothing to shut. */\n  const [wide, setWide] = createSignal(true);\n  const [sheet, setSheet] = createSignal(\"closed\");\n\n  onMount(() => {\n    const beside = window.matchMedia(\"(min-width: 900px)\");\n    const settle = () => setWide(beside.matches);\n    settle();\n    beside.addEventListener(\"change\", settle);\n    onCleanup(() => beside.removeEventListener(\"change\", settle));\n  });\n\n  const hiding = () => review().worries.filter((worry) => worry.hides);\n  const weaker = () => review().worries.filter((worry) => !worry.hides);\n  const said = () =>\n    hiding().length\n      ? `${hiding().length} this review might not be showing`\n      : `${weaker().length} worked out a weaker way`;\n\n  const showing = () => wide() || sheet() !== \"closed\";\n  const open = () => !wide() && sheet() === \"closed\" && setSheet(\"half\");\n  const shut = () => !wide() && setSheet(\"closed\");\n\n  const steps = () => review().steps;\n\n  /* What's being looked at, which isn't always a step.\n   *\n   * Most of the page is the reading order, and `at` is where in it you are. But a module\n   * that didn't itself change is on the page without being in that order — it's the box\n   * around things that did — and picking one has to show it rather than quietly show\n   * something else. So the reading has a position, and looking has a subject, and stepping\n   * puts the two back together. */\n  const [aside, setAside] = createSignal(null);\n  const here = () => aside() ?? (steps()[at()] || {}).definition;\n  const next = () => (steps()[at() + 1] || {}).definition;\n  const stepping = () => aside() === null;\n\n  const step = (by) => {\n    setAside(null);\n    setAt((was) => Math.min(Math.max(was + by, 0), steps().length - 1));\n    open();\n  };\n  const markRead = () => setRead((was) => new Set(was).add(here()));\n  const toggleRead = () =>\n    setRead((was) => {\n      const now = new Set(was);\n      if (!now.delete(here())) now.add(here());\n      return now;\n    });\n  const goTo = (id) => {\n    const found = steps().findIndex((step) => step.definition === id);\n    if (found >= 0) {\n      setAside(null);\n      setAt(found);\n    } else {\n      setAside(id);\n    }\n    open();\n  };\n\n  /* The same keys as the command line, because the point of both is to read a change\n   * without taking a hand off the keyboard. Nothing here needs anything focused. */\n  const keys = {\n    j: () => { markRead(); step(1); },\n    n: () => step(1),\n    ArrowDown: () => step(1),\n    \" \": () => step(1),\n    k: () => step(-1),\n    ArrowUp: () => step(-1),\n    m: () => toggleRead(),\n    g: () => setAt(0),\n    G: () => setAt(steps().length - 1),\n    Escape: () => (worriesOpen() ? setWorriesOpen(false) : shut()),\n  };\n\n  const onKey = (event) => {\n    if (event.metaKey || event.ctrlKey || event.altKey) return;\n    const pressed = keys[event.key];\n    if (!pressed) return;\n    pressed();\n    event.preventDefault();\n  };\n\n  document.addEventListener(\"keydown\", onKey);\n  onCleanup(() => document.removeEventListener(\"keydown\", onKey));\n\n  return (\n    <>\n      <header>\n        <div class=\"t\">\n          <span class=\"what\">{steps().length} to read, grouped by {review().grouping || \"module\"}</span>\n          <span class=\"prog\">{at() + 1} of {steps().length}</span>\n          {/* Only there when there's something to say, and only a warning when something\n            * might be missing. A review worked out a weaker way is worth knowing about and\n            * isn't worth alarm — told as alarm, it teaches you to ignore the alarm. */}\n          <Show when={review().worries.length}>\n            <button\n              class={`worry${hiding().length ? \" bad\" : \"\"}`}\n              onClick={() => setWorriesOpen((was) => !was)}\n              title={said()}\n              aria-label={said()}\n            >\n              {hiding().length ? \"⚠\" : \"ⓘ\"}\n            </button>\n          </Show>\n        </div>\n        <div class=\"d\">\n          {review().cost.peak_open} definitions in mind at once\n          {\" · \"}{review().cost.taken_on_faith} out of order\n          {\" · \"}{review().cost.jumps} module jumps\n        </div>\n        <Legend />\n      </header>\n\n      <main class={showing() ? `has-sheet ${sheet()}` : \"\"}>\n        {/* Tapping past the graph puts the drawer away, the way tapping off any sheet does. */}\n        <div class=\"stage\" onClick={(event) => !event.target.closest(\".nd, .box text\") && shut()}>\n          <Graph review={review()} laid={laid()} here={here()} next={next()} read={read()} onOpen={goTo} />\n        </div>\n        <Reading\n          review={review()}\n          here={here()}\n          step={stepping() ? steps()[at()] : undefined}\n          at={at()}\n          onStep={step}\n          onRead={() => { markRead(); step(1); }}\n          onOpen={goTo}\n          names={names()}\n          read={read().has(here())}\n          onToggle={toggleRead}\n          sheet={wide() ? \"beside\" : sheet()}\n          onExpand={() => setSheet((was) => (was === \"full\" ? \"half\" : \"full\"))}\n          onClose={shut}\n        />\n      </main>\n\n      <Show when={worriesOpen()}>\n        <aside class=\"notes\">\n          <button class=\"ib\" onClick={() => setWorriesOpen(false)} aria-label=\"Close\">×</button>\n\n          <Show when={hiding().length}>\n            <h2>This review might not be showing</h2>\n            <ul>\n              <For each={hiding()}>{(worry) => <li>{worry.said}</li>}</For>\n            </ul>\n          </Show>\n\n          <Show when={weaker().length}>\n            <h2 class=\"lesser\">Worked out a weaker way</h2>\n            <ul>\n              <For each={weaker()}>{(worry) => <li>{worry.said}</li>}</For>\n            </ul>\n          </Show>\n        </aside>\n      </Show>\n    </>\n  );\n}"
+                }
+              ],
+              "type": [
+                {
+                  "file": null,
+                  "line": 6,
+                  "span": {
+                    "end": 245,
+                    "start": 218
+                  },
+                  "text": "export function App(props) "
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "identity": 411,
+      "sides": {
+        "kept": {
+          "after": {
+            "contract": null,
+            "file": "ui/src/App.tsx",
+            "kind": "module",
+            "locator": {
+              "name": "App",
               "scope": [
                 "ui",
                 "src"
@@ -19,21 +416,22 @@
               "body": [
                 {
                   "file": null,
+                  "line": 1,
                   "span": {
-                    "end": 8759,
+                    "end": 218,
                     "start": 0
                   },
-                  "text": "/* Colours come from theme.js. What's here is only what a theme has no opinion about. */\n:root {\n  --sans: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif;\n  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n}\n\n* { box-sizing: border-box; }\nhtml, body { margin: 0; height: 100%; }\nbody {\n  background: var(--paper); color: var(--ink); font: 16px/1.5 var(--sans);\n  display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;\n}\n#root { display: flex; flex-direction: column; min-height: 0; flex: 1; }\nbutton { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }\n:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }\n\n.add { color: var(--add); } .del { color: var(--del); } .chg { color: var(--chg); } .aff { color: var(--muted); }\n.ch { font: 700 13px/1 var(--mono); display: inline-block; width: 1ch; text-align: center; }\n.waiting { margin: 24px; color: var(--muted); font-family: var(--mono); font-size: 13px; }\n\nheader { padding: 12px 16px 8px; flex: none; }\n/* One row, laid out rather than floated: the count and the warning sat on top of each\n * other when both were taken out of the flow. */\n.t { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 16px; line-height: 1.3; }\n.t .what { flex: 1; min-width: 0; }\n.prog { font: 500 12.5px/1.6 var(--mono); color: var(--muted); flex: none; }\n.d { color: var(--muted); font-size: 13.5px; margin-top: 2px; font-family: var(--mono); }\n.lg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); margin-top: 8px; }\n.lg span { display: inline-flex; gap: 5px; align-items: baseline; }\n\n/* Whatever dagger couldn't work out: out of the way until there's something to say. */\n.worry {\n  width: 30px; height: 30px; flex: none;\n  border-radius: 8px; color: var(--chg); font-size: 16px; line-height: 1;\n}\n.worry:hover { background: var(--raised); }\n.notes {\n  position: fixed; right: 16px; bottom: 16px; z-index: 20;\n  width: min(560px, calc(100vw - 32px)); background: var(--surface);\n  border: 1px solid var(--rule); border-radius: 10px; padding: 12px 34px 12px 14px;\n  box-shadow: 0 6px 24px rgb(0 0 0 / 12%);\n}\n.notes h2 { margin: 0 0 8px; font-size: 14px; }\n.notes ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--muted); max-height: 40dvh; overflow: auto; }\n.notes li { margin-bottom: 5px; }\n.notes .ib { position: absolute; top: 6px; right: 8px; }\n\nmain { flex: 1; min-height: 0; display: flex; }\n.stage { flex: 1; min-width: 0; position: relative; }\n\n/* The graph has a view of its own rather than being an image scaled to the pane: the reader\n * moves it about, and how far away it is has nothing to do with how big the window is. */\n.canvas { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }\n.canvas:active { cursor: grabbing; }\n.viewkeys {\n  position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: var(--muted);\n  pointer-events: none; display: flex; align-items: center; gap: 4px;\n}\n/* The drawing. Everything inside it is painted rather than built, so there are no rules\n * here for nodes, boxes or lines — those colours are read out of this stylesheet by the\n * code that paints them. */\n.canvas canvas { display: block; }\n\n/* The same definitions as real buttons, for anything that reads a page rather than looks\n * at one. Taken out of sight without being taken out of the page: `display: none` would\n * hide it from a screen reader too, which is the one thing it's for. */\n.spoken {\n  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;\n  overflow: hidden; clip-path: inset(50%); white-space: nowrap; list-style: none;\n}\n.spoken button:focus-visible {\n  position: fixed; left: 12px; top: 12px; z-index: 30; width: auto; height: auto;\n  clip-path: none; padding: 8px 12px; background: var(--surface);\n  border: 1px solid var(--lean); border-radius: 8px; font: 13px var(--mono);\n}\n\n/* A drawer, until there's room for it to sit beside the graph. Three heights: away, half\n * the window, and all of it. Sliding rather than appearing is most of what makes it feel\n * like something you pulled up rather than something that happened to you. */\n.sheet {\n  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; height: 58dvh;\n  background: var(--surface); border-top: 1px solid var(--rule);\n  border-radius: 12px 12px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / 28%);\n  transform: translateY(105%); transition: transform 0.2s ease, height 0.2s ease;\n  display: flex; flex-direction: column;\n}\n.sheet.half, .sheet.full { transform: none; }\n.sheet.full { height: 100dvh; border-radius: 0; }\n/* The graph keeps clear of the drawer so what's being read isn't hidden behind it. */\nmain.has-sheet.half .canvas { bottom: 58dvh; }\n.sh { display: flex; align-items: center; gap: 10px; padding: 10px 8px 6px 16px; flex: none; }\n.sh h2 { margin: 0; font: 500 16px/1.3 var(--mono); word-break: break-all; flex: 1; min-width: 0; }\n.sb { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 0 16px 12px; }\n.file {\n  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;\n  font: 13px var(--mono); color: var(--muted); margin: 0 0 10px;\n}\n.kind {\n  border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px;\n  font-size: 12px; line-height: 1.5; color: var(--muted);\n}\n.why { font-size: 13.5px; color: var(--muted); margin: 0 0 8px; }\n.why b { color: var(--ink); font-weight: 600; font-family: var(--mono); }\n.why b.soon { color: var(--chg); }\n\npre.code {\n  margin: 0 0 10px; background: var(--paper); border-radius: 6px;\n  overflow-x: auto; font: 13px/1.6 var(--mono); padding: 6px 0;\n}\npre.code .ln { display: block; padding: 0 12px 0 24px; position: relative; white-space: pre; min-width: max-content; }\npre.code .ln i { position: absolute; left: 9px; font-style: normal; font-weight: 700; }\npre.code .ln.a { background: var(--addbg); } pre.code .ln.a i { color: var(--add); }\npre.code .ln.r { background: var(--delbg); } pre.code .ln.r i { color: var(--del); }\npre.code .ln.gap { color: var(--muted); padding-left: 24px; }\npre.code.same { color: var(--muted); }\npre.code .tq { color: var(--quiet); }\npre.code .lnk { color: var(--lean); }\n\n/* Anything that takes you to another definition looks the same wherever it turns up, and\n * says so under the pointer rather than all the time. */\n.why b, pre.code .lnk { cursor: pointer; text-underline-offset: 3px; }\n.why b:hover, pre.code .lnk:hover { text-decoration: underline dotted; }\n\n/* 44px is the smallest a finger can be relied on to hit. The bottom padding clears the\n * home indicator on a phone, where the drawer sits against the very bottom of the screen. */\n.nav {\n  flex: none; display: flex; align-items: center; gap: 6px;\n  padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule);\n}\n.nav .pair { display: flex; align-items: stretch; gap: 6px; flex: none; margin-left: auto; }\n.nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }\n.nav .nb { width: 50px; height: 50px; border: 1px solid var(--rule); border-radius: 8px; color: var(--muted); }\n.nav .nb .gl { font-size: 20px; line-height: 1; }\n.nav .nb:disabled { opacity: 0.35; cursor: default; }\n.nav .pos {\n  height: 50px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 8px;\n  font: 14px var(--mono); color: var(--muted);\n}\n.nav .pos.done { color: var(--add); border-color: var(--add); }\n.nav .go { height: 50px; padding: 0 18px; border-radius: 8px; background: var(--lean); color: var(--paper); font-weight: 600; font-size: 14.5px; }\n\n/* The key that does what the button does, worn by the button. */\nkbd {\n  font: 10.5px/1.4 var(--mono); border: 1px solid currentColor; border-radius: 3px;\n  padding: 0 3px; opacity: 0.6; font-weight: 400;\n}\n/* The solid button's text is already dark on bright, which is as much contrast as there is\n * to have. Anything behind the key can only eat into it, so nothing goes behind it. */\n.nav .go kbd { opacity: 1; border-color: currentColor; background: none; }\n.ib { width: 38px; height: 38px; border-radius: 8px; color: var(--muted); font-size: 18px; flex: none; }\n\n/* Room enough for the sheet to stop being a drawer and just sit there. */\n@media (min-width: 900px) {\n  .sheet {\n    position: relative; transform: none; height: auto; width: 46%; max-width: 660px;\n    flex: none; border-radius: 0; border-top: 0; border-left: 1px solid var(--rule);\n    box-shadow: none; transition: none;\n  }\n  .sheet.full { height: auto; }\n  .grip { display: none; }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .sheet { transition: none; }\n}\n"
+                  "text": "import { createMemo, createSignal, For, onCleanup, onMount, Show } from \"solid-js\";\nimport { Graph } from \"./Graph.tsx\";\nimport { Reading } from \"./Reading.tsx\";\nimport { digest, layout, namesIn } from \"./review.ts\";\n\n"
                 }
               ]
             }
           },
           "before": {
             "contract": null,
-            "file": "ui/src/style.css",
-            "kind": "file",
+            "file": "ui/src/App.tsx",
+            "kind": "module",
             "locator": {
-              "name": "style.css",
+              "name": "App",
               "scope": [
                 "ui",
                 "src"
@@ -43,11 +441,12 @@
               "body": [
                 {
                   "file": null,
+                  "line": 1,
                   "span": {
-                    "end": 13083,
+                    "end": 218,
                     "start": 0
                   },
-                  "text": "/* Colours come from theme.js. What's here is only what a theme has no opinion about. */\n:root {\n  --sans: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif;\n  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n}\n\n* { box-sizing: border-box; }\nhtml, body { margin: 0; height: 100%; }\nbody {\n  background: var(--paper); color: var(--ink); font: 16px/1.5 var(--sans);\n  display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;\n}\n#root { display: flex; flex-direction: column; min-height: 0; flex: 1; }\nbutton { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }\n:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }\n\n.add { color: var(--add); } .del { color: var(--del); } .chg { color: var(--chg); } .aff { color: var(--muted); }\n.ch { font: 700 13px/1 var(--mono); display: inline-block; width: 1ch; text-align: center; }\n.waiting { margin: 24px; color: var(--muted); font-family: var(--mono); font-size: 13px; }\n\nheader { padding: 12px 16px 8px; flex: none; }\n/* One row, laid out rather than floated: the count and the warning sat on top of each\n * other when both were taken out of the flow. */\n.t { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 16px; line-height: 1.3; }\n.t .what { flex: 1; min-width: 0; }\n.prog { font: 500 12.5px/1.6 var(--mono); color: var(--muted); flex: none; }\n.d { color: var(--muted); font-size: 13.5px; margin-top: 2px; font-family: var(--mono); }\n.lg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); margin-top: 8px; }\n.lg span { display: inline-flex; gap: 5px; align-items: baseline; }\n\n/* Whatever dagger couldn't work out: out of the way until there's something to say. */\n.worry {\n  width: 30px; height: 30px; flex: none;\n  border-radius: 8px; color: var(--chg); font-size: 16px; line-height: 1;\n}\n.worry:hover { background: var(--raised); }\n.notes {\n  position: fixed; right: 16px; bottom: 16px; z-index: 20;\n  width: min(560px, calc(100vw - 32px)); background: var(--surface);\n  border: 1px solid var(--rule); border-radius: 10px; padding: 12px 34px 12px 14px;\n  box-shadow: 0 6px 24px rgb(0 0 0 / 12%);\n}\n.notes h2 { margin: 0 0 8px; font-size: 14px; }\n.notes ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--muted); max-height: 40dvh; overflow: auto; }\n.notes li { margin-bottom: 5px; }\n.notes .ib { position: absolute; top: 6px; right: 8px; }\n\nmain { flex: 1; min-height: 0; display: flex; }\n.stage { flex: 1; min-width: 0; position: relative; }\n\n/* The graph has a view of its own rather than being an image scaled to the pane: the reader\n * moves it about, and how far away it is has nothing to do with how big the window is. */\n.canvas { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }\n.canvas:active { cursor: grabbing; }\n.canvas svg { display: block; width: 100%; height: 100%; }\n.viewkeys {\n  position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: var(--muted);\n  pointer-events: none; display: flex; align-items: center; gap: 4px;\n}\nsvg text { font-family: var(--mono); font-size: 14px; fill: var(--ink); }\n/* Words are never the answer to \"what is under the pointer\", so they don't get asked. Left\n * in, every letter of every name is another thing to test on each move of the mouse. */\nsvg text, svg tspan, svg title { pointer-events: none; }\n\n/* The layer everything is drawn on. Held by the compositor so a drag moves it rather than\n * redrawing it, and anchored top-left because a CSS transform on an SVG group otherwise\n * turns about its middle. */\n.canvas svg > g { will-change: transform; transform-origin: 0 0; }\n\n/* What happened to a definition is the first thing about it, so it colours the node's edge\n * and the mark it wears. The body of the node stays plain: a wall of tinted boxes says the\n * same thing as no tint at all. */\n.nd { cursor: pointer; color: var(--muted); }\n.nd rect { fill: var(--raised); stroke: currentColor; stroke-width: 1.2; }\n.nd.add { color: var(--add); } .nd.del { color: var(--del); }\n.nd.chg { color: var(--chg); } .nd.aff { color: var(--muted); }\n.nd .mk { fill: currentColor; }\n.nd .nm { fill: var(--ink); }\n.nd.sel rect { stroke: var(--lean); stroke-width: 2; }\n.nd.sel .nm { fill: var(--lean); }\n\n/* A focus ring here would be a second box drawn around a box: an outline on an SVG element\n * is a hard rectangle round its bounds, so it ignores the rounded corners and doesn't scale\n * with the drawing — it reads as an artifact once you're zoomed in. The node says it has\n * focus by thickening its own edge instead. */\n.nd:focus { outline: none; }\n.nd:focus-visible { outline: none; }\n.nd:focus-visible rect { stroke: var(--ink); stroke-width: 2.4; }\n\n/* Where the reading goes next: the same blue as the one being read, but dashed, so the two\n * read as a pair — here, then there — rather than as two of the same thing. */\n.nd.next rect { stroke: var(--path); stroke-width: 1.8; stroke-dasharray: 5 3; }\n.nd.next { opacity: 1; }\n\n/* Nothing else in the drawing has an arrowhead, because nothing else is about which way\n * time runs. That alone tells it from the lines that only say what holds up what. */\n.up {\n  fill: none; stroke: var(--path); stroke-width: 1.8; stroke-dasharray: 5 3;\n  marker-end: url(#tip); pointer-events: none; opacity: 0.55;\n}\n#tip path { fill: var(--path); }\n\n/* Under the pointer a node comes back to full strength, whatever it was doing — read,\n * dimmed or both — and thickens its edge. No filter: a filter on an SVG element gets its\n * own offscreen buffer, redrawn at every scale, and a graph full of them will not pan. */\n.nd:hover { opacity: 1; }\n.nd:hover rect { stroke-width: 2; fill: var(--raised); }\n.nd:hover .nm { fill: var(--ink); }\n\n/* Two different ways of being in the background, and they have to stay apart: read is\n * finished with, dim is just not what's being looked at right now. A node that's been read\n * is emptied out — it keeps its coloured edge, so green and yellow are still told apart,\n * but it stops being a solid thing on the page. Dim only lowers. Neither may go so faint\n * that the name stops being readable: knowing what a node says is the whole point. */\n.nd.done { opacity: 0.6; }\n.nd.done rect { fill: none; }\n.nd.done .nm { fill: var(--muted); }\n.nd.dim { opacity: 0.55; }\n.nd.done.dim { opacity: 0.42; }\n.nd.sel { opacity: 1; }\n\n/* Boxes nest, so every rule reaches its own box's parts and not its children's. A box at\n * any depth is the same thing; the only thing depth changes is how tight the corner is and\n * that anything inside another is drawn dashed. */\n.box > rect { fill: none; stroke: var(--rule); }\n.box.deep > rect { stroke-dasharray: 3 3; }\n.box > text { fill: var(--muted); font-size: 12.5px; cursor: pointer; }\n.box > text .mk { fill: currentColor; }\n.box.add { color: var(--add); } .box.del { color: var(--del); }\n.box.chg { color: var(--chg); } .box.aff { color: var(--muted); }\n\n/* Same weight and dash as the arrow that points at them, so the line and its target read\n * as one thing rather than two that happen to share a colour. */\n.box.here > rect:not(.hit) { stroke: var(--lean); stroke-width: 1.8; stroke-dasharray: none; }\n.box.next > rect:not(.hit) { stroke: var(--path); stroke-width: 1.8; stroke-dasharray: 5 3; }\n\n/* Takes a click anywhere in the box, and says so by tinting the ground it sits on. Laid on\n * with alpha rather than a flat colour, so a box inside a lit box adds to it instead of\n * replacing it: the deepest place the pointer is in is the brightest thing on the page. */\n.box > rect.hit {\n  fill: var(--raised); fill-opacity: 0; stroke: none; cursor: pointer;\n  transition: fill-opacity 0.12s ease; pointer-events: all;\n}\n.box > rect.hit.on { fill-opacity: 0.4; }\n\n/* Lines are there to be read, never pressed: left alive they sit over the boxes and\n * swallow the pointer on its way to one. */\n.eg, .ec, .eh { pointer-events: none; }\n.eg { fill: none; stroke: var(--faint); stroke-width: 1; opacity: 0.85; }\nsvg.focus .eg { opacity: 0.3; }\n.eh { fill: none; stroke: var(--lean); stroke-width: 1.5; }\n.ec { fill: none; stroke: var(--faint); stroke-width: 1.2; opacity: 0.8; stroke-dasharray: 4 3; }\n.ec.on { stroke: var(--lean); opacity: 1; }\n\n/* A drawer, until there's room for it to sit beside the graph. Three heights: away, half\n * the window, and all of it. Sliding rather than appearing is most of what makes it feel\n * like something you pulled up rather than something that happened to you. */\n.sheet {\n  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; height: 58dvh;\n  background: var(--surface); border-top: 1px solid var(--rule);\n  border-radius: 12px 12px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / 28%);\n  transform: translateY(105%); transition: transform 0.2s ease, height 0.2s ease;\n  display: flex; flex-direction: column;\n}\n.sheet.half, .sheet.full { transform: none; }\n.sheet.full { height: 100dvh; border-radius: 0; }\n/* The graph keeps clear of the drawer so what's being read isn't hidden behind it. */\nmain.has-sheet.half .canvas { bottom: 58dvh; }\n.sh { display: flex; align-items: center; gap: 10px; padding: 10px 8px 6px 16px; flex: none; }\n.sh h2 { margin: 0; font: 500 16px/1.3 var(--mono); word-break: break-all; flex: 1; min-width: 0; }\n.sb { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 0 16px 12px; }\n.file {\n  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;\n  font: 13px var(--mono); color: var(--muted); margin: 0 0 10px;\n}\n.kind {\n  border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px;\n  font-size: 12px; line-height: 1.5; color: var(--muted);\n}\n.why { font-size: 13.5px; color: var(--muted); margin: 0 0 8px; }\n.why b { color: var(--ink); font-weight: 600; font-family: var(--mono); }\n.why b.soon { color: var(--chg); }\n\npre.code {\n  margin: 0 0 10px; background: var(--paper); border-radius: 6px;\n  overflow-x: auto; font: 13px/1.6 var(--mono); padding: 6px 0;\n}\npre.code .ln { display: block; padding: 0 12px 0 24px; position: relative; white-space: pre; min-width: max-content; }\npre.code .ln i { position: absolute; left: 9px; font-style: normal; font-weight: 700; }\npre.code .ln.a { background: var(--addbg); } pre.code .ln.a i { color: var(--add); }\npre.code .ln.r { background: var(--delbg); } pre.code .ln.r i { color: var(--del); }\npre.code .ln.gap { color: var(--muted); padding-left: 24px; }\npre.code.same { color: var(--muted); }\npre.code .tq { color: var(--quiet); }\npre.code .lnk { color: var(--lean); }\n\n/* Anything that takes you to another definition looks the same wherever it turns up, and\n * says so under the pointer rather than all the time. */\n.why b, pre.code .lnk { cursor: pointer; text-underline-offset: 3px; }\n.why b:hover, pre.code .lnk:hover { text-decoration: underline dotted; }\n\n/* 44px is the smallest a finger can be relied on to hit. The bottom padding clears the\n * home indicator on a phone, where the drawer sits against the very bottom of the screen. */\n.nav {\n  flex: none; display: flex; align-items: center; gap: 6px;\n  padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule);\n}\n.nav .pair { display: flex; align-items: stretch; gap: 6px; flex: none; margin-left: auto; }\n.nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }\n.nav .nb { width: 50px; height: 50px; border: 1px solid var(--rule); border-radius: 8px; color: var(--muted); }\n.nav .nb .gl { font-size: 20px; line-height: 1; }\n.nav .nb:disabled { opacity: 0.35; cursor: default; }\n.nav .pos {\n  height: 50px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 8px;\n  font: 14px var(--mono); color: var(--muted);\n}\n.nav .pos.done { color: var(--add); border-color: var(--add); }\n.nav .go { height: 50px; padding: 0 18px; border-radius: 8px; background: var(--lean); color: var(--paper); font-weight: 600; font-size: 14.5px; }\n\n/* The key that does what the button does, worn by the button. */\nkbd {\n  font: 10.5px/1.4 var(--mono); border: 1px solid currentColor; border-radius: 3px;\n  padding: 0 3px; opacity: 0.6; font-weight: 400;\n}\n/* The solid button's text is already dark on bright, which is as much contrast as there is\n * to have. Anything behind the key can only eat into it, so nothing goes behind it. */\n.nav .go kbd { opacity: 1; border-color: currentColor; background: none; }\n.ib { width: 38px; height: 38px; border-radius: 8px; color: var(--muted); font-size: 18px; flex: none; }\n\n/* Room enough for the sheet to stop being a drawer and just sit there. */\n@media (min-width: 900px) {\n  .sheet {\n    position: relative; transform: none; height: auto; width: 46%; max-width: 660px;\n    flex: none; border-radius: 0; border-top: 0; border-left: 1px solid var(--rule);\n    box-shadow: none; transition: none;\n  }\n  .sheet.full { height: auto; }\n  .grip { display: none; }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .sheet { transition: none; }\n}\n"
+                  "text": "import { createMemo, createSignal, For, onCleanup, onMount, Show } from \"solid-js\";\nimport { Graph } from \"./Graph.tsx\";\nimport { Reading } from \"./Reading.tsx\";\nimport { digest, layout, namesIn } from \"./review.ts\";\n\n"
                 }
               ]
             }
@@ -56,51 +455,101 @@
       }
     },
     {
-      "identity": 35,
+      "identity": 412,
       "sides": {
         "kept": {
           "after": {
-            "contract": null,
-            "file": "ui/vite.config.js",
-            "kind": "file",
+            "contract": "function Reading(props: any): JSX.Element",
+            "file": "ui/src/Reading.tsx",
+            "kind": "function",
             "locator": {
-              "name": "vite.config.js",
+              "name": "Reading",
               "scope": [
-                "ui"
+                "ui",
+                "src",
+                "Reading"
               ]
             },
             "parts": {
               "body": [
                 {
                   "file": null,
+                  "line": 5,
                   "span": {
-                    "end": 2682,
-                    "start": 0
+                    "end": 4154,
+                    "start": 250
                   },
-                  "text": "import { spawn } from \"node:child_process\";\nimport { defineConfig } from \"vite\";\nimport solid from \"vite-plugin-solid\";\n\n/* Where the page gets a review when it's open in a browser rather than in the window.\n *\n * The window asks dagger through Tauri. A browser has no way to run anything, so it asks\n * here and this runs the same command — `dagger --json`, no revisions, which is the working\n * changes. Reading a file instead is what made the page quietly show yesterday's answer\n * every time anything changed.\n *\n * The fixture the tests run against is a different thing and stays pinned: a test wants the\n * same input every time, and a page wants the current one.\n */\nfunction live() {\n  return {\n    name: \"dagger-review\",\n    configureServer(server) {\n      server.middlewares.use(\"/review\", (request, response) => {\n        /* Which pair to read. Named in the address when the page asks for a particular\n         * one, and otherwise whatever this server was started on — so a browser opened\n         * beside a window started on `HEAD~1 HEAD` is looking at the same change, rather\n         * than quietly at a different one. Neither, and dagger decides, which means the\n         * working changes. */\n        const asked = new URL(request.url, \"http://dagger\").searchParams;\n        const before = asked.get(\"before\") || process.env.DAGGER_BEFORE;\n        const after = asked.get(\"after\") || process.env.DAGGER_AFTER;\n        const reading = before && after ? [before, after] : [];\n\n        const dagger = spawn(\"target/debug/dagger\", [\"--json\", ...reading], { cwd: \"..\" });\n\n        let said = \"\";\n        let wrong = \"\";\n        dagger.stdout.on(\"data\", (chunk) => (said += chunk));\n        // Dagger says what it's up to on the way, and it takes long enough to be worth\n        // seeing rather than watching a blank page.\n        dagger.stderr.on(\"data\", (chunk) => {\n          wrong += chunk;\n          process.stderr.write(chunk);\n        });\n\n        dagger.on(\"error\", (error) => {\n          response.statusCode = 500;\n          response.end(`couldn't run dagger: ${error.message}`);\n        });\n        dagger.on(\"close\", (code) => {\n          if (code !== 0) {\n            response.statusCode = 500;\n            response.end(wrong.trim() || `dagger gave up with ${code}`);\n            return;\n          }\n          response.setHeader(\"content-type\", \"application/json\");\n          response.end(said);\n        });\n      });\n    },\n  };\n}\n\nexport default defineConfig({\n  plugins: [solid(), live()],\n  // Tauri looks for the page here while developing, and for the build in dist.\n  server: { port: 1420, strictPort: true },\n  build: { target: \"esnext\" },\n});\n"
+                  "text": "{\n  const definition = () => props.review.definitions.get(props.here);\n  const leans = () =>\n    props.review.edges.filter((edge) => edge.from === definition().id).map((edge) => edge.to);\n\n  const because = () => leans().filter((id) => broke(props.review, id));\n  const uses = () => leans().filter((id) => !broke(props.review, id));\n\n  let sheet: HTMLDivElement | undefined;\n\n  /* A long definition with one line changed near the bottom opens showing none of it. The\n   * top of the sheet says what this is and why it's here, which is worth seeing, so the\n   * first changed line is brought just under that rather than to the top of the pane. */\n  createEffect(() => {\n    const here = definition();\n    if (!here || !sheet) return;\n\n    queueMicrotask(() => {\n      const changed = sheet?.querySelector(\".ln.a, .ln.r\");\n      if (!changed) {\n        if (sheet) sheet.scrollTop = 0;\n        return;\n      }\n      const above = sheet!.getBoundingClientRect().top;\n      const onto = changed.getBoundingClientRect().top;\n      sheet!.scrollTop += onto - above - 12;\n    });\n  });\n\n  return (\n    <Show when={definition()}>\n      <aside class={`sheet ${props.sheet}`}>\n        <div class=\"sh\">\n          <b class={`ch ${TINT[definition().mark]}`}>{MARK[definition().mark]}</b>\n          <h2>{definition().path}</h2>\n          <button class=\"ib grip\" onClick={props.onExpand} aria-label={props.sheet === \"full\" ? \"Shrink\" : \"Expand\"}>\n            {props.sheet === \"full\" ? \"⌄\" : \"⌃\"}\n          </button>\n          <button class=\"ib grip\" onClick={props.onClose} aria-label=\"Close\">×</button>\n        </div>\n\n        <div class=\"sb\" ref={sheet}>\n          {/* What a definition is comes from a fixed set, so it reads as a label rather than\n            * as more of the sentence the path is. */}\n          <p class=\"file\">\n            {definition().file}\n            <span class=\"kind\">{definition().kind}</span>\n          </p>\n\n          <Show when={because().length}>\n            <p class=\"why\">\n              because: <Names ids={because()} step={props.step} review={props.review} onOpen={props.onOpen} />\n            </p>\n          </Show>\n          <Show when={uses().length}>\n            <p class=\"why\">\n              uses: <Names ids={uses()} step={props.step} review={props.review} onOpen={props.onOpen} />\n            </p>\n          </Show>\n\n          <Diff definition={definition()} names={props.names} onOpen={props.onOpen} />\n        </div>\n\n        {/* Everything you can press sits together on the right, each wearing the key that\n          * does the same job — a hint is worth more on the thing it applies to than in a\n          * list somewhere else.\n          *\n          * Both directions mark as viewed, because both mean you're finished with what\n          * you're looking at. Moving without saying so is the exception, and an exception\n          * doesn't earn a button: n and p do it, and so do the arrow keys. */}\n        <div class=\"nav\">\n          <div class=\"pair\">\n            <button\n              class=\"nb\"\n              disabled={props.at === 0}\n              onClick={() => props.onRead(-1)}\n              aria-label=\"Viewed, and back\"\n            >\n              <span class=\"gl\">✓‹</span>\n              <kbd>k</kbd>\n            </button>\n            <button\n              class={`pos${props.read ? \" done\" : \"\"}`}\n              onClick={props.onToggle}\n              aria-label={props.read ? \"Viewed. Press to unmark\" : \"Not viewed yet\"}\n            >\n              <span class=\"gl\">{props.read ? \"✓ \" : \"\"}{props.at + 1}/{props.review.steps.length}</span>\n              <kbd>m</kbd>\n            </button>\n            <button class=\"go\" onClick={() => props.onRead(1)} aria-label=\"Viewed, and next\">\n              <span class=\"gl\">✓ next</span>\n              <kbd>j</kbd>\n            </button>\n          </div>\n        </div>\n      </aside>\n    </Show>\n  );\n}"
+                }
+              ],
+              "docs": [
+                {
+                  "file": null,
+                  "line": 4,
+                  "span": {
+                    "end": 219,
+                    "start": 127
+                  },
+                  "text": "/* The definition in front of the reader: what it is, why it's here, and how it changed. */\n"
+                }
+              ],
+              "type": [
+                {
+                  "file": null,
+                  "line": 5,
+                  "span": {
+                    "end": 250,
+                    "start": 219
+                  },
+                  "text": "export function Reading(props) "
                 }
               ]
             }
           },
           "before": {
-            "contract": null,
-            "file": "ui/vite.config.js",
-            "kind": "file",
+            "contract": "function Reading(props: any): JSX.Element",
+            "file": "ui/src/Reading.tsx",
+            "kind": "function",
             "locator": {
-              "name": "vite.config.js",
+              "name": "Reading",
               "scope": [
-                "ui"
+                "ui",
+                "src",
+                "Reading"
               ]
             },
             "parts": {
               "body": [
                 {
                   "file": null,
+                  "line": 5,
                   "span": {
-                    "end": 2000,
-                    "start": 0
+                    "end": 4282,
+                    "start": 250
                   },
-                  "text": "import { spawn } from \"node:child_process\";\nimport { defineConfig } from \"vite\";\nimport solid from \"vite-plugin-solid\";\n\n/* Where the page gets a review when it's open in a browser rather than in the window.\n *\n * The window asks dagger through Tauri. A browser has no way to run anything, so it asks\n * here and this runs the same command — `dagger --json`, no revisions, which is the working\n * changes. Reading a file instead is what made the page quietly show yesterday's answer\n * every time anything changed.\n *\n * The fixture the tests run against is a different thing and stays pinned: a test wants the\n * same input every time, and a page wants the current one.\n */\nfunction live() {\n  return {\n    name: \"dagger-review\",\n    configureServer(server) {\n      server.middlewares.use(\"/review\", (request, response) => {\n        const dagger = spawn(\"target/debug/dagger\", [\"--json\"], { cwd: \"..\" });\n\n        let said = \"\";\n        let wrong = \"\";\n        dagger.stdout.on(\"data\", (chunk) => (said += chunk));\n        // Dagger says what it's up to on the way, and it takes long enough to be worth\n        // seeing rather than watching a blank page.\n        dagger.stderr.on(\"data\", (chunk) => {\n          wrong += chunk;\n          process.stderr.write(chunk);\n        });\n\n        dagger.on(\"error\", (error) => {\n          response.statusCode = 500;\n          response.end(`couldn't run dagger: ${error.message}`);\n        });\n        dagger.on(\"close\", (code) => {\n          if (code !== 0) {\n            response.statusCode = 500;\n            response.end(wrong.trim() || `dagger gave up with ${code}`);\n            return;\n          }\n          response.setHeader(\"content-type\", \"application/json\");\n          response.end(said);\n        });\n      });\n    },\n  };\n}\n\nexport default defineConfig({\n  plugins: [solid(), live()],\n  // Tauri looks for the page here while developing, and for the build in dist.\n  server: { port: 1420, strictPort: true },\n  build: { target: \"esnext\" },\n});\n"
+                  "text": "{\n  const definition = () => props.review.definitions.get(props.here);\n  const leans = () =>\n    props.review.edges.filter((edge) => edge.from === definition().id).map((edge) => edge.to);\n\n  const because = () => leans().filter((id) => broke(props.review, id));\n  const uses = () => leans().filter((id) => !broke(props.review, id));\n\n  let sheet: HTMLDivElement | undefined;\n\n  /* A long definition with one line changed near the bottom opens showing none of it. The\n   * top of the sheet says what this is and why it's here, which is worth seeing, so the\n   * first changed line is brought just under that rather than to the top of the pane. */\n  createEffect(() => {\n    const here = definition();\n    if (!here || !sheet) return;\n\n    queueMicrotask(() => {\n      const changed = sheet?.querySelector(\".ln.a, .ln.r\");\n      if (!changed) {\n        if (sheet) sheet.scrollTop = 0;\n        return;\n      }\n      const above = sheet!.getBoundingClientRect().top;\n      const onto = changed.getBoundingClientRect().top;\n      sheet!.scrollTop += onto - above - 12;\n    });\n  });\n\n  return (\n    <Show when={definition()}>\n      <aside class={`sheet ${props.sheet}`}>\n        <div class=\"sh\">\n          <b class={`ch ${TINT[definition().mark]}`}>{MARK[definition().mark]}</b>\n          <h2>{definition().path}</h2>\n          <button class=\"ib grip\" onClick={props.onExpand} aria-label={props.sheet === \"full\" ? \"Shrink\" : \"Expand\"}>\n            {props.sheet === \"full\" ? \"⌄\" : \"⌃\"}\n          </button>\n          <button class=\"ib grip\" onClick={props.onClose} aria-label=\"Close\">×</button>\n        </div>\n\n        <div class=\"sb\" ref={sheet}>\n          {/* What a definition is comes from a fixed set, so it reads as a label rather than\n            * as more of the sentence the path is. */}\n          <p class=\"file\">\n            {definition().file}\n            <span class=\"kind\">{definition().kind}</span>\n          </p>\n\n          <Show when={because().length}>\n            <p class=\"why\">\n              because: <Names ids={because()} step={props.step} review={props.review} onOpen={props.onOpen} />\n            </p>\n          </Show>\n          <Show when={uses().length}>\n            <p class=\"why\">\n              uses: <Names ids={uses()} step={props.step} review={props.review} onOpen={props.onOpen} />\n            </p>\n          </Show>\n\n          <Diff definition={definition()} names={props.names} onOpen={props.onOpen} />\n        </div>\n\n        {/* Everything you can press sits together on the right, each wearing the key that\n          * does the same job — a hint is worth more on the thing it applies to than in a\n          * list somewhere else. Moving on and marking as viewed are one button, because\n          * they're one thing a reader does; the count doubles as the way to take it back. */}\n        <div class=\"nav\">\n          <div class=\"pair\">\n            <button\n              class=\"nb\"\n              disabled={props.at === 0}\n              onClick={() => props.onStep(-1)}\n              aria-label=\"Back\"\n            >\n              <span class=\"gl\">‹</span>\n              <kbd>k</kbd>\n            </button>\n            <button\n              class=\"nb\"\n              disabled={props.at === props.review.steps.length - 1}\n              onClick={() => props.onStep(1)}\n              aria-label=\"Skip ahead\"\n            >\n              <span class=\"gl\">›</span>\n              <kbd>n</kbd>\n            </button>\n            <button\n              class={`pos${props.read ? \" done\" : \"\"}`}\n              onClick={props.onToggle}\n              aria-label={props.read ? \"Viewed. Press to unmark\" : \"Not viewed yet\"}\n            >\n              <span class=\"gl\">{props.read ? \"✓ \" : \"\"}{props.at + 1}/{props.review.steps.length}</span>\n              <kbd>m</kbd>\n            </button>\n            <button class=\"go\" onClick={props.onRead}>\n              <span class=\"gl\">✓ next</span>\n              <kbd>j</kbd>\n            </button>\n          </div>\n        </div>\n      </aside>\n    </Show>\n  );\n}"
+                }
+              ],
+              "docs": [
+                {
+                  "file": null,
+                  "line": 4,
+                  "span": {
+                    "end": 219,
+                    "start": 127
+                  },
+                  "text": "/* The definition in front of the reader: what it is, why it's here, and how it changed. */\n"
+                }
+              ],
+              "type": [
+                {
+                  "file": null,
+                  "line": 5,
+                  "span": {
+                    "end": 250,
+                    "start": 219
+                  },
+                  "text": "export function Reading(props) "
                 }
               ]
             }
@@ -109,50 +558,200 @@
       }
     },
     {
-      "identity": 36,
+      "identity": 416,
       "sides": {
         "kept": {
           "after": {
             "contract": null,
-            "file": "window",
-            "kind": "file",
+            "file": "ui/src/Reading.tsx",
+            "kind": "module",
             "locator": {
-              "name": "window",
-              "scope": []
+              "name": "Reading",
+              "scope": [
+                "ui",
+                "src"
+              ]
             },
             "parts": {
               "body": [
                 {
                   "file": null,
+                  "line": 1,
                   "span": {
-                    "end": 2415,
+                    "end": 127,
                     "start": 0
                   },
-                  "text": "#!/usr/bin/env bash\n# Opens the window on a repository, building whatever is out of date first.\n#\n#   ./window                       this repository's working changes\n#   ./window HEAD~1 HEAD           some other pair, as the command line takes them\n#   ./window ../redo               another repository\n#   ./window ../redo HEAD~1 HEAD   both\n#\n# The window shells out to dagger, so the tool built here is put on PATH ahead of any\n# installed one: a window built from this repository should read with the tool from it.\nset -euo pipefail\ncd \"$(dirname \"$0\")\"\n\n# A directory first means another repository; anything else is revisions, the same pair\n# dagger itself takes.\nrepo=\".\"\nif [ $# -gt 0 ] && [ -d \"$1\" ]; then\n  repo=\"$1\"\n  shift\nfi\nrepo=\"$(cd \"$repo\" && pwd)\"\n\nreading=()\nif [ $# -eq 2 ]; then\n  reading=(--before \"$1\" --after \"$2\")\nelif [ $# -ne 0 ]; then\n  echo \"name two revisions or none: ./window [<repo>] [<before> <after>]\" >&2\n  exit 1\nfi\n\nport=1420\n\ncargo build --workspace --quiet\n\n# A debug build of the window asks for the page over http, whatever sits in dist, so one\n# has to be there to answer. This window starts that server and takes it away again when it\n# closes: a server left running is one nobody can see, serving whichever change it happened\n# to be started on, to whoever finds the port.\nserving() { (exec 3<>\"/dev/tcp/127.0.0.1/$port\") >/dev/null 2>&1; }\n\nif serving; then\n  echo \"something is already serving $port — stop it and try again:\" >&2\n  ss -ltnp 2>/dev/null | grep \":$port \" >&2 || lsof -i \":$port\" >&2 || true\n  exit 1\nfi\n\n# The page reads the same pair this window was opened on, so a browser pointed at it shows\n# the change being looked at rather than a different one.\n(cd ui && DAGGER_BEFORE=\"${1:-}\" DAGGER_AFTER=\"${2:-}\" \\\n  exec npx --no-install vite --port \"$port\" --strictPort >/dev/null 2>&1) &\npage=$!\ntrap 'kill \"$page\" 2>/dev/null; wait \"$page\" 2>/dev/null' EXIT INT TERM\n\nfor _ in $(seq 50); do\n  serving && break\n  sleep 0.1\ndone\nserving || { echo \"the page never came up on $port\" >&2; exit 1; }\n\n# The webview and its plumbing come from the dev shell, so the window has to run inside it.\ninside=\"PATH=$PWD/target/debug:\\$PATH ./ui/src-tauri/target/debug/dagger-ui --repo '$repo' ${reading[*]}\"\nif [ -n \"${IN_NIX_SHELL:-}\" ]; then\n  eval \"$inside\"\nelse\n  nix develop --command bash -c \"cd ui/src-tauri && cargo build --quiet && cd ../.. && $inside\"\nfi\n"
+                  "text": "import { createEffect, For, Show } from \"solid-js\";\nimport { MARK, TINT, broke, compare, stitch, tokens } from \"./review.ts\";\n\n"
                 }
               ]
             }
           },
           "before": {
             "contract": null,
-            "file": "window",
-            "kind": "file",
+            "file": "ui/src/Reading.tsx",
+            "kind": "module",
             "locator": {
-              "name": "window",
-              "scope": []
+              "name": "Reading",
+              "scope": [
+                "ui",
+                "src"
+              ]
             },
             "parts": {
               "body": [
                 {
                   "file": null,
+                  "line": 1,
                   "span": {
-                    "end": 2040,
+                    "end": 127,
                     "start": 0
                   },
-                  "text": "#!/usr/bin/env bash\n# Opens the window on a repository, building whatever is out of date first.\n#\n#   ./window                       this repository's working changes\n#   ./window HEAD~1 HEAD           some other pair, as the command line takes them\n#   ./window ../redo               another repository\n#   ./window ../redo HEAD~1 HEAD   both\n#\n# The window shells out to dagger, so the tool built here is put on PATH ahead of any\n# installed one: a window built from this repository should read with the tool from it.\nset -euo pipefail\ncd \"$(dirname \"$0\")\"\n\n# A directory first means another repository; anything else is revisions, the same pair\n# dagger itself takes.\nrepo=\".\"\nif [ $# -gt 0 ] && [ -d \"$1\" ]; then\n  repo=\"$1\"\n  shift\nfi\nrepo=\"$(cd \"$repo\" && pwd)\"\n\nreading=()\nif [ $# -eq 2 ]; then\n  reading=(--before \"$1\" --after \"$2\")\nelif [ $# -ne 0 ]; then\n  echo \"name two revisions or none: ./window [<repo>] [<before> <after>]\" >&2\n  exit 1\nfi\n\nport=1420\n\ncargo build --workspace --quiet\n\n# A debug build of the window asks for the page over http, whatever sits in dist, so one\n# has to be there to answer. Somebody already running `npm run dev` gets reused — starting\n# a second would only fail on the port — and anything started here is cleaned up on the way\n# out rather than left behind holding it.\nserving() { (exec 3<>\"/dev/tcp/127.0.0.1/$port\") >/dev/null 2>&1; }\n\nif ! serving; then\n  (cd ui && npx --no-install vite --port \"$port\" --strictPort >/dev/null 2>&1) &\n  page=$!\n  trap 'kill \"$page\" 2>/dev/null || true' EXIT\n\n  for _ in $(seq 50); do\n    serving && break\n    sleep 0.1\n  done\n  serving || { echo \"the page never came up on $port\" >&2; exit 1; }\nfi\n\n# The webview and its plumbing come from the dev shell, so the window has to run inside it.\ninside=\"PATH=$PWD/target/debug:\\$PATH ./ui/src-tauri/target/debug/dagger-ui --repo '$repo' ${reading[*]}\"\nif [ -n \"${IN_NIX_SHELL:-}\" ]; then\n  eval \"$inside\"\nelse\n  nix develop --command bash -c \"cd ui/src-tauri && cargo build --quiet && cd ../.. && $inside\"\nfi\n"
+                  "text": "import { createEffect, For, Show } from \"solid-js\";\nimport { MARK, TINT, broke, compare, stitch, tokens } from \"./review.ts\";\n\n"
                 }
               ]
             }
+          }
+        }
+      }
+    },
+    {
+      "identity": 421,
+      "sides": {
+        "added": {
+          "contract": null,
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "module",
+          "locator": {
+            "name": "tests",
+            "scope": [
+              "dagger_lsp_adapter"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 659,
+                "span": {
+                  "end": 22292,
+                  "start": 22274
+                },
+                "text": "use super::*;\n    "
+              },
+              {
+                "file": null,
+                "line": 660,
+                "span": {
+                  "end": 22313,
+                  "start": 22292
+                },
+                "text": "use serde_json::json;"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "identity": 422,
+      "sides": {
+        "added": {
+          "contract": "fn spot(source: &str, at: usize) -> (u32, u32)",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "spot",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 663,
+                "span": {
+                  "end": 22658,
+                  "start": 22452
+                },
+                "text": "{\n        let before = &source[..at];\n        let line = before.matches('\\n').count() as u32;\n        let column = (at - before.rfind('\\n').map_or(0, |found| found + 1)) as u32;\n        (line, column)\n    }"
+              }
+            ],
+            "docs": [
+              {
+                "file": null,
+                "line": 662,
+                "span": {
+                  "end": 22400,
+                  "start": 22319
+                },
+                "text": "/// Where a piece of text sits, as a server would say it: a line and a character."
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 662,
+                "span": {
+                  "end": 22452,
+                  "start": 22400
+                },
+                "text": "\n    fn spot(source: &str, at: usize) -> (u32, u32) "
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "identity": 423,
+      "sides": {
+        "added": {
+          "contract": "fn reported(source: &str, name: &str, kind: u64, whole: &str) -> Value",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "reported",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 672,
+                "span": {
+                  "end": 23611,
+                  "start": 22896
+                },
+                "text": "{\n        let from = source.find(whole).expect(\"the source should hold it\");\n        let (line, column) = spot(source, from);\n        let (ends, at_end) = spot(source, from + whole.len());\n        let (named, at_name) = spot(source, source.find(name).expect(\"named\"));\n\n        json!({\n            \"name\": name,\n            \"kind\": kind,\n            \"range\": {\n                \"start\": { \"line\": line, \"character\": column },\n                \"end\": { \"line\": ends, \"character\": at_end },\n            },\n            \"selectionRange\": {\n                \"start\": { \"line\": named, \"character\": at_name },\n                \"end\": { \"line\": named, \"character\": at_name + name.len() as u32 },\n            },\n        })\n    }"
+              }
+            ],
+            "docs": [
+              {
+                "file": null,
+                "line": 670,
+                "span": {
+                  "end": 22820,
+                  "start": 22664
+                },
+                "text": "/// A symbol as a server reports one, found by looking for its own text in the source so\n    /// a test can be written as the code a reader would recognise."
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 671,
+                "span": {
+                  "end": 22896,
+                  "start": 22820
+                },
+                "text": "\n    fn reported(source: &str, name: &str, kind: u64, whole: &str) -> Value "
+              }
+            ]
           }
         }
       }
@@ -160,76 +759,245 @@
     {
       "identity": 424,
       "sides": {
-        "kept": {
-          "after": {
-            "contract": null,
-            "file": "ui/src/Graph.tsx",
-            "kind": "variable",
-            "locator": {
-              "name": "select",
-              "scope": [
-                "ui",
-                "src",
-                "Graph"
-              ]
-            },
-            "parts": {
-              "docs": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 84,
-                    "start": 0
-                  },
-                  "text": "import { createEffect, createSignal, onCleanup, onMount } from \"solid-js\";\nimport { "
-                }
-              ],
-              "type": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 90,
-                    "start": 84
-                  },
-                  "text": "select"
-                }
-              ]
-            }
+        "added": {
+          "contract": "fn opened(source: &str, reported: Value) -> Opened",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "opened",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
           },
-          "before": {
-            "contract": null,
-            "file": "ui/src/Graph.tsx",
-            "kind": "variable",
-            "locator": {
-              "name": "select",
-              "scope": [
-                "ui",
-                "src",
-                "Graph"
-              ]
-            },
-            "parts": {
-              "docs": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 95,
-                    "start": 0
-                  },
-                  "text": "import { createEffect, createSignal, For, onCleanup, onMount, Show } from \"solid-js\";\nimport { "
-                }
-              ],
-              "type": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 101,
-                    "start": 95
-                  },
-                  "text": "select"
-                }
-              ]
-            }
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 692,
+                "span": {
+                  "end": 23862,
+                  "start": 23668
+                },
+                "text": "{\n        let lines = Lines::new(source);\n        Opened {\n            path: \"src/money.ts\".to_string(),\n            symbols: symbols::read(&reported, &lines),\n            lines,\n        }\n    }"
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 692,
+                "span": {
+                  "end": 23668,
+                  "start": 23617
+                },
+                "text": "fn opened(source: &str, reported: Value) -> Opened "
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "identity": 425,
+      "sides": {
+        "added": {
+          "contract": "fn preambles(file: &Opened) -> Vec<String>",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "preambles",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 701,
+                "span": {
+                  "end": 24270,
+                  "start": 23911
+                },
+                "text": "{\n        let wholes: Vec<Range<usize>> = file\n            .symbols\n            .iter()\n            .map(|symbol| symbol.whole.clone())\n            .collect();\n\n        file.symbols\n            .iter()\n            .filter_map(|symbol| preamble(file, symbol, &wholes))\n            .map(|range| file.lines.slice(&range).to_string())\n            .collect()\n    }"
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 701,
+                "span": {
+                  "end": 23911,
+                  "start": 23868
+                },
+                "text": "fn preambles(file: &Opened) -> Vec<String> "
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "identity": 426,
+      "sides": {
+        "added": {
+          "contract": "fn what_is_written_above_a_definition_belongs_to_it()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "what_is_written_above_a_definition_belongs_to_it",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 720,
+                "span": {
+                  "end": 25040,
+                  "start": 24645
+                },
+                "text": "{\n        let source = \"/** Money. */\\nexport interface Money {\\n  pence: number;\\n}\\n\";\n        let file = opened(\n            source,\n            json!([reported(\n                source,\n                \"Money\",\n                11,\n                \"export interface Money {\\n  pence: number;\\n}\"\n            )]),\n        );\n\n        assert_eq!(preambles(&file), vec![\"/** Money. */\\n\"]);\n    }"
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 719,
+                "span": {
+                  "end": 24645,
+                  "start": 24579
+                },
+                "text": "#[test]\n    fn what_is_written_above_a_definition_belongs_to_it() "
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "identity": 427,
+      "sides": {
+        "added": {
+          "contract": "fn a_blank_line_ends_the_preamble()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "a_blank_line_ends_the_preamble",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 738,
+                "span": {
+                  "end": 25538,
+                  "start": 25239
+                },
+                "text": "{\n        let source = \"// About the file.\\n\\n/** Money. */\\nexport interface Money {}\\n\";\n        let file = opened(\n            source,\n            json!([reported(source, \"Money\", 11, \"export interface Money {}\")]),\n        );\n\n        assert_eq!(preambles(&file), vec![\"/** Money. */\\n\"]);\n    }"
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 737,
+                "span": {
+                  "end": 25239,
+                  "start": 25191
+                },
+                "text": "#[test]\n    fn a_blank_line_ends_the_preamble() "
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "identity": 428,
+      "sides": {
+        "added": {
+          "contract": "fn a_preamble_never_takes_another_definitions_line()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "a_preamble_never_takes_another_definitions_line",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 752,
+                "span": {
+                  "end": 26166,
+                  "start": 25807
+                },
+                "text": "{\n        let source = \"export const one = 1;\\nexport const two = 2;\\n\";\n        let file = opened(\n            source,\n            json!([\n                reported(source, \"one\", 13, \"export const one = 1;\"),\n                reported(source, \"two\", 13, \"export const two = 2;\"),\n            ]),\n        );\n\n        assert!(preambles(&file).is_empty());\n    }"
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 751,
+                "span": {
+                  "end": 25807,
+                  "start": 25742
+                },
+                "text": "#[test]\n    fn a_preamble_never_takes_another_definitions_line() "
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "identity": 429,
+      "sides": {
+        "added": {
+          "contract": "fn a_module_keeps_only_what_nobody_else_claims()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "a_module_keeps_only_what_nobody_else_claims",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 768,
+                "span": {
+                  "end": 26850,
+                  "start": 26385
+                },
+                "text": "{\n        let source = \"import { a } from \\\"./a\\\";\\n\\n/** Money. */\\nexport interface Money {}\\n\";\n        let file = opened(\n            source,\n            json!([reported(source, \"Money\", 11, \"export interface Money {}\")]),\n        );\n\n        let left: Vec<String> = leftovers(&file)\n            .iter()\n            .map(|range| file.lines.slice(range).to_string())\n            .collect();\n        assert_eq!(left, vec![\"import { a } from \\\"./a\\\";\\n\\n\"]);\n    }"
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 767,
+                "span": {
+                  "end": 26385,
+                  "start": 26324
+                },
+                "text": "#[test]\n    fn a_module_keeps_only_what_nobody_else_claims() "
+              }
+            ]
           }
         }
       }
@@ -237,96 +1005,40 @@
     {
       "identity": 430,
       "sides": {
-        "kept": {
-          "after": {
-            "contract": "function Graph(props: any): JSX.Element",
-            "file": "ui/src/Graph.tsx",
-            "kind": "function",
-            "locator": {
-              "name": "Graph",
-              "scope": [
-                "ui",
-                "src",
-                "Graph"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 17993,
-                    "start": 1954
-                  },
-                  "text": "{\n  let frame;\n  let paper;\n  let ink;\n\n  /* What the pointer is over: a definition, or the box around some.\n   *\n   * Worked out by asking where things are rather than by asking the page. That's the other\n   * half of what a canvas buys — there's no element to hit-test, and no flicker when the\n   * answer is a node sitting on top of the box it belongs to. */\n  const [over, setOver] = createSignal(null);\n\n  const behaviour = zooming()\n    .translateExtent([[0, 0], [props.laid.w, props.laid.h]])\n    /* Wheels are handled below instead. */\n    .filter((event) => event.type !== \"wheel\" && !event.ctrlKey && !event.button)\n    .on(\"zoom\", () => redraw());\n\n  const pane = () => frame.getBoundingClientRect();\n  const seen = () => zoomTransform(paper);\n\n  /* ---------------- where the view is ---------------- */\n\n  /* The whole drawing, in the middle, as large as it goes. Also the furthest out a reader\n   * can pull: there's nothing to see beyond the edges of the drawing. */\n  const whole = () => {\n    const room = pane();\n    const k = Math.min(\n      (room.width - 2 * EDGE) / props.laid.w,\n      (room.height - 2 * EDGE) / props.laid.h,\n    );\n    return zoomIdentity\n      .translate((room.width - props.laid.w * k) / 2, (room.height - props.laid.h * k) / 2)\n      .scale(k);\n  };\n\n  const fit = () => {\n    const shown = whole();\n    behaviour.scaleExtent([shown.k, CLOSEST]);\n    select(paper).call(behaviour.transform, shown);\n  };\n\n  /* The same view, moved so one definition sits in the middle of it. */\n  const onto = (spot, k) =>\n    zoomIdentity\n      .translate(pane().width / 2, pane().height / 2)\n      .scale(k)\n      .translate(-(spot.x + spot.w / 2), -(spot.y + spot.h / 2));\n\n  const closer = () => {\n    const spot = spotOf(props.here);\n    if (spot) select(paper).call(behaviour.transform, onto(spot, CLOSEST / 2));\n  };\n\n  /* A touchpad reports a wheel far faster than anything can be drawn, and the zoom that\n   * ships with d3 works out a whole new view for each report — while holding the browser\n   * up, because it has to say whether the page should scroll before the page can move.\n   * Hundreds of those a second is the lag: not the drawing, the answering.\n   *\n   * So the reports are added up and turned into one change of size per frame, and nothing\n   * is held up in the meantime — this page doesn't scroll, so there's nothing to prevent. */\n  let wheeled = 0;\n  let towards = [0, 0];\n  let turning = 0;\n\n  const onWheel = (event) => {\n    const room = pane();\n    towards = [event.clientX - room.left, event.clientY - room.top];\n    wheeled += event.deltaY;\n    if (turning) return;\n\n    turning = requestAnimationFrame(() => {\n      turning = 0;\n      const by = Math.pow(0.9985, wheeled);\n      wheeled = 0;\n      behaviour.scaleBy(select(paper), by, towards);\n    });\n  };\n\n  /* ---------------- what is where ---------------- */\n\n  /* Where a definition sits, whether or not it has a node. A module is drawn as its box\n   * rather than a node of its own, so anything pointing at one has to point at the box. */\n  const spotOf = (id) => {\n    const node = props.laid.at.get(id);\n    if (node) return { x: node.x, y: node.y, w: node.w, h: NODE_H };\n\n    const boxed = (box) => {\n      if (box.module && box.module.id === id) {\n        return { x: box.x, y: box.y, w: box.w, h: box.h };\n      }\n      for (const child of box.boxes) {\n        const found = boxed(child);\n        if (found) return found;\n      }\n      return null;\n    };\n    for (const box of props.laid.boxes) {\n      const found = boxed(box);\n      if (found) return found;\n    }\n    return null;\n  };\n\n  const every = (boxes) => boxes.flatMap((box) => [box, ...every(box.boxes)]);\n  const holding = () => (props.review.definitions.get(props.here) || {}).file;\n\n  /* Everything a box stands over: itself, its module's file, and the same again for every\n   * box inside it. A box lights for anything in any of them, which is what stacks the\n   * tints as you point deeper in. */\n  const covers = (box) =>\n    [box.key, (box.module || {}).file, ...box.boxes.flatMap(covers)].filter(Boolean);\n\n  /* Where pressing a box takes you: its own module if it has one, else the first definition\n   * it holds at any depth. A place you can't point at reads as broken. */\n  const opens = (box) => {\n    if (box.module) return box.module.id;\n    for (const node of inside(box)) return node.id;\n    return null;\n  };\n\n  /* What's under a point, in the drawing's own units. A definition wins over the box it's\n   * in, and the innermost box wins over the ones around it. */\n  const at = ({ x, y }) => {\n    for (const [id, spot] of props.laid.at) {\n      if (x >= spot.x && x <= spot.x + spot.w && y >= spot.y && y <= spot.y + NODE_H) {\n        return { node: id, file: props.review.definitions.get(id).file };\n      }\n    }\n\n    let innermost = null;\n    for (const box of every(props.laid.boxes)) {\n      if (x < box.x || x > box.x + box.w || y < box.y || y > box.y + box.h) continue;\n      if (!innermost || box.w * box.h < innermost.w * innermost.h) innermost = box;\n    }\n    return innermost ? { box: innermost, file: innermost.key } : null;\n  };\n\n  const pointing = (event) => {\n    const room = pane();\n    const view = seen();\n    return {\n      x: (event.clientX - room.left - view.x) / view.k,\n      y: (event.clientY - room.top - view.y) / view.k,\n    };\n  };\n\n  const onPointerMove = (event) => {\n    const what = at(pointing(event));\n    setOver(what && what.file);\n    frame.style.cursor = what ? \"pointer\" : \"grab\";\n    frame.title = what && what.node !== undefined ? props.review.definitions.get(what.node).path : \"\";\n  };\n\n  const onClick = (event) => {\n    const what = at(pointing(event));\n    if (!what) return;\n    const id = what.node !== undefined ? what.node : opens(what.box);\n    if (id !== null && id !== undefined) props.onOpen(id);\n  };\n\n  /* ---------------- drawing ---------------- */\n\n  /* The palette, as the page has it. Read from the stylesheet so a theme is still the one\n   * place colours are decided, even though nothing drawn here is styled by a rule. */\n  let paint: Record<string, string> = {};\n  const readPaint = () => {\n    const had = getComputedStyle(document.documentElement);\n    const of = (name) => had.getPropertyValue(`--${name}`).trim();\n    paint = {\n      raised: of(\"raised\"), ink: of(\"ink\"), muted: of(\"muted\"), faint: of(\"faint\"),\n      rule: of(\"rule\"), lean: of(\"lean\"), path: of(\"path\"),\n      add: of(\"add\"), del: of(\"del\"), chg: of(\"chg\"), aff: of(\"muted\"),\n    };\n  };\n\n  let drawing = 0;\n  const redraw = () => {\n    if (drawing || !ink) return;\n    drawing = requestAnimationFrame(() => {\n      drawing = 0;\n      draw();\n    });\n  };\n\n  /* A canvas has a size in pixels of its own, and it isn't the size it's shown at: on a\n   * dense screen the two differ, and drawing at the wrong one is how text goes soft. */\n  const sized = () => {\n    const room = pane();\n    const dense = window.devicePixelRatio || 1;\n    paper.width = Math.round(room.width * dense);\n    paper.height = Math.round(room.height * dense);\n    paper.style.width = `${room.width}px`;\n    paper.style.height = `${room.height}px`;\n  };\n\n  function draw() {\n    const room = pane();\n    const dense = window.devicePixelRatio || 1;\n    const view = seen();\n\n    ink.setTransform(dense, 0, 0, dense, 0, 0);\n    ink.clearRect(0, 0, room.width, room.height);\n    ink.setTransform(dense * view.k, 0, 0, dense * view.k, dense * view.x, dense * view.y);\n    ink.lineJoin = \"round\";\n    ink.textBaseline = \"alphabetic\";\n\n    const near = neighbours(props.review, props.here);\n    for (const box of props.laid.boxes) place(box, 0);\n    for (const edge of props.review.edges) leans(edge, near);\n    ahead();\n    for (const [id, spot] of props.laid.at) node(id, spot, near);\n  }\n\n  const lit = (box) => covers(box).some((key) => key === over() || key === holding());\n\n  function place(box, deep) {\n    const radius = Math.max(RADIUS.node, RADIUS.box - deep * RADIUS.step);\n    const module = box.module;\n\n    /* Laid on with alpha rather than a flat colour, so a box inside a lit box adds to it\n     * instead of replacing it: the deepest place the pointer is in is the brightest. */\n    if (lit(box) && opens(box) !== null) {\n      ink.globalAlpha = 0.4;\n      ink.fillStyle = paint.raised;\n      round(box.x, box.y, box.w, box.h, radius);\n      ink.fill();\n      ink.globalAlpha = 1;\n    }\n\n    const here = module && module.id === props.here;\n    const soon = module && module.id === props.next;\n    ink.setLineDash(soon ? [5, 3] : deep && !here ? [3, 3] : []);\n    ink.lineWidth = here || soon ? 1.8 : 1;\n    ink.strokeStyle = here ? paint.lean : soon ? paint.path : paint.rule;\n    round(box.x, box.y, box.w, box.h, radius);\n    ink.stroke();\n    ink.setLineDash([]);\n\n    ink.font = `${BOX_FONT}px ${MONO}`;\n    let x = box.x + 10;\n    if (module) {\n      const mark = `${MARK[module.mark]} `;\n      ink.fillStyle = paint[TINT[module.mark]];\n      ink.fillText(mark, x, box.y + 16);\n      x += ink.measureText(mark).width;\n    }\n    ink.fillStyle = paint.muted;\n    ink.fillText(box.label, x, box.y + 16);\n\n    for (const child of box.boxes) place(child, deep + 1);\n  }\n\n  function node(id, spot, near) {\n    const definition = props.review.definitions.get(id);\n    const here = id === props.here;\n    const soon = id === props.next;\n    const read = props.read.has(id);\n    const dim = near.size > 0 && !near.has(id) && !here && !soon;\n    const tint = paint[TINT[definition.mark]];\n\n    ink.globalAlpha = here || soon ? 1 : read && dim ? 0.42 : read ? 0.6 : dim ? 0.55 : 1;\n\n    /* A node that's been read is emptied out — it keeps its coloured edge, so what happened\n     * to it is still legible, but it stops being a solid thing on the page. */\n    if (!read || here) {\n      ink.fillStyle = paint.raised;\n      round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);\n      ink.fill();\n    }\n\n    ink.setLineDash(soon ? [5, 3] : []);\n    ink.lineWidth = here ? 2 : soon ? 1.8 : 1.2;\n    ink.strokeStyle = here ? paint.lean : soon ? paint.path : tint;\n    round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);\n    ink.stroke();\n    ink.setLineDash([]);\n\n    ink.font = `${FONT}px ${MONO}`;\n    const mark = `${MARK[definition.mark]}`;\n    ink.fillStyle = tint;\n    ink.fillText(mark, spot.x + 10, spot.y + 18.5);\n    ink.fillStyle = here ? paint.lean : read ? paint.muted : paint.ink;\n    ink.fillText(\n      shorten(definition.name),\n      spot.x + 10 + ink.measureText(`${mark} `).width,\n      spot.y + 18.5,\n    );\n    ink.globalAlpha = 1;\n  }\n\n  function leans(edge, near) {\n    const from = spotOf(edge.from);\n    const to = spotOf(edge.to);\n    if (!from || !to) return;\n\n    const touching = props.here && (edge.from === props.here || edge.to === props.here);\n    const upwards = to.y <= from.y;\n\n    ink.globalAlpha = touching ? 1 : near.size ? 0.3 : 0.85;\n    ink.strokeStyle = touching ? paint.lean : paint.faint;\n    ink.lineWidth = touching ? 1.5 : upwards ? 1 : 1.2;\n    ink.setLineDash(upwards ? [] : [4, 3]);\n    ink.beginPath();\n    if (upwards) bend(to, from);\n    else aside(from, to);\n    ink.stroke();\n    ink.setLineDash([]);\n    ink.globalAlpha = 1;\n  }\n\n  /* Where the reading goes next. Nothing else in the drawing has an arrowhead, because\n   * nothing else is about which way time runs. */\n  function ahead() {\n    const from = spotOf(props.here);\n    const to = spotOf(props.next);\n    if (!from || !to) return;\n\n    const [leaves, arrives] = closest(from, to);\n    ink.globalAlpha = 0.55;\n    ink.strokeStyle = paint.path;\n    ink.fillStyle = paint.path;\n    ink.lineWidth = 1.8;\n    ink.setLineDash([5, 3]);\n    ink.beginPath();\n    ink.moveTo(leaves.x, leaves.y);\n    ink.lineTo(arrives.x, arrives.y);\n    ink.stroke();\n    ink.setLineDash([]);\n    tip(leaves, arrives);\n    ink.globalAlpha = 1;\n  }\n\n  function tip(from, to) {\n    const turn = Math.atan2(to.y - from.y, to.x - from.x);\n    const wide = 0.42;\n    const long = 9;\n    ink.beginPath();\n    ink.moveTo(to.x, to.y);\n    ink.lineTo(to.x - long * Math.cos(turn - wide), to.y - long * Math.sin(turn - wide));\n    ink.lineTo(to.x - long * Math.cos(turn + wide), to.y - long * Math.sin(turn + wide));\n    ink.closePath();\n    ink.fill();\n  }\n\n  const round = (x, y, w, h, r) => {\n    const tight = Math.min(r, w / 2, h / 2);\n    ink.beginPath();\n    ink.moveTo(x + tight, y);\n    ink.arcTo(x + w, y, x + w, y + h, tight);\n    ink.arcTo(x + w, y + h, x, y + h, tight);\n    ink.arcTo(x, y + h, x, y, tight);\n    ink.arcTo(x, y, x + w, y, tight);\n    ink.closePath();\n  };\n\n  const bend = (up, down) => {\n    const [x1, y1] = [up.x + up.w / 2, up.y + up.h];\n    const [x2, y2] = [down.x + down.w / 2, down.y];\n    const mid = (y1 + y2) / 2;\n    ink.moveTo(x1, y1);\n    ink.bezierCurveTo(x1, mid, x2, mid, x2, y2);\n  };\n\n  const aside = (from, to) => {\n    const [x1, y1] = [from.x + from.w, from.y + from.h / 2];\n    const [x2, y2] = [to.x + to.w, to.y + to.h / 2];\n    const out = 34 + Math.abs(y2 - y1) * 0.2;\n    ink.moveTo(x1, y1);\n    ink.bezierCurveTo(x1 + out, y1, x2 + out, y2, x2, y2);\n  };\n\n  /* ---------------- keeping up ---------------- */\n\n  const onKey = (event) => {\n    if (event.metaKey || event.altKey) return;\n    if (event.key === \"+\" || event.key === \"=\") behaviour.scaleBy(select(paper), 1.2);\n    else if (event.key === \"-\" || event.key === \"_\") behaviour.scaleBy(select(paper), 1 / 1.2);\n    else if (event.key === \"0\") fit();\n    else if (event.key === \"1\") closer();\n    else return;\n    event.preventDefault();\n  };\n\n  onMount(() => {\n    ink = paper.getContext(\"2d\");\n    readPaint();\n    sized();\n    select(paper).call(behaviour);\n    frame.addEventListener(\"wheel\", onWheel, { passive: true });\n    fit();\n\n    /* A resized window changes how far out the whole drawing sits, so the limit has to\n     * move with it or the reader gets stuck too close in. */\n    const resized = new ResizeObserver(() => {\n      sized();\n      const shown = whole();\n      behaviour.scaleExtent([shown.k, CLOSEST]);\n      if (seen().k < shown.k) fit();\n      else redraw();\n    });\n    resized.observe(frame);\n\n    document.addEventListener(\"keydown\", onKey);\n    onCleanup(() => {\n      resized.disconnect();\n      frame.removeEventListener(\"wheel\", onWheel);\n      document.removeEventListener(\"keydown\", onKey);\n    });\n  });\n\n  /* Everything the drawing depends on, watched in one place: read it here, and a change to\n   * it draws again. */\n  createEffect(() => {\n    void [props.here, props.next, props.read, props.review, props.laid, over()];\n    redraw();\n  });\n\n  /* Reading moves the view, but only when what's being read has gone off screen, and only\n   * ever in answer to the reading. */\n  createEffect(() => {\n    const spot = spotOf(props.here);\n    if (!spot || !paper) return;\n\n    const view = seen();\n    const room = pane();\n    const [x, y] = [view.applyX(spot.x), view.applyY(spot.y)];\n    const showing =\n      x >= 0 && y >= 0 && x + spot.w * view.k <= room.width && y + spot.h * view.k <= room.height;\n    if (showing) return;\n\n    select(paper).call(behaviour.transform, onto(spot, view.k));\n  });\n\n  return (\n    <div\n      class=\"canvas\"\n      ref={frame}\n      onPointerMove={onPointerMove}\n      onPointerLeave={() => setOver(null)}\n      onClick={onClick}\n    >\n      <canvas ref={paper} />\n\n      {/* What a canvas can't be: something to tab through, and something to read aloud. */}\n      <ul class=\"spoken\" aria-label=\"What changed, and what holds up what\">\n        {props.review.steps.map((step) => {\n          const definition = props.review.definitions.get(step.definition);\n          return (\n            <li>\n              <button onClick={() => props.onOpen(definition.id)}>\n                {definition.path} — {definition.kind}\n              </button>\n            </li>\n          );\n        })}\n      </ul>\n\n      <div class=\"viewkeys\">\n        scroll to zoom · drag to move · <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current\n      </div>\n    </div>\n  );\n}"
-                }
-              ],
-              "docs": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 1925,
-                    "start": 579
-                  },
-                  "text": "/* The shape of the change: a box for every place code lives, nested as deep as the\n * grouping goes, a node for each definition, and lines for what leans on what.\n *\n * Lines run upwards, because whatever holds something up is drawn above it. A line that has\n * to run the other way is something the reader will be asked to take on faith, so it swings\n * out to the side where it can't be mistaken for the ordinary case.\n *\n * Drawn on a canvas rather than as elements. As elements this was a shape and a name for\n * every definition and a path for every line — some nine hundred things for the engine to\n * lay out, rasterise and hit-test, all of it again at each new size. Chrome has the room to\n * hide that. The webview the window is built on does not: measured on the same picture, ten\n * frames a second as elements against sixty here.\n *\n * What that costs is what a browser gives an element for free — nothing drawn here can be\n * tabbed to or read aloud. The list underneath makes up for it: the same definitions, in\n * reading order, as real buttons that nobody can see.\n *\n * One thing owns where the view is, and it's the zoom behaviour. Nothing here sets the\n * transform itself — moving the view means asking the behaviour to move, so what the reader\n * is doing and what the page wants to show can't end up disagreeing.\n */\n"
-                }
-              ],
-              "type": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 1954,
-                    "start": 1925
-                  },
-                  "text": "export function Graph(props) "
-                }
-              ]
-            }
+        "added": {
+          "contract": "fn a_module_is_named_after_its_file()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "a_module_is_named_after_its_file",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
           },
-          "before": {
-            "contract": "function Graph(props: any): JSX.Element",
-            "file": "ui/src/Graph.tsx",
-            "kind": "function",
-            "locator": {
-              "name": "Graph",
-              "scope": [
-                "ui",
-                "src",
-                "Graph"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 10032,
-                    "start": 1527
-                  },
-                  "text": "{\n  let frame;\n  let paper;\n  let moving;\n\n  /* Which module's box the pointer is inside.\n   *\n   * Not :hover, which only reaches what's under the pointer and its ancestors. A node sits\n   * on top of its box without being inside it in the drawing, so moving across the nodes\n   * made the box flicker on and off. Asking what's under the pointer and working out which\n   * box it belongs to holds steady. */\n  const [over, setOver] = createSignal(null);\n\n  const onPointerOver = (event) => {\n    const node = event.target.closest(\".nd\");\n    if (node) return setOver(node.dataset.file);\n    /* The innermost box wins on its own: a file's box is drawn over its group's, so this\n     * finds the file when the pointer is in one and the group when it's in the space\n     * around them. */\n    setOver(event.target.closest(\".box\")?.dataset.box || null);\n  };\n\n  const behaviour = zooming()\n    .translateExtent([[0, 0], [props.laid.w, props.laid.h]])\n    /* Moved with a CSS transform rather than the SVG attribute. The attribute makes the\n     * engine redraw every element under it — a few hundred shapes and all their text,\n     * re-shaped at the new scale — for each frame of a drag. A CSS transform on a layer\n     * the compositor already holds is a blit, and only settles back to sharp text when\n     * the gesture stops. Chrome hides the difference; WebKit does not. */\n    .on(\"zoom\", ({ transform }) => {\n      moving.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`;\n    });\n\n  const pane = () => frame.getBoundingClientRect();\n\n  /* The whole drawing, in the middle, as large as it goes. Also the furthest out a reader\n   * can pull: there's nothing to see beyond the edges of the drawing. */\n  const whole = () => {\n    const seen = pane();\n    const k = Math.min((seen.width - 2 * EDGE) / props.laid.w, (seen.height - 2 * EDGE) / props.laid.h);\n    return zoomIdentity\n      .translate((seen.width - props.laid.w * k) / 2, (seen.height - props.laid.h * k) / 2)\n      .scale(k);\n  };\n\n  const fit = () => {\n    const shown = whole();\n    behaviour.scaleExtent([shown.k, CLOSEST]);\n    select(paper).call(behaviour.transform, shown);\n  };\n\n  /* The same view, moved so one definition sits in the middle of it. */\n  const onto = (spot, k) =>\n    zoomIdentity\n      .translate(pane().width / 2, pane().height / 2)\n      .scale(k)\n      .translate(-(spot.x + spot.w / 2), -(spot.y + NODE_H / 2));\n\n  const closer = () => {\n    const spot = props.laid.at.get(props.here);\n    if (spot) select(paper).call(behaviour.transform, onto(spot, CLOSEST / 2));\n  };\n\n  /* The box holding whatever is being read stays lit, so a glance says where you are\n   * without hunting for the one outlined node. */\n  const holding = () => (props.review.definitions.get(props.here) || {}).file;\n\n  /* Where a definition sits, whether or not it has a node. A module is drawn as its file's\n   * box rather than a node of its own, so anything pointing at one has to point at the box\n   * — without this the arrow simply vanished whenever the reading passed through a module. */\n  const spotOf = (id) => {\n    const node = props.laid.at.get(id);\n    if (node) return { x: node.x, y: node.y, w: node.w, h: NODE_H };\n\n    const boxed = (box) => {\n      if (box.module && box.module.id === id) {\n        return { x: box.x, y: box.y, w: box.w, h: box.h };\n      }\n      for (const child of box.boxes) {\n        const found = boxed(child);\n        if (found) return found;\n      }\n      return null;\n    };\n    for (const box of props.laid.boxes) {\n      const found = boxed(box);\n      if (found) return found;\n    }\n    return null;\n  };\n\n  /* Everything a box stands over: itself, its module's file, and the same again for every\n   * box inside it. A box lights for anything in any of them, which is what stacks the\n   * tints as you point deeper in. */\n  const covers = (box) =>\n    [box.key, (box.module || {}).file, ...box.boxes.flatMap(covers)].filter(Boolean);\n  const lit = (box) => covers(box).some((key) => key === over() || key === holding());\n\n  /* Where pressing a box takes you: its own module if it has one, else the first definition\n   * it holds at any depth. A place you can't point at reads as broken. */\n  const opens = (box) => {\n    if (box.module) return box.module.id;\n    for (const node of inside(box)) return node.id;\n    return null;\n  };\n\n  const near = () => neighbours(props.review, props.here);\n  const dimmed = (id) => near().size > 0 && !near().has(id);\n  const placed = () =>\n    [...props.review.definitions.values()].filter((definition) => props.laid.at.has(definition.id));\n\n  /* Zoom from the keyboard as well, since that's how the rest of this is driven. */\n  const onKey = (event) => {\n    if (event.metaKey || event.altKey) return;\n    if (event.key === \"+\" || event.key === \"=\") behaviour.scaleBy(select(paper), 1.2);\n    else if (event.key === \"-\" || event.key === \"_\") behaviour.scaleBy(select(paper), 1 / 1.2);\n    else if (event.key === \"0\") fit();\n    else if (event.key === \"1\") closer();\n    else return;\n    event.preventDefault();\n  };\n\n  onMount(() => {\n    select(paper).call(behaviour);\n    fit();\n\n    /* A resized window changes how far out the whole drawing sits, so the limit has to\n     * move with it or the reader gets stuck too close in. */\n    const resized = new ResizeObserver(() => {\n      const shown = whole();\n      behaviour.scaleExtent([shown.k, CLOSEST]);\n      if (zoomTransform(paper).k < shown.k) fit();\n    });\n    resized.observe(frame);\n\n    document.addEventListener(\"keydown\", onKey);\n    onCleanup(() => {\n      resized.disconnect();\n      document.removeEventListener(\"keydown\", onKey);\n    });\n  });\n\n  /* Reading moves the view, but only when what's being read has gone off screen, and only\n   * ever in answer to the reading. Where the view is isn't watched here — that's what let\n   * this fight the reader before. */\n  createEffect(() => {\n    const spot = props.laid.at.get(props.here);\n    if (!spot || !paper) return;\n\n    const at = zoomTransform(paper);\n    const seen = pane();\n    const [x, y] = [at.applyX(spot.x), at.applyY(spot.y)];\n    const showing =\n      x >= 0 && y >= 0 && x + spot.w * at.k <= seen.width && y + NODE_H * at.k <= seen.height;\n    if (showing) return;\n\n    select(paper).call(behaviour.transform, onto(spot, at.k));\n  });\n\n  return (\n    <div class=\"canvas\" ref={frame} onPointerOver={onPointerOver} onPointerLeave={() => setOver(null)}>\n      <svg\n        class={near().size ? \"focus\" : \"\"}\n        ref={paper}\n        role=\"img\"\n        aria-label=\"What changed, and what holds up what\"\n      >\n        <defs>\n          <marker\n            id=\"tip\"\n            viewBox=\"0 0 8 8\"\n            refX=\"7\"\n            refY=\"4\"\n            markerWidth=\"6\"\n            markerHeight=\"6\"\n            orient=\"auto-start-reverse\"\n          >\n            <path d=\"M0,0 L8,4 L0,8 z\" />\n          </marker>\n        </defs>\n        <g ref={moving}>\n          <For each={props.laid.boxes}>\n            {(box) => (\n              <Box\n                box={box}\n                deep={0}\n                radius={RADIUS.box}\n                here={props.here}\n                next={props.next}\n                lit={lit}\n                opens={opens}\n                onOpen={props.onOpen}\n              />\n            )}\n          </For>\n\n          <For each={props.review.edges}>\n            {(edge) => <Leans edge={edge} at={props.laid.at} here={props.here} />}\n          </For>\n\n          <For each={placed()}>\n            {(definition) => (\n              <Node\n                definition={definition}\n                spot={props.laid.at.get(definition.id)}\n                here={props.here}\n                next={props.next}\n                read={props.read.has(definition.id)}\n                dim={dimmed(definition.id)}\n                file={definition.file}\n                onOpen={props.onOpen}\n              />\n            )}\n          </For>\n\n          {/* Where the reading goes next. The order is the whole point of the tool, and\n            * without this the graph shows where you are but not where you're being taken. */}\n          <Show when={spotOf(props.here) && spotOf(props.next)}>\n            <path class=\"up\" d={onward(spotOf(props.here), spotOf(props.next))} />\n          </Show>\n        </g>\n      </svg>\n\n      <div class=\"viewkeys\">\n        scroll to zoom · drag to move · <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current\n      </div>\n    </div>\n  );\n}"
-                }
-              ],
-              "docs": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 1498,
-                    "start": 477
-                  },
-                  "text": "/* The shape of the change: a box for every place code lives, nested as deep as the\n * grouping goes, a node for each definition, and lines for what leans on what.\n *\n * Lines run upwards, because whatever holds something up is drawn above it. A line that has\n * to run the other way is something the reader will be asked to take on faith, so it swings\n * out to the side where it can't be mistaken for the ordinary case.\n *\n * The view is the reader's to move: drag to pan, scroll to zoom, and the page keeps up with\n * the reading by bringing whatever is being read into view.\n *\n * One thing owns where the view is, and it's the zoom behaviour. Nothing here sets the\n * transform itself — moving the view means asking the behaviour to move, so what the reader\n * is doing and what the page wants to show can't end up disagreeing. Getting that wrong is\n * what made zooming in far enough a trap: the page kept dragging the view back to the\n * definition being read, and every attempt to zoom out was overwritten.\n */\n"
-                }
-              ],
-              "type": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 1527,
-                    "start": 1498
-                  },
-                  "text": "export function Graph(props) "
-                }
-              ]
-            }
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 783,
+                "span": {
+                  "end": 27148,
+                  "start": 26906
+                },
+                "text": "{\n        let source = \"import { a } from \\\"./a\\\";\\n\";\n        let module = module(&opened(source, json!([]))).expect(\"a module\");\n\n        assert_eq!(module.locator.name, \"money\");\n        assert_eq!(module.locator.scope, vec![\"src\"]);\n    }"
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 782,
+                "span": {
+                  "end": 26906,
+                  "start": 26856
+                },
+                "text": "#[test]\n    fn a_module_is_named_after_its_file() "
+              }
+            ]
           }
         }
       }
@@ -334,47 +1046,38 @@
     {
       "identity": 431,
       "sides": {
-        "removed": {
-          "contract": "function Box(props: any): JSX.Element",
-          "file": "ui/src/Graph.tsx",
-          "kind": "function",
+        "added": {
+          "contract": "fn a_file_with_nothing_left_over_has_no_module()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
           "locator": {
-            "name": "Box",
+            "name": "a_file_with_nothing_left_over_has_no_module",
             "scope": [
-              "ui",
-              "src",
-              "Graph"
+              "dagger_lsp_adapter",
+              "tests"
             ]
           },
           "parts": {
             "body": [
               {
                 "file": null,
+                "line": 794,
                 "span": {
-                  "end": 12146,
-                  "start": 10602
+                  "end": 27590,
+                  "start": 27349
                 },
-                "text": "{\n  const module = () => props.box.module;\n  const mine = () => module() && module().id === props.here;\n  const soon = () => module() && module().id === props.next;\n\n  const classes = () =>\n    [\"box\", props.deep ? \"deep\" : \"\", mine() ? \"here\" : \"\", soon() ? \"next\" : \"\",\n      module() ? TINT[module().mark] : \"\"]\n      .filter(Boolean)\n      .join(\" \");\n\n  return (\n    <g class={classes()} data-box={props.box.key}>\n      <Show when={props.opens(props.box)}>\n        <rect\n          class={`hit${props.lit(props.box) ? \" on\" : \"\"}`}\n          x={props.box.x}\n          y={props.box.y}\n          width={props.box.w}\n          height={props.box.h}\n          rx={props.radius}\n          onClick={() => props.onOpen(props.opens(props.box))}\n        />\n      </Show>\n      <rect\n        x={props.box.x}\n        y={props.box.y}\n        width={props.box.w}\n        height={props.box.h}\n        rx={props.radius}\n      />\n      <text x={props.box.x + 10} y={props.box.y + 16}>\n        <Show when={module()}>\n          <tspan class=\"mk\" font-weight=\"700\">{MARK[module().mark]} </tspan>\n        </Show>\n        {props.box.label}\n      </text>\n\n      <For each={props.box.boxes}>\n        {(child) => (\n          <Box\n            box={child}\n            deep={props.deep + 1}\n            radius={Math.max(RADIUS.node, props.radius - RADIUS.step)}\n            here={props.here}\n            next={props.next}\n            lit={props.lit}\n            opens={props.opens}\n            onOpen={props.onOpen}\n          />\n        )}\n      </For>\n    </g>\n  );\n}"
-              }
-            ],
-            "docs": [
-              {
-                "file": null,
-                "span": {
-                  "end": 10582,
-                  "start": 10034
-                },
-                "text": "/* A box, and whatever it holds — which is boxes, so this draws itself again one level in.\n *\n * There is no such thing here as a group or a file, only a place at some depth. Each takes\n * a press, each lights when the pointer or the reading is anywhere inside it, and each that\n * answers to a module wears that module's mark and its current-or-next outline. Because the\n * tints are laid on with alpha, a box inside a lit box adds to it rather than replacing it,\n * and the deepest place you're pointing is the brightest thing on the page.\n */\n"
+                "text": "{\n        let source = \"export interface Money {}\\n\";\n        let file = opened(\n            source,\n            json!([reported(source, \"Money\", 11, \"export interface Money {}\")]),\n        );\n\n        assert!(module(&file).is_none());\n    }"
               }
             ],
             "type": [
               {
                 "file": null,
+                "line": 793,
                 "span": {
-                  "end": 10602,
-                  "start": 10582
+                  "end": 27349,
+                  "start": 27288
                 },
-                "text": "function Box(props) "
+                "text": "#[test]\n    fn a_file_with_nothing_left_over_has_no_module() "
               }
             ]
           }
@@ -384,37 +1087,38 @@
     {
       "identity": 432,
       "sides": {
-        "removed": {
-          "contract": "function Node(props: any): JSX.Element",
-          "file": "ui/src/Graph.tsx",
-          "kind": "function",
+        "added": {
+          "contract": "fn a_contract_stops_at_the_documentation()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
           "locator": {
-            "name": "Node",
+            "name": "a_contract_stops_at_the_documentation",
             "scope": [
-              "ui",
-              "src",
-              "Graph"
+              "dagger_lsp_adapter",
+              "tests"
             ]
           },
           "parts": {
             "body": [
               {
                 "file": null,
+                "line": 808,
                 "span": {
-                  "end": 13171,
-                  "start": 12169
+                  "end": 28205,
+                  "start": 27918
                 },
-                "text": "{\n  const marking = () => props.definition.mark;\n  const classes = () =>\n    [\"nd\",\n      TINT[marking()],\n      props.definition.id === props.here ? \"sel\" : \"\",\n      props.definition.id === props.next ? \"next\" : \"\",\n      props.read ? \"done\" : \"\",\n      props.dim ? \"dim\" : \"\"]\n      .filter(Boolean)\n      .join(\" \");\n\n  return (\n    <g\n      class={classes()}\n      transform={`translate(${props.spot.x},${props.spot.y})`}\n      data-file={props.file}\n      tabindex=\"0\"\n      role=\"button\"\n      aria-label={props.definition.path}\n      onClick={() => props.onOpen(props.definition.id)}\n      onKeyDown={(event) => event.key === \"Enter\" && props.onOpen(props.definition.id)}\n    >\n      <rect width={props.spot.w} height={NODE_H} rx={RADIUS.node} />\n      <text x=\"10\" y=\"18.5\">\n        <tspan class=\"mk\" font-weight=\"700\">{MARK[marking()]}</tspan>\n        <tspan class=\"nm\" dx=\"6\">{shorten(props.definition.name)}</tspan>\n      </text>\n      <title>{props.definition.path}</title>\n    </g>\n  );\n}"
+                "text": "{\n        let hover = json!({\n            \"contents\": { \"value\": \"```ts\\nfunction add(a: number): number\\n```\\n---\\nAdds.\\n\\n```ts\\nadd(1)\\n```\" }\n        });\n\n        assert_eq!(\n            fenced(&hover).as_deref(),\n            Some(\"function add(a: number): number\")\n        );\n    }"
               }
             ],
             "type": [
               {
                 "file": null,
+                "line": 807,
                 "span": {
-                  "end": 12169,
-                  "start": 12148
+                  "end": 27918,
+                  "start": 27863
                 },
-                "text": "function Node(props) "
+                "text": "#[test]\n    fn a_contract_stops_at_the_documentation() "
               }
             ]
           }
@@ -424,37 +1128,79 @@
     {
       "identity": 433,
       "sides": {
-        "removed": {
-          "contract": "function Leans(props: any): JSX.Element",
-          "file": "ui/src/Graph.tsx",
-          "kind": "function",
+        "added": {
+          "contract": "fn the_last_block_before_the_rule_is_the_declaration()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
           "locator": {
-            "name": "Leans",
+            "name": "the_last_block_before_the_rule_is_the_declaration",
             "scope": [
-              "ui",
-              "src",
-              "Graph"
+              "dagger_lsp_adapter",
+              "tests"
             ]
           },
           "parts": {
             "body": [
               {
                 "file": null,
+                "line": 821,
                 "span": {
-                  "end": 13762,
-                  "start": 13195
+                  "end": 28595,
+                  "start": 28370
                 },
-                "text": "{\n  const from = () => props.at.get(props.edge.from);\n  const to = () => props.at.get(props.edge.to);\n  const touching = () => props.here && (props.edge.from === props.here || props.edge.to === props.here);\n  const upwards = () => to().y <= from().y;\n  const shape = () => (upwards() ? bend(to(), from()) : aside(from(), to()));\n\n  return (\n    <Show when={from() && to()}>\n      <path class={`${upwards() ? \"eg\" : \"ec\"}${touching() ? \" on\" : \"\"}`} d={shape()} />\n      <Show when={touching()}>\n        <path class=\"eh\" d={shape()} />\n      </Show>\n    </Show>\n  );\n}"
+                "text": "{\n        let hover = json!({\n            \"contents\": { \"value\": \"```ts\\nmodule \\\"money\\\"\\n```\\n```ts\\nconst pence: number\\n```\" }\n        });\n\n        assert_eq!(fenced(&hover).as_deref(), Some(\"const pence: number\"));\n    }"
               }
             ],
             "type": [
               {
                 "file": null,
+                "line": 820,
                 "span": {
-                  "end": 13195,
-                  "start": 13173
+                  "end": 28370,
+                  "start": 28303
                 },
-                "text": "function Leans(props) "
+                "text": "#[test]\n    fn the_last_block_before_the_rule_is_the_declaration() "
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "identity": 434,
+      "sides": {
+        "added": {
+          "contract": "fn a_hover_with_nothing_fenced_says_nothing()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
+          "locator": {
+            "name": "a_hover_with_nothing_fenced_says_nothing",
+            "scope": [
+              "dagger_lsp_adapter",
+              "tests"
+            ]
+          },
+          "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 830,
+                "span": {
+                  "end": 28746,
+                  "start": 28659
+                },
+                "text": "{\n        assert_eq!(fenced(&json!({ \"contents\": { \"value\": \"Adds.\" } })), None);\n    }"
+              }
+            ],
+            "type": [
+              {
+                "file": null,
+                "line": 829,
+                "span": {
+                  "end": 28659,
+                  "start": 28601
+                },
+                "text": "#[test]\n    fn a_hover_with_nothing_fenced_says_nothing() "
               }
             ]
           }
@@ -464,124 +1210,38 @@
     {
       "identity": 435,
       "sides": {
-        "kept": {
-          "after": {
-            "contract": "function closest(from: any, to: any): any[]",
-            "file": "ui/src/Graph.tsx",
-            "kind": "function",
-            "locator": {
-              "name": "closest",
-              "scope": [
-                "ui",
-                "src",
-                "Graph"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 18631,
-                    "start": 18397
-                  },
-                  "text": "{\n  let best = null;\n  for (const a of faces(from)) {\n    for (const b of faces(to)) {\n      const far = Math.hypot(b.x - a.x, b.y - a.y);\n      if (!best || far < best.far) best = { far, a, b };\n    }\n  }\n  return [best.a, best.b];\n}"
-                }
-              ],
-              "docs": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 18370,
-                    "start": 18254
-                  },
-                  "text": "/* From the definition being read to the one after it: between whichever pair of faces sits\n * closest together. */\n"
-                }
-              ],
-              "type": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 18397,
-                    "start": 18370
-                  },
-                  "text": "function closest(from, to) "
-                }
-              ]
-            }
-          },
-          "before": {
-            "contract": "function onward(from: any, to: any): string",
-            "file": "ui/src/Graph.tsx",
-            "kind": "function",
-            "locator": {
-              "name": "onward",
-              "scope": [
-                "ui",
-                "src",
-                "Graph"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 14752,
-                    "start": 14483
-                  },
-                  "text": "{\n  let best = null;\n  for (const a of faces(from)) {\n    for (const b of faces(to)) {\n      const far = Math.hypot(b.x - a.x, b.y - a.y);\n      if (!best || far < best.far) best = { far, a, b };\n    }\n  }\n  return `M${best.a.x},${best.a.y} L${best.b.x},${best.b.y}`;\n}"
-                }
-              ],
-              "docs": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 14457,
-                    "start": 14023
-                  },
-                  "text": "/* From the definition being read to the one after it: straight, between whichever pair of\n * faces sits closest together. Picking a side by which way the target mostly lies gets it\n * wrong whenever two boxes are roughly level or one wraps around the other — the line then\n * sets off away from where it's going before crossing back. Trying all sixteen pairs and\n * keeping the shortest is both simpler to say and always right. */\n"
-                }
-              ],
-              "type": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 14483,
-                    "start": 14457
-                  },
-                  "text": "function onward(from, to) "
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "identity": 437,
-      "sides": {
-        "removed": {
-          "contract": "const bend: (up: any, down: any) => string",
-          "file": "ui/src/Graph.tsx",
-          "kind": "variable",
+        "added": {
+          "contract": "fn a_uri_comes_back_as_a_path_inside_the_snapshot()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
           "locator": {
-            "name": "bend",
+            "name": "a_uri_comes_back_as_a_path_inside_the_snapshot",
             "scope": [
-              "ui",
-              "src",
-              "Graph"
+              "dagger_lsp_adapter",
+              "tests"
             ]
           },
           "parts": {
+            "body": [
+              {
+                "file": null,
+                "line": 835,
+                "span": {
+                  "end": 29083,
+                  "start": 28816
+                },
+                "text": "{\n        let root = Path::new(\"/tmp/dagger-1\");\n\n        assert_eq!(\n            relative(\"file:///tmp/dagger-1/src/money.ts\", root).as_deref(),\n            Some(\"src/money.ts\")\n        );\n        assert_eq!(relative(\"file:///elsewhere/money.ts\", root), None);\n    }"
+              }
+            ],
             "type": [
               {
                 "file": null,
+                "line": 834,
                 "span": {
-                  "end": 15177,
-                  "start": 14957
+                  "end": 28816,
+                  "start": 28752
                 },
-                "text": "bend = (up, down) => {\n  const [x1, y1] = [up.x + up.w / 2, up.y + NODE_H];\n  const [x2, y2] = [down.x + down.w / 2, down.y];\n  const mid = (y1 + y2) / 2;\n  return `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`;\n}"
+                "text": "#[test]\n    fn a_uri_comes_back_as_a_path_inside_the_snapshot() "
               }
             ]
           }
@@ -589,494 +1249,40 @@
       }
     },
     {
-      "identity": 438,
-      "sides": {
-        "removed": {
-          "contract": "const aside: (from: any, to: any) => string",
-          "file": "ui/src/Graph.tsx",
-          "kind": "variable",
-          "locator": {
-            "name": "aside",
-            "scope": [
-              "ui",
-              "src",
-              "Graph"
-            ]
-          },
-          "parts": {
-            "type": [
-              {
-                "file": null,
-                "span": {
-                  "end": 15441,
-                  "start": 15186
-                },
-                "text": "aside = (from, to) => {\n  const [x1, y1] = [from.x + from.w, from.y + NODE_H / 2];\n  const [x2, y2] = [to.x + to.w, to.y + NODE_H / 2];\n  const out = 34 + Math.abs(y2 - y1) * 0.2;\n  return `M${x1},${y1} C${x1 + out},${y1} ${x2 + out},${y2} ${x2},${y2}`;\n}"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "identity": 439,
-      "sides": {
-        "kept": {
-          "after": {
-            "contract": null,
-            "file": "ui/src/Graph.tsx",
-            "kind": "module",
-            "locator": {
-              "name": "Graph",
-              "scope": [
-                "ui",
-                "src"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 123,
-                    "start": 90
-                  },
-                  "text": " } from \"d3-selection\";\nimport { "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 140,
-                    "start": 138
-                  },
-                  "text": ", "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 154,
-                    "start": 152
-                  },
-                  "text": ", "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 262,
-                    "start": 167
-                  },
-                  "text": " } from \"d3-zoom\";\nimport { MARK, NODE_H, RADIUS, TINT, inside, shorten } from \"./review.ts\";\n\n"
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 354,
-                    "start": 352
-                  },
-                  "text": ";\n"
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 471,
-                    "start": 463
-                  },
-                  "text": ";\nconst "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 488,
-                    "start": 480
-                  },
-                  "text": ";\nconst "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 511,
-                    "start": 503
-                  },
-                  "text": ";\nconst "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 579,
-                    "start": 576
-                  },
-                  "text": ";\n\n"
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 18639,
-                    "start": 18631
-                  },
-                  "text": "\n\nconst "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 18829,
-                    "start": 18827
-                  },
-                  "text": ";\n"
-                }
-              ]
-            }
-          },
-          "before": {
-            "contract": null,
-            "file": "ui/src/Graph.tsx",
-            "kind": "module",
-            "locator": {
-              "name": "Graph",
-              "scope": [
-                "ui",
-                "src"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 134,
-                    "start": 101
-                  },
-                  "text": " } from \"d3-selection\";\nimport { "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 151,
-                    "start": 149
-                  },
-                  "text": ", "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 165,
-                    "start": 163
-                  },
-                  "text": ", "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 273,
-                    "start": 178
-                  },
-                  "text": " } from \"d3-zoom\";\nimport { MARK, NODE_H, RADIUS, TINT, inside, shorten } from \"./review.ts\";\n\n"
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 365,
-                    "start": 363
-                  },
-                  "text": ";\n"
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 477,
-                    "start": 474
-                  },
-                  "text": ";\n\n"
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 14760,
-                    "start": 14752
-                  },
-                  "text": "\n\nconst "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 14957,
-                    "start": 14948
-                  },
-                  "text": ";\n\nconst "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 15186,
-                    "start": 15177
-                  },
-                  "text": ";\n\nconst "
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 15443,
-                    "start": 15441
-                  },
-                  "text": ";\n"
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "identity": 441,
-      "sides": {
-        "kept": {
-          "after": {
-            "contract": "function load(): Promise<any>",
-            "file": "ui/src/main.tsx",
-            "kind": "function",
-            "locator": {
-              "name": "load",
-              "scope": [
-                "ui",
-                "src",
-                "main"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 1326,
-                    "start": 884
-                  },
-                  "text": "{\n  const tauri = window.__TAURI__;\n  if (!tauri) {\n    /* Whatever the address asks for is passed straight on, so a link to one change is a\n     * link somebody else can open. */\n    const said = await fetch(`/review${window.location.search}`);\n    if (!said.ok) throw new Error(await said.text());\n    return said.json();\n  }\n\n  const said = await tauri.core.invoke(\"review\", await tauri.core.invoke(\"opened\"));\n  return JSON.parse(said);\n}"
-                }
-              ],
-              "docs": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 862,
-                    "start": 486
-                  },
-                  "text": "/* Where the review comes from.\n *\n * Either way it's dagger that's asked, and asked for the same thing: the working changes.\n * In a window that goes through Tauri; in a browser it goes to the dev server, which runs\n * the same command. Nothing here reads a saved review — one that's written down is out of\n * date as soon as anything changes, and the page can't tell.\n */\n"
-                }
-              ],
-              "type": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 884,
-                    "start": 862
-                  },
-                  "text": "async function load() "
-                }
-              ]
-            }
-          },
-          "before": {
-            "contract": "function load(): Promise<any>",
-            "file": "ui/src/main.tsx",
-            "kind": "function",
-            "locator": {
-              "name": "load",
-              "scope": [
-                "ui",
-                "src",
-                "main"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 1173,
-                    "start": 884
-                  },
-                  "text": "{\n  const tauri = window.__TAURI__;\n  if (!tauri) {\n    const said = await fetch(\"/review\");\n    if (!said.ok) throw new Error(await said.text());\n    return said.json();\n  }\n\n  const said = await tauri.core.invoke(\"review\", await tauri.core.invoke(\"opened\"));\n  return JSON.parse(said);\n}"
-                }
-              ],
-              "docs": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 862,
-                    "start": 486
-                  },
-                  "text": "/* Where the review comes from.\n *\n * Either way it's dagger that's asked, and asked for the same thing: the working changes.\n * In a window that goes through Tauri; in a browser it goes to the dev server, which runs\n * the same command. Nothing here reads a saved review — one that's written down is out of\n * date as soon as anything changes, and the page can't tell.\n */\n"
-                }
-              ],
-              "type": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 884,
-                    "start": 862
-                  },
-                  "text": "async function load() "
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "identity": 443,
-      "sides": {
-        "kept": {
-          "after": {
-            "contract": null,
-            "file": "ui/src/main.tsx",
-            "kind": "module",
-            "locator": {
-              "name": "main",
-              "scope": [
-                "ui",
-                "src"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 199,
-                    "start": 0
-                  },
-                  "text": "import { render } from \"solid-js/web\";\nimport { createResource, Match, Switch } from \"solid-js\";\nimport { App } from \"./App.tsx\";\nimport { paint } from \"./theme.ts\";\nimport \"./style.css\";\n\npaint();\n\n"
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 1774,
-                    "start": 1715
-                  },
-                  "text": "\n\nrender(() => <Root />, document.getElementById(\"root\"));\n"
-                }
-              ]
-            }
-          },
-          "before": {
-            "contract": null,
-            "file": "ui/src/main.tsx",
-            "kind": "module",
-            "locator": {
-              "name": "main",
-              "scope": [
-                "ui",
-                "src"
-              ]
-            },
-            "parts": {
-              "body": [
-                {
-                  "file": null,
-                  "span": {
-                    "end": 199,
-                    "start": 0
-                  },
-                  "text": "import { render } from \"solid-js/web\";\nimport { createResource, Match, Switch } from \"solid-js\";\nimport { App } from \"./App.tsx\";\nimport { paint } from \"./theme.ts\";\nimport \"./style.css\";\n\npaint();\n\n"
-                },
-                {
-                  "file": null,
-                  "span": {
-                    "end": 1621,
-                    "start": 1562
-                  },
-                  "text": "\n\nrender(() => <Root />, document.getElementById(\"root\"));\n"
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "identity": 444,
+      "identity": 436,
       "sides": {
         "added": {
-          "contract": "const FONT: 14",
-          "file": "ui/src/Graph.tsx",
-          "kind": "variable",
+          "contract": "fn a_language_is_guessed_from_the_extension()",
+          "file": "adapters/lsp/src/main.rs",
+          "kind": "fn",
           "locator": {
-            "name": "FONT",
+            "name": "a_language_is_guessed_from_the_extension",
             "scope": [
-              "ui",
-              "src",
-              "Graph"
+              "dagger_lsp_adapter",
+              "tests"
             ]
           },
           "parts": {
-            "type": [
+            "body": [
               {
                 "file": null,
+                "line": 846,
                 "span": {
-                  "end": 480,
-                  "start": 471
+                  "end": 29394,
+                  "start": 29147
                 },
-                "text": "FONT = 14"
+                "text": "{\n        assert_eq!(language_of(\"src/money.ts\"), \"typescript\");\n        assert_eq!(language_of(\"src/App.tsx\"), \"typescriptreact\");\n        assert_eq!(language_of(\"main.rs\"), \"rust\");\n        assert_eq!(language_of(\"Makefile\"), \"plaintext\");\n    }"
               }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "identity": 445,
-      "sides": {
-        "added": {
-          "contract": "const BOX_FONT: 12.5",
-          "file": "ui/src/Graph.tsx",
-          "kind": "variable",
-          "locator": {
-            "name": "BOX_FONT",
-            "scope": [
-              "ui",
-              "src",
-              "Graph"
-            ]
-          },
-          "parts": {
+            ],
             "type": [
               {
                 "file": null,
+                "line": 845,
                 "span": {
-                  "end": 503,
-                  "start": 488
+                  "end": 29147,
+                  "start": 29089
                 },
-                "text": "BOX_FONT = 12.5"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "identity": 446,
-      "sides": {
-        "added": {
-          "contract": "const MONO: \"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace\"",
-          "file": "ui/src/Graph.tsx",
-          "kind": "variable",
-          "locator": {
-            "name": "MONO",
-            "scope": [
-              "ui",
-              "src",
-              "Graph"
-            ]
-          },
-          "parts": {
-            "type": [
-              {
-                "file": null,
-                "span": {
-                  "end": 576,
-                  "start": 511
-                },
-                "text": "MONO = \"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace\""
+                "text": "#[test]\n    fn a_language_is_guessed_from_the_extension() "
               }
             ]
           }
@@ -1087,19 +1293,25 @@
   "grouping": {
     "name": "package",
     "of": {
-      "0": [],
-      "1": [],
+      "0": [
+        "adapters",
+        "git"
+      ],
+      "1": [
+        "adapters",
+        "git"
+      ],
       "10": [
-        "crates",
-        "protocol"
+        "adapters",
+        "git"
       ],
       "100": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "101": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "102": [
         "adapters",
@@ -1133,7 +1345,10 @@
         "adapters",
         "rust"
       ],
-      "11": [],
+      "11": [
+        "adapters",
+        "git"
+      ],
       "110": [
         "adapters",
         "rust"
@@ -1174,7 +1389,10 @@
         "adapters",
         "rust"
       ],
-      "12": [],
+      "12": [
+        "adapters",
+        "git"
+      ],
       "120": [
         "adapters",
         "rust"
@@ -1215,7 +1433,10 @@
         "adapters",
         "rust"
       ],
-      "13": [],
+      "13": [
+        "adapters",
+        "git"
+      ],
       "130": [
         "adapters",
         "rust"
@@ -1233,71 +1454,77 @@
         "rust"
       ],
       "134": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "135": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "136": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "137": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "138": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "139": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
-      "14": [],
-      "140": [
+      "14": [
         "adapters",
-        "rust"
+        "lsp"
+      ],
+      "140": [
+        "crates",
+        "cli"
       ],
       "141": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "142": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "143": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "144": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "145": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "146": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "147": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "148": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
       "149": [
-        "adapters",
-        "rust"
+        "crates",
+        "cli"
       ],
-      "15": [],
+      "15": [
+        "adapters",
+        "lsp"
+      ],
       "150": [
         "crates",
         "cli"
@@ -1338,7 +1565,10 @@
         "crates",
         "cli"
       ],
-      "16": [],
+      "16": [
+        "adapters",
+        "lsp"
+      ],
       "160": [
         "crates",
         "cli"
@@ -1379,7 +1609,10 @@
         "crates",
         "cli"
       ],
-      "17": [],
+      "17": [
+        "adapters",
+        "lsp"
+      ],
       "170": [
         "crates",
         "cli"
@@ -1420,7 +1653,10 @@
         "crates",
         "cli"
       ],
-      "18": [],
+      "18": [
+        "adapters",
+        "lsp"
+      ],
       "180": [
         "crates",
         "cli"
@@ -1461,7 +1697,10 @@
         "crates",
         "cli"
       ],
-      "19": [],
+      "19": [
+        "adapters",
+        "lsp"
+      ],
       "190": [
         "crates",
         "cli"
@@ -1506,7 +1745,10 @@
         "adapters",
         "git"
       ],
-      "20": [],
+      "20": [
+        "adapters",
+        "lsp"
+      ],
       "200": [
         "crates",
         "cli"
@@ -1547,7 +1789,10 @@
         "crates",
         "cli"
       ],
-      "21": [],
+      "21": [
+        "adapters",
+        "lsp"
+      ],
       "210": [
         "crates",
         "cli"
@@ -1589,7 +1834,8 @@
         "cli"
       ],
       "22": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "220": [
         "crates",
@@ -1621,69 +1867,71 @@
       ],
       "227": [
         "crates",
-        "cli"
+        "core"
       ],
       "228": [
         "crates",
-        "cli"
+        "core"
       ],
       "229": [
         "crates",
-        "cli"
+        "core"
       ],
       "23": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "230": [
         "crates",
-        "cli"
+        "core"
       ],
       "231": [
         "crates",
-        "cli"
+        "core"
       ],
       "232": [
         "crates",
-        "cli"
+        "core"
       ],
       "233": [
         "crates",
-        "cli"
+        "core"
       ],
       "234": [
         "crates",
-        "cli"
+        "core"
       ],
       "235": [
         "crates",
-        "cli"
+        "core"
       ],
       "236": [
         "crates",
-        "cli"
+        "core"
       ],
       "237": [
         "crates",
-        "cli"
+        "core"
       ],
       "238": [
         "crates",
-        "cli"
+        "core"
       ],
       "239": [
         "crates",
-        "cli"
+        "core"
       ],
       "24": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "240": [
         "crates",
-        "cli"
+        "core"
       ],
       "241": [
         "crates",
-        "cli"
+        "core"
       ],
       "242": [
         "crates",
@@ -1718,8 +1966,8 @@
         "core"
       ],
       "25": [
-        "ui",
-        "src-tauri"
+        "adapters",
+        "lsp"
       ],
       "250": [
         "crates",
@@ -1762,8 +2010,8 @@
         "core"
       ],
       "26": [
-        "ui",
-        "src-tauri"
+        "adapters",
+        "lsp"
       ],
       "260": [
         "crates",
@@ -1806,8 +2054,8 @@
         "core"
       ],
       "27": [
-        "ui",
-        "src-tauri"
+        "adapters",
+        "lsp"
       ],
       "270": [
         "crates",
@@ -1850,8 +2098,8 @@
         "core"
       ],
       "28": [
-        "ui",
-        "src-tauri"
+        "adapters",
+        "lsp"
       ],
       "280": [
         "crates",
@@ -1894,8 +2142,8 @@
         "core"
       ],
       "29": [
-        "ui",
-        "src-tauri"
+        "adapters",
+        "lsp"
       ],
       "290": [
         "crates",
@@ -1939,11 +2187,11 @@
       ],
       "3": [
         "adapters",
-        "lsp"
+        "git"
       ],
       "30": [
-        "ui",
-        "src-tauri"
+        "adapters",
+        "lsp"
       ],
       "300": [
         "crates",
@@ -1986,8 +2234,8 @@
         "core"
       ],
       "31": [
-        "ui",
-        "src-tauri"
+        "adapters",
+        "lsp"
       ],
       "310": [
         "crates",
@@ -2030,7 +2278,8 @@
         "core"
       ],
       "32": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "320": [
         "crates",
@@ -2073,7 +2322,8 @@
         "core"
       ],
       "33": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "330": [
         "crates",
@@ -2116,7 +2366,8 @@
         "core"
       ],
       "34": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "340": [
         "crates",
@@ -2159,7 +2410,8 @@
         "core"
       ],
       "35": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "350": [
         "crates",
@@ -2201,7 +2453,10 @@
         "crates",
         "core"
       ],
-      "36": [],
+      "36": [
+        "adapters",
+        "lsp"
+      ],
       "360": [
         "crates",
         "core"
@@ -2232,55 +2487,55 @@
       ],
       "367": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "368": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "369": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "37": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "370": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "371": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "372": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "373": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "374": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "375": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "376": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "377": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "378": [
         "crates",
-        "core"
+        "lsp-client"
       ],
       "379": [
         "crates",
@@ -2288,7 +2543,7 @@
       ],
       "38": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "380": [
         "crates",
@@ -2332,7 +2587,7 @@
       ],
       "39": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "390": [
         "crates",
@@ -2356,234 +2611,211 @@
       ],
       "395": [
         "crates",
-        "lsp-client"
+        "protocol"
       ],
       "396": [
         "crates",
-        "lsp-client"
+        "protocol"
       ],
       "397": [
         "crates",
-        "lsp-client"
+        "protocol"
       ],
       "398": [
         "crates",
-        "lsp-client"
+        "protocol"
       ],
       "399": [
         "crates",
-        "lsp-client"
+        "protocol"
       ],
       "4": [
         "adapters",
-        "rust"
+        "git"
       ],
       "40": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "400": [
-        "crates",
-        "lsp-client"
+        "ui",
+        "src-tauri"
       ],
       "401": [
-        "crates",
-        "lsp-client"
+        "ui",
+        "src-tauri"
       ],
       "402": [
-        "crates",
-        "lsp-client"
+        "ui",
+        "src-tauri"
       ],
       "403": [
-        "crates",
-        "lsp-client"
+        "ui",
+        "src-tauri"
       ],
       "404": [
-        "crates",
-        "lsp-client"
+        "ui",
+        "src-tauri"
       ],
       "405": [
-        "crates",
-        "lsp-client"
+        "ui",
+        "src-tauri"
       ],
       "406": [
-        "crates",
-        "lsp-client"
+        "ui",
+        "src-tauri"
       ],
       "407": [
-        "crates",
-        "protocol"
+        "ui",
+        "src-tauri"
       ],
       "408": [
-        "crates",
-        "protocol"
+        "ui",
+        "src-tauri"
       ],
       "409": [
-        "crates",
-        "protocol"
+        "ui"
       ],
       "41": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "410": [
-        "crates",
-        "protocol"
+        "ui"
       ],
       "411": [
-        "crates",
-        "protocol"
+        "ui"
       ],
       "412": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "413": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "414": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "415": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "416": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "417": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "418": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "419": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "42": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "420": [
-        "ui",
-        "src-tauri"
+        "ui"
       ],
       "421": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "422": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "423": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "424": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "425": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "426": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "427": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "428": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "429": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "43": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "430": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "431": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "432": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "433": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "434": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "435": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "436": [
-        "ui"
-      ],
-      "437": [
-        "ui"
-      ],
-      "438": [
-        "ui"
-      ],
-      "439": [
-        "ui"
+        "adapters",
+        "lsp"
       ],
       "44": [
         "adapters",
-        "git"
-      ],
-      "440": [
-        "ui"
-      ],
-      "441": [
-        "ui"
-      ],
-      "442": [
-        "ui"
-      ],
-      "443": [
-        "ui"
-      ],
-      "444": [
-        "ui"
-      ],
-      "445": [
-        "ui"
-      ],
-      "446": [
-        "ui"
+        "lsp"
       ],
       "45": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "46": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "47": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "48": [
         "adapters",
-        "git"
+        "lsp"
       ],
       "49": [
         "adapters",
-        "git"
+        "lsp"
       ],
-      "5": [],
-      "50": [
+      "5": [
         "adapters",
         "git"
+      ],
+      "50": [
+        "adapters",
+        "lsp"
       ],
       "51": [
         "adapters",
@@ -2621,7 +2853,10 @@
         "adapters",
         "lsp"
       ],
-      "6": [],
+      "6": [
+        "adapters",
+        "git"
+      ],
       "60": [
         "adapters",
         "lsp"
@@ -2652,185 +2887,165 @@
       ],
       "67": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "68": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "69": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "7": [
-        "crates",
-        "cli"
+        "adapters",
+        "git"
       ],
       "70": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "71": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "72": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "73": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "74": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "75": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "76": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "77": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "78": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "79": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "8": [
-        "crates",
-        "core"
+        "adapters",
+        "git"
       ],
       "80": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "81": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "82": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "83": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "84": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "85": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "86": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "87": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "88": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "89": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "9": [
-        "crates",
-        "lsp-client"
+        "adapters",
+        "git"
       ],
       "90": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "91": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "92": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "93": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "94": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "95": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "96": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "97": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "98": [
         "adapters",
-        "lsp"
+        "rust"
       ],
       "99": [
         "adapters",
-        "lsp"
+        "rust"
       ]
     }
   },
   "notes": [],
   "ordering": {
     "cost": {
-      "jumps": 2,
-      "peak_open": 8,
+      "jumps": 1,
+      "peak_open": 3,
       "taken_on_faith": 0,
-      "total_open": 47
+      "total_open": 20
     },
     "steps": [
       {
-        "definition": 32,
+        "definition": 14,
         "on_faith": []
       },
       {
-        "definition": 35,
-        "on_faith": []
-      },
-      {
-        "definition": 439,
-        "on_faith": []
-      },
-      {
-        "definition": 441,
-        "on_faith": []
-      },
-      {
-        "definition": 36,
-        "on_faith": []
-      },
-      {
-        "definition": 424,
-        "on_faith": []
-      },
-      {
-        "definition": 431,
+        "definition": 421,
         "on_faith": []
       },
       {
@@ -2838,35 +3053,67 @@
         "on_faith": []
       },
       {
-        "definition": 435,
-        "on_faith": []
-      },
-      {
-        "definition": 437,
-        "on_faith": []
-      },
-      {
-        "definition": 438,
-        "on_faith": []
-      },
-      {
         "definition": 433,
         "on_faith": []
       },
       {
-        "definition": 444,
+        "definition": 434,
         "on_faith": []
       },
       {
-        "definition": 445,
+        "definition": 435,
         "on_faith": []
       },
       {
-        "definition": 446,
+        "definition": 436,
+        "on_faith": []
+      },
+      {
+        "definition": 422,
+        "on_faith": []
+      },
+      {
+        "definition": 423,
+        "on_faith": []
+      },
+      {
+        "definition": 424,
+        "on_faith": []
+      },
+      {
+        "definition": 429,
         "on_faith": []
       },
       {
         "definition": 430,
+        "on_faith": []
+      },
+      {
+        "definition": 431,
+        "on_faith": []
+      },
+      {
+        "definition": 425,
+        "on_faith": []
+      },
+      {
+        "definition": 426,
+        "on_faith": []
+      },
+      {
+        "definition": 427,
+        "on_faith": []
+      },
+      {
+        "definition": 428,
+        "on_faith": []
+      },
+      {
+        "definition": 412,
+        "on_faith": []
+      },
+      {
+        "definition": 409,
         "on_faith": []
       }
     ]
@@ -3200,7 +3447,9 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": []
+          "parts": [
+            "body"
+          ]
         }
       },
       "140": {
@@ -4600,9 +4849,7 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": [
-            "body"
-          ]
+          "parts": []
         }
       },
       "320": {
@@ -4833,9 +5080,7 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": [
-            "body"
-          ]
+          "parts": []
         }
       },
       "350": {
@@ -4912,9 +5157,7 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": [
-            "body"
-          ]
+          "parts": []
         }
       },
       "360": {
@@ -5299,7 +5542,9 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": []
+          "parts": [
+            "body"
+          ]
         }
       },
       "41": {
@@ -5327,7 +5572,9 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": []
+          "parts": [
+            "body"
+          ]
         }
       },
       "413": {
@@ -5393,71 +5640,15 @@
           "parts": []
         }
       },
-      "421": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "422": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "423": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "424": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": [
-            "docs"
-          ]
-        }
-      },
-      "425": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "426": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "427": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "428": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "429": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
+      "421": "added",
+      "422": "added",
+      "423": "added",
+      "424": "added",
+      "425": "added",
+      "426": "added",
+      "427": "added",
+      "428": "added",
+      "429": "added",
       "43": {
         "kept": {
           "contract": false,
@@ -5465,55 +5656,13 @@
           "parts": []
         }
       },
-      "430": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": [
-            "body",
-            "docs"
-          ]
-        }
-      },
-      "431": "removed",
-      "432": "removed",
-      "433": "removed",
-      "434": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "435": {
-        "kept": {
-          "contract": true,
-          "moved": false,
-          "parts": [
-            "type",
-            "body",
-            "docs"
-          ]
-        }
-      },
-      "436": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "437": "removed",
-      "438": "removed",
-      "439": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": [
-            "body"
-          ]
-        }
-      },
+      "430": "added",
+      "431": "added",
+      "432": "added",
+      "433": "added",
+      "434": "added",
+      "435": "added",
+      "436": "added",
       "44": {
         "kept": {
           "contract": false,
@@ -5521,39 +5670,6 @@
           "parts": []
         }
       },
-      "440": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "441": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": [
-            "body"
-          ]
-        }
-      },
-      "442": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "443": {
-        "kept": {
-          "contract": false,
-          "moved": false,
-          "parts": []
-        }
-      },
-      "444": "added",
-      "445": "added",
-      "446": "added",
       "45": {
         "kept": {
           "contract": false,
@@ -5976,78 +6092,126 @@
       }
     },
     "context": [
-      443
+      411,
+      416
     ],
-    "diagnostics": [],
+    "diagnostics": [
+      {
+        "unattributed": {
+          "at": [
+            715,
+            716,
+            717,
+            718,
+            735
+          ],
+          "file": "adapters/lsp/src/main.rs",
+          "lines": 18
+        }
+      }
+    ],
     "edges": [
+      {
+        "from": 409,
+        "to": 412,
+        "via": []
+      },
+      {
+        "from": 423,
+        "to": 422,
+        "via": []
+      },
+      {
+        "from": 426,
+        "to": 423,
+        "via": []
+      },
+      {
+        "from": 426,
+        "to": 424,
+        "via": []
+      },
+      {
+        "from": 426,
+        "to": 425,
+        "via": []
+      },
+      {
+        "from": 427,
+        "to": 423,
+        "via": []
+      },
+      {
+        "from": 427,
+        "to": 424,
+        "via": []
+      },
+      {
+        "from": 427,
+        "to": 425,
+        "via": []
+      },
+      {
+        "from": 428,
+        "to": 423,
+        "via": []
+      },
+      {
+        "from": 428,
+        "to": 424,
+        "via": []
+      },
+      {
+        "from": 428,
+        "to": 425,
+        "via": []
+      },
+      {
+        "from": 429,
+        "to": 423,
+        "via": []
+      },
+      {
+        "from": 429,
+        "to": 424,
+        "via": []
+      },
       {
         "from": 430,
         "to": 424,
         "via": []
       },
       {
-        "from": 430,
-        "to": 431,
+        "from": 431,
+        "to": 423,
         "via": []
       },
       {
-        "from": 430,
-        "to": 432,
-        "via": []
-      },
-      {
-        "from": 430,
-        "to": 433,
-        "via": []
-      },
-      {
-        "from": 430,
-        "to": 435,
-        "via": []
-      },
-      {
-        "from": 430,
-        "to": 444,
-        "via": []
-      },
-      {
-        "from": 430,
-        "to": 445,
-        "via": []
-      },
-      {
-        "from": 430,
-        "to": 446,
-        "via": []
-      },
-      {
-        "from": 433,
-        "to": 437,
-        "via": []
-      },
-      {
-        "from": 433,
-        "to": 438,
+        "from": 431,
+        "to": 424,
         "via": []
       }
     ],
     "members": [
-      32,
-      35,
-      36,
+      14,
+      409,
+      412,
+      421,
+      422,
+      423,
       424,
+      425,
+      426,
+      427,
+      428,
+      429,
       430,
       431,
       432,
       433,
+      434,
       435,
-      437,
-      438,
-      439,
-      441,
-      444,
-      445,
-      446
+      436
     ]
   }
 }

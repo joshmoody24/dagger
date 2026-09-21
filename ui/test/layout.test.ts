@@ -149,7 +149,8 @@ test("a definition in one piece reads as itself", () => {
     (definition) => definition.after && Object.values(definition.after.parts).flat().length === 1,
   );
   const piece = Object.values(whole.after.parts).flat()[0];
-  assert.equal(stitch(whole.after), piece.text.replace(/^\n+|\n+$/g, ""));
+  const shown = stitch(whole.after)!.map((line) => line.text).join("\n");
+  assert.equal(shown, piece.text.replace(/^\n+|\n+$/g, ""));
 });
 
 /* A module's imports aren't one stretch of the file, and a gap has to say so rather than
@@ -163,5 +164,24 @@ test("pieces that aren't next to each other are separated", () => {
   });
 
   if (!scattered) return;
-  assert.ok(stitch(scattered.after).includes("…"));
+  assert.ok(stitch(scattered.after)!.some((line) => line.at === null && line.text === "…"));
+});
+
+/* A reader points at a line — "the check on line 31" — so every line that's really in the
+ * file says which one, counting up as it goes. */
+test("every line says where it is in the file", () => {
+  for (const definition of review.definitions.values()) {
+    const lines = stitch(definition.after);
+    if (!lines) continue;
+
+    const numbered = lines.filter((line) => line.at !== null);
+    for (const line of numbered) assert.ok(line.at! >= 1, `${definition.path} has line ${line.at}`);
+
+    /* Within one stretch they run consecutively; a gap is where they may jump. */
+    for (let at = 1; at < lines.length; at++) {
+      const [before, now] = [lines[at - 1], lines[at]];
+      if (before.at === null || now.at === null) continue;
+      assert.equal(now.at, before.at + 1, `${definition.path} jumps from ${before.at} to ${now.at}`);
+    }
+  }
 });

@@ -10,6 +10,8 @@ import type {
   Occurrence,
   Raw,
   Review,
+  Line,
+  Shown,
   Spot,
   Worry,
 } from "./dagger.ts";
@@ -27,6 +29,8 @@ import type {
 export const NODE_H = 28;
 const ROW_GAP = 22, BAND_GAP = 30, BOX_GAP = 14;
 const PAD_X = 12, PAD_TOP = 24, PAD_BOTTOM = 10, NODE_GAP = 10, MARGIN = 16;
+/* Room for a box's name and nothing else, which is all an empty one needs. */
+const LABEL = 26;
 
 export const MARK = {
   added: "+", removed: "−", contract: "!", body: "~", docs: '"', affected: "≈", still: "·",
@@ -110,6 +114,10 @@ export function digest(raw: Raw): Review {
     steps: raw.ordering.steps.filter((step) => definitions.has(step.definition)),
     edges: raw.review.edges.filter((e) => definitions.has(e.from) && definitions.has(e.to)),
     changes: raw.review.changes,
+    /* Didn't change, but sits downstream of something that did. Kept apart so a reader can
+     * put them away: a change to something everything leans on brings hundreds of these,
+     * and they're the same news over and over. */
+    affected: new Set(raw.review.affected),
     cost: raw.ordering.cost,
     grouping: raw.grouping.name,
     worries: [
@@ -174,6 +182,11 @@ function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): W
       return {
         hides: true,
         said: `a mention of ${named(what.to)} came from ${what.from.name}, which was never reported`,
+      };
+    case "tangled":
+      return {
+        hides: true,
+        said: `${[...what.definition.scope, what.definition.name].join("::")} was handed over with two of its pieces covering the same text, around byte ${what.at} — so a line of it is shown twice, and read as two different kinds of change`,
       };
     case "two_of_one_name":
       return {
@@ -305,11 +318,16 @@ function sized(box: Omit<Box, "boxes" | "w" | "h">): Box {
     : 0;
   const between = box.lanes.length && box.rows.length ? BOX_GAP : 0;
 
+  /* A box with nothing in it is its own name and no more. The padding above content and
+   * the padding below it are both for content, and taking them anyway leaves a box with a
+   * label sitting in the top of a space nothing fills. */
+  const hollow = !box.lanes.length && !box.rows.length;
+
   return {
     ...box,
     boxes: box.lanes.flat(),
     w: Math.max(across + 2 * PAD_X, labelWidth(box.module ? `${box.label}xx` : box.label)),
-    h: PAD_TOP + lanesDeep + between + rowsDeep + PAD_BOTTOM,
+    h: hollow ? LABEL : PAD_TOP + lanesDeep + between + rowsDeep + PAD_BOTTOM,
   };
 }
 
@@ -453,39 +471,56 @@ function collect<T, K>(items: T[], by: (item: T) => K) {
  * anybody reads code. Where a part's pieces aren't next to each other in the file — a
  * module's imports, an implementation's braces — a gap stands in rather than pretending the
  * lines met. */
-export function stitch(occurrence: Occurrence | null): string | null {
+export function stitch(occurrence: Occurrence | null): Line[] | null {
   if (!occurrence) return null;
 
   const pieces = Object.values(occurrence.parts)
     .flat()
     .sort((a, b) => a.span.start - b.span.start);
 
-  let out = "";
-  let last = null;
+  const out: Line[] = [];
+  let last: number | null = null;
+
   for (const piece of pieces) {
     /* Pieces that touch are run together exactly as the file has them. Putting a newline
      * between them instead is how a signature and its opening brace ended up on separate
-     * lines. Only a real gap gets a line of its own. */
-    if (last !== null && piece.span.start > last) out += "\n…\n";
-    out += piece.text;
+     * lines. Only a real gap gets a line of its own — and that line is nowhere in the
+     * file, so it has no number. */
+    const joins = last !== null && piece.span.start === last;
+    if (last !== null && !joins) out.push({ at: null, text: "…" });
+
+    for (const [after, text] of piece.text.split("\n").entries()) {
+      /* The first line of a piece carrying straight on from the last one finishes that
+       * line rather than starting another. */
+      if (joins && after === 0 && out.length) out[out.length - 1].text += text;
+      else out.push({ at: piece.line + after, text });
+    }
     last = piece.span.end;
   }
 
-  return straighten(out.replace(/^\n+|\n+$/g, ""));
+  return straighten(trimmed(out));
+}
+
+/** Blank lines at either end are the space around a definition, not part of it. */
+function trimmed(lines: Line[]) {
+  let from = 0;
+  let until = lines.length;
+  while (from < until && !lines[from].text.trim()) from += 1;
+  while (until > from && !lines[until - 1].text.trim()) until -= 1;
+  return lines.slice(from, until);
 }
 
 /* A definition starts at its name rather than at the margin, so its first line turns up
  * without the indentation every line beneath it still carries. Taking that much off the
  * rest lines them up the way the file has them. */
-function straighten(text: string) {
-  const lines = text.split("\n");
-  const under = lines.slice(1).filter((line) => line.trim() && line !== "…");
-  if (!under.length) return text;
+function straighten(lines: Line[]) {
+  const under = lines.slice(1).filter((line) => line.text.trim() && line.at !== null);
+  if (!under.length) return lines;
 
-  const spare = Math.min(...under.map((line) => line.match(/^ */)[0].length));
-  if (!spare) return text;
+  const spare = Math.min(...under.map((line) => line.text.match(/^ */)![0].length));
+  if (!spare) return lines;
 
-  return [lines[0], ...lines.slice(1).map((line) => line.slice(spare))].join("\n");
+  return lines.map((line, at) => (at ? { ...line, text: line.text.slice(spare) } : line));
 }
 
 /* Names in this review that can be pointed at without ambiguity.
@@ -523,26 +558,29 @@ export function tokens(line: string) {
 }
 
 /** Line by line, marked as kept, gone, or new. */
-export function compare(before: string | null, after: string | null) {
-  const a = before === null ? [] : before.split("\n");
-  const b = after === null ? [] : after.split("\n");
+export function compare(before: Line[] | null, after: Line[] | null) {
+  const a = before ?? [];
+  const b = after ?? [];
   const same = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
 
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {
-      same[i][j] = a[i] === b[j] ? same[i + 1][j + 1] + 1 : Math.max(same[i + 1][j], same[i][j + 1]);
+      same[i][j] =
+        a[i].text === b[j].text
+          ? same[i + 1][j + 1] + 1
+          : Math.max(same[i + 1][j], same[i][j + 1]);
     }
   }
 
-  const out = [];
+  const out: Shown[] = [];
   let i = 0;
   let j = 0;
   while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) { out.push([" ", a[i]]); i++; j++; }
-    else if (same[i + 1][j] >= same[i][j + 1]) out.push(["−", a[i++]]);
-    else out.push(["+", b[j++]]);
+    if (a[i].text === b[j].text) { out.push({ mark: " ", line: b[j] }); i++; j++; }
+    else if (same[i + 1][j] >= same[i][j + 1]) out.push({ mark: "−", line: a[i++] });
+    else out.push({ mark: "+", line: b[j++] });
   }
-  while (i < a.length) out.push(["−", a[i++]]);
-  while (j < b.length) out.push(["+", b[j++]]);
+  while (i < a.length) out.push({ mark: "−", line: a[i++] });
+  while (j < b.length) out.push({ mark: "+", line: b[j++] });
   return out;
 }

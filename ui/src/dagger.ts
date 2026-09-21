@@ -66,9 +66,24 @@ export interface Review {
   steps: Step[];
   edges: Edge[];
   changes: Record<Identity, Change>;
+  affected: Set<Identity>;
   cost: Cost;
   grouping?: string;
   worries: Worry[];
+}
+
+/* One line as the page shows it: what it says, and where it is in the file. A gap between
+ * two pieces of a definition is a line on the page and nowhere in the file, so it has no
+ * number. */
+export interface Line {
+  at: number | null;
+  text: string;
+}
+
+/** A line in a diff, and what became of it. */
+export interface Shown {
+  mark: " " | "+" | "−";
+  line: Line;
 }
 
 export interface Spot {

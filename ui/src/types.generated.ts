@@ -13,6 +13,15 @@ export type Span = { start: number, end: number, };
 
 export type Piece = { text: string, span: Span, 
 /**
+ * Which line of the file this starts on, counting from one.
+ *
+ * A span is where the bytes are, which is what the machinery needs and nothing a
+ * person can use. A reader points at a line — "the check on line 31" — and only
+ * whoever read the file can say which line that is, so it's said here rather than
+ * worked out later from text nobody kept.
+ */
+line: number, 
+/**
  * Set when this piece lives somewhere other than the definition's own file, the
  * way a C declaration sits in a header away from its body.
  */
@@ -74,7 +83,11 @@ export type Edge = { from: Identity, to: Identity,
  */
 via: Array<Identity>, };
 
-export type Diagnostic = { "lopsided_contract": { definition: Identity, } } | { "unbound_in_contract": { definition: Identity, symbol: string, } } | { "mention_from_nowhere": { from: Locator, } } | { "two_of_one_name": { locator: Locator, times: number, } } | { "unattributed": { file: string, lines: number, 
+export type Diagnostic = { "lopsided_contract": { definition: Identity, } } | { "unbound_in_contract": { definition: Identity, symbol: string, } } | { "mention_from_nowhere": { from: Locator, } } | { "tangled": { definition: Locator, 
+/**
+ * Where the trouble starts, in bytes.
+ */
+at: number, } } | { "two_of_one_name": { locator: Locator, times: number, } } | { "unattributed": { file: string, lines: number, 
 /**
  * The first few, so this can be looked into rather than just counted.
  */

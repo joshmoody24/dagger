@@ -21,6 +21,7 @@ pub fn piece(text: &str) -> Piece {
     Piece {
         text: text.to_string(),
         span: Span { start: 0, end: 0 },
+        line: 1,
         file: None,
     }
 }
