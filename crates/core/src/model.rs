@@ -60,7 +60,12 @@ pub struct Locator {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Occurrence {
     pub locator: Locator,
-    /// What the extractor calls this, like "function" or "test". We never read it.
+    /// What the extractor calls this, like "function" or "test".
+    ///
+    /// Display metadata, with one exception that ought not to be one: "module" is read as
+    /// meaning a container — something drawn as a box around others rather than read on its
+    /// own. That's a convention held in a string across a protocol boundary, and it belongs
+    /// in the model instead.
     pub kind: String,
     /// Where the definition lives, and where its parts live unless they say otherwise.
     pub file: String,
@@ -100,10 +105,22 @@ impl Occurrence {
             .get(&part)
             .into_iter()
             .flatten()
-            .map(|piece| piece.file.as_deref().unwrap_or(&self.file))
+            .map(|piece| self.home_of(piece))
             .collect();
+        /* Sorted before the duplicates come out, since `dedup` only drops the ones next to
+         * each other. A part whose pieces sit in one file, then another, then the first
+         * again came back naming three files, and two of them the same — which reads as a
+         * part that moved when nothing moved at all. */
+        files.sort_unstable();
         files.dedup();
         files
+    }
+
+    /// Which file a piece is in. A piece says so only when it's somewhere other than the
+    /// definition's own file, so the two ways of saying "here" have to be settled before
+    /// anything compares them.
+    pub fn home_of<'a>(&'a self, piece: &'a Piece) -> &'a str {
+        piece.file.as_deref().unwrap_or(&self.file)
     }
 
     /// Every piece of every part, in the order they appear, with the file each sits in.
@@ -112,7 +129,7 @@ impl Occurrence {
             .parts
             .values()
             .flatten()
-            .map(|piece| (piece.file.as_deref().unwrap_or(&self.file), piece))
+            .map(|piece| (self.home_of(piece), piece))
             .collect();
         pieces.sort_by_key(|(file, piece)| (*file, piece.span.start));
         pieces
@@ -167,4 +184,57 @@ impl Sides {
 pub struct Definition {
     pub identity: Identity,
     pub sides: Sides,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(file: Option<&str>, start: u32, end: u32) -> Piece {
+        Piece {
+            text: String::new(),
+            span: Span { start, end },
+            line: 1,
+            file: file.map(str::to_string),
+        }
+    }
+
+    fn spread(pieces: Vec<Piece>) -> Occurrence {
+        Occurrence {
+            locator: Locator {
+                scope: Vec::new(),
+                name: "one".to_string(),
+            },
+            kind: "function".to_string(),
+            file: "own.c".to_string(),
+            parts: BTreeMap::from([(Part::Type, pieces)]),
+            contract: None,
+        }
+    }
+
+    /* A part that leaves its own file and comes back sits in two files, not three. Counted
+     * as three, comparing one side against the other says it moved when nothing did. */
+    #[test]
+    fn a_part_that_returns_to_a_file_is_not_in_it_twice() {
+        let occurrence = spread(vec![
+            at(None, 0, 1),
+            at(Some("other.h"), 0, 1),
+            at(None, 2, 3),
+        ]);
+        assert_eq!(occurrence.files_of(Part::Type), ["other.h", "own.c"]);
+    }
+
+    /* A piece names its file only when it isn't the definition's own, so the same place has
+     * two spellings. Compared as written they look like different files. */
+    #[test]
+    fn a_piece_saying_nothing_is_in_the_definitions_own_file() {
+        let occurrence = spread(vec![at(None, 0, 1), at(Some("own.c"), 2, 3)]);
+        assert_eq!(occurrence.files_of(Part::Type), ["own.c"]);
+
+        let pieces = occurrence.parts[&Part::Type].clone();
+        assert_eq!(
+            occurrence.home_of(&pieces[0]),
+            occurrence.home_of(&pieces[1])
+        );
+    }
 }

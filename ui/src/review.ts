@@ -671,6 +671,7 @@ function split(a: Line[], b: Line[]): Shown[] {
   const anchors = rising(pairs);
   if (!anchors.length) return exactly(a, b);
 
+
   const shown: Shown[] = [];
   let [i, j] = [0, 0];
   for (const [x, y] of anchors) {
@@ -679,6 +680,30 @@ function split(a: Line[], b: Line[]): Shown[] {
     [i, j] = [x + 1, y + 1];
   }
   shown.push(...diffing(a.slice(i), b.slice(j)));
+  return shown;
+}
+
+/* Lined up where they sit, when there's nothing to line them up by.
+ *
+ * Last resort, for a stretch too big to weigh line against line and with no line in it
+ * distinctive enough to anchor on. Comparing position against position is the one thing
+ * left that's honest: where two versions of a repeated structure agree at a spot they are
+ * almost certainly the same line, and where they don't the reader is shown both. Not the
+ * shortest answer, but a true one, and it costs a single pass.
+ */
+function abreast(a: Line[], b: Line[]): Shown[] {
+  const shown: Shown[] = [];
+  for (let at = 0; at < Math.max(a.length, b.length); at++) {
+    const [was, is] = [a[at], b[at]];
+    if (was && is && was.text === is.text) {
+      shown.push({ mark: " ", line: is });
+      continue;
+    }
+    /* Gone before arrived, so reading past the additions still gives back the older
+     * version and reading past the removals the newer. */
+    if (was) shown.push({ mark: "−", line: was });
+    if (is) shown.push({ mark: "+", line: is });
+  }
   return shown;
 }
 
@@ -715,8 +740,16 @@ function rising(pairs: [number, number][]): [number, number][] {
 }
 
 /* Every line against every other: the exact answer, for when there's little enough left to
- * ask for it. This is what the whole comparison used to be. */
+ * ask for it. This is what the whole comparison used to be.
+ *
+ * Guarded here rather than at each place it's called, so nothing can reach the table by a
+ * route that forgot to check. Nothing should arrive too big — the ends are matched off
+ * first and the middle split at lines that can only be themselves — but a stretch with no
+ * line appearing exactly once on each side has nothing to split on, and a file of repeated
+ * punctuation is exactly that. */
 function exactly(a: Line[], b: Line[]): Shown[] {
+  if (a.length * b.length > EXACT) return abreast(a, b);
+
   const same = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
 
   for (let i = a.length - 1; i >= 0; i--) {

@@ -31,7 +31,12 @@ export type Locator = { scope: Array<string>, name: string, };
 
 export type Occurrence = { locator: Locator, 
 /**
- * What the extractor calls this, like "function" or "test". We never read it.
+ * What the extractor calls this, like "function" or "test".
+ *
+ * Display metadata, with one exception that ought not to be one: "module" is read as
+ * meaning a container — something drawn as a box around others rather than read on its
+ * own. That's a convention held in a string across a protocol boundary, and it belongs
+ * in the model instead.
  */
 kind: string, 
 /**

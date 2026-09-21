@@ -69,8 +69,12 @@ fn tangled(occurrence: &Occurrence) -> Option<Diagnostic> {
     pieces.sort_by_key(|piece| piece.span.start);
 
     let over = pieces.windows(2).find(|pair| {
-        // Pieces of different files sit in different files, so they can't overlap.
-        pair[0].file == pair[1].file && pair[1].span.start < pair[0].span.end
+        /* Pieces of different files sit in different files, so they can't overlap. Asked
+         * through the occurrence, because a piece says which file it's in only when that
+         * isn't the definition's own — so `None` and `Some(its own file)` are the same
+         * place written two ways, and comparing them as written misses the overlap. */
+        occurrence.home_of(pair[0]) == occurrence.home_of(pair[1])
+            && pair[1].span.start < pair[0].span.end
     })?;
 
     Some(Diagnostic::Tangled {
@@ -329,6 +333,41 @@ mod tests {
                 span: Span { start: 13, end: 27 },
                 line: 2,
                 file: None,
+            }],
+        );
+
+        let said = checked(std::slice::from_ref(&occurrence));
+        assert!(
+            matches!(said.as_slice(), [Diagnostic::Tangled { at: 13, .. }]),
+            "expected the overlap to be reported, got {said:?}"
+        );
+    }
+
+    /* A piece names its file only when it isn't the definition's own, so a piece saying
+     * nothing and one naming that same file are in the same place. Compared as written they
+     * looked like different files, and pieces in different files can't overlap — so the
+     * overlap went unreported. */
+    #[test]
+    fn an_overlap_is_found_however_the_file_is_spelled() {
+        let mut occurrence = crate::testing::occurrence("one", &[]);
+        occurrence.file = "money.ts".to_string();
+        occurrence.parts.insert(
+            Part::Docs,
+            vec![Piece {
+                text: "/** One. */\nconst ".to_string(),
+                span: Span { start: 0, end: 19 },
+                line: 1,
+                file: None,
+            }],
+        );
+        occurrence.parts.insert(
+            Part::Type,
+            vec![Piece {
+                text: "const one = 1;".to_string(),
+                span: Span { start: 13, end: 27 },
+                line: 2,
+                // The definition's own file, said out loud.
+                file: Some("money.ts".to_string()),
             }],
         );
 

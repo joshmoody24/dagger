@@ -326,3 +326,31 @@ test("nothing changed means nothing marked", () => {
   const lines = ["one", "two", "three"].map((text, at) => ({ at: at + 1, text }));
   assert.ok(compare(lines, [...lines]).every((one) => one.mark === " "));
 });
+
+/* The case the first long-file test missed. Its six thousand lines were all distinct, so
+ * every one of them was a place the two versions could be pinned together. A file of
+ * repeated punctuation — which is what generated output looks like — offers no such line,
+ * and the comparison used to fall back to weighing every line against every other. */
+test("a long file of repeated lines is compared without weighing every pair", () => {
+  const body = Array.from({ length: 4000 }, (_, at) => ({
+    at: at + 2,
+    text: at % 3 === 0 ? "{" : at % 3 === 1 ? '  "via": [],' : "},",
+  }));
+  const was = [{ at: 1, text: "first" }, ...body, { at: 4002, text: "last" }];
+  const is = [{ at: 1, text: "FIRST" }, ...body, { at: 4002, text: "LAST" }];
+
+  const began = performance.now();
+  const shown = compare(was, is);
+  const took = performance.now() - began;
+
+  assert.ok(took < 500, `took ${took.toFixed(0)}ms — the table is being built again`);
+  assert.equal(shown.filter((one) => one.mark !== " ").length, 4, "both ends, nothing else");
+  assert.deepEqual(
+    shown.filter((one) => one.mark !== "+").map((one) => one.line.text),
+    was.map((one) => one.text),
+  );
+  assert.deepEqual(
+    shown.filter((one) => one.mark !== "−").map((one) => one.line.text),
+    is.map((one) => one.text),
+  );
+});
