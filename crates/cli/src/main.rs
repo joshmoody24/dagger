@@ -299,7 +299,18 @@ fn read(
         dir,
         snapshot.files.as_deref(),
     )?;
-    let mut merged = fallback::extract(dir, &assignment.fallback);
+    /* Only the files that differ. Whatever nobody claimed gets read whole, and reading a
+     * file that didn't change buys nothing: both sides come out identical, so it's kept,
+     * unchanged, and never worth reading. On a repository of any size that's the whole cost
+     * of the run — a hundred thousand files read off disk twice to say nothing. */
+    let differs: std::collections::BTreeSet<&str> = changed.iter().map(String::as_str).collect();
+    let fallen: Vec<String> = assignment
+        .fallback
+        .iter()
+        .filter(|file| differs.contains(file.as_str()))
+        .cloned()
+        .collect();
+    let mut merged = fallback::extract(dir, &fallen);
     let mut notes = Vec::new();
 
     for (extractor, files) in config.extractors.iter().zip(&assignment.extractors) {

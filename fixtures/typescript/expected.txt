@@ -1,4 +1,4 @@
-6 definitions, 4 to read (3 changed, 3 affected)
+5 definitions, 4 to read (3 changed, 3 affected)
 + new   - gone   ! callers affected   ~ body   " docs   . untouched
 at most 2 held in mind at once, 0 read early, 1 jumps between files
 
