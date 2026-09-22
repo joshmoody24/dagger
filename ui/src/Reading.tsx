@@ -123,7 +123,7 @@ export function Reading(props: ReadingProps) {
             />
             <p class="legend">
               Names in the code open their definitions, coloured by how each
-              changed. A collapsed run opens {STEP} lines at a click, or with o.
+              changed. A collapsed run opens {STEP} lines at a click or with o.
             </p>
           </div>
 

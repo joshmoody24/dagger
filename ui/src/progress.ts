@@ -27,10 +27,7 @@ export function compared(said: string[]): [string, string] | null {
 }
 
 export function phases(said: string[]): Phase[] {
-  const [before, after] = compared(said) ?? [
-    "the first snapshot",
-    "the second snapshot",
-  ];
+  const [before, after] = compared(said) ?? ["snapshot 1", "snapshot 2"];
 
   const found: Phase[] = [
     { said: "preparing both snapshots", done: false, going: true },

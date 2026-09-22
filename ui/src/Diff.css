@@ -31,10 +31,11 @@ pre.code .gutter {
 pre.code .gap {
   color: var(--muted);
 }
-/* An ellipsis, centred, wearing the key that opens it. */
+/* The ellipsis sits where a line number would, the count in the middle, the key at the
+ * end, all in the gutter's colour. */
 pre.code button.fold {
   font: inherit;
-  color: var(--muted);
+  color: var(--faint);
   background: none;
   border: 0;
   width: 100%;
@@ -42,13 +43,17 @@ pre.code button.fold {
   text-indent: 0;
   cursor: pointer;
 }
+pre.code button.fold .gutter {
+  text-align: center;
+}
 pre.code button.fold kbd {
-  margin-inline-start: 6px;
-  vertical-align: 1px;
+  position: absolute;
+  inset-inline-end: 12px;
+  top: 3px;
 }
 pre.code button.fold:hover,
 pre.code button.fold:focus-visible {
-  color: var(--ink);
+  color: var(--muted);
   outline: none;
 }
 /* The words that differ, on a darker ground than the line they sit in. */

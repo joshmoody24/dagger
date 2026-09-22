@@ -82,6 +82,10 @@ export function Diff(props: {
       gaps: new Map([...opened(), [from, (opened().get(from) ?? 0) + STEP]]),
     });
 
+  /* How much of a gap has been opened so far. The gap keeps its original key so a second
+   * click carries on from where the first left off. */
+  const shown = (gap: { from: number }) => opened().get(gap.from) ?? 0;
+
   const lines = createMemo(() =>
     cut().flatMap((one): Detailed[] => {
       if (!one.gap) return [one];
@@ -92,9 +96,6 @@ export function Diff(props: {
       ];
     }),
   );
-  /* How much of a gap has been opened so far. The gap keeps its original key so a second
-   * click carries on from where the first left off. */
-  const shown = (gap: { from: number }) => opened().get(gap.from) ?? 0;
 
   const unchanged = createMemo(
     () => lines().length > 0 && lines().every((one) => one.mark === " "),
@@ -196,10 +197,15 @@ export function Diff(props: {
               <button
                 type="button"
                 class="line fold"
-                title={`${gap().to - gap().from - shown(gap())} unchanged lines; opens ${STEP}`}
                 onClick={() => unfold(gap().from)}
               >
-                … <kbd>o</kbd>
+                <span class="gutter" aria-hidden="true">
+                  …
+                </span>
+                <span class="hidden">
+                  {gap().to - gap().from - shown(gap())} lines collapsed
+                </span>
+                <kbd>o</kbd>
               </button>
             )}
           </Show>

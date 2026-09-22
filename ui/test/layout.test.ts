@@ -230,11 +230,7 @@ test("a progress report reads the same however the two readings interleave", () 
   ];
 
   const [laying, older, newer] = phases(said);
-  assert.equal(
-    laying.done,
-    true,
-    "preparing is over once a reading has begun",
-  );
+  assert.equal(laying.done, true, "preparing is over once a reading has begun");
 
   assert.equal(older.said, "reading aaa");
   assert.deepEqual(older.through, [2, 7], "each side took the line naming it");
