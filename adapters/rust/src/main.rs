@@ -266,8 +266,7 @@ fn bind(
     notes: &mut Vec<Note>,
     settings: &Settings,
 ) -> Result<Vec<Mention>> {
-    // Indexing is the slow part by a wide margin, so it's worth admitting to.
-    eprintln!("  waiting for rust-analyzer to index");
+    eprintln!("  starting rust-analyzer");
     let mut options = json!({
         // Nothing here needs macros expanded or build scripts run, and both cost real
         // time on a cold tree.
@@ -278,12 +277,12 @@ fn bind(
         options["linkedProjects"] = json!(settings.linked);
     }
     let mut server = Server::start(&["rust-analyzer".to_string()], dir, options)?;
+    // Indexing is the slow part by a wide margin, so it's worth admitting to.
+    eprintln!("  waiting for rust-analyzer to index");
     server.wait_until(|message| {
         message["method"] == "experimental/serverStatus"
             && message["params"]["quiescent"] == serde_json::Value::Bool(true)
     })?;
-    let count: usize = parsed.iter().map(|file| file.found.len()).sum();
-    eprintln!("  asking rust-analyzer about {count} definitions");
     let root = dir.canonicalize()?;
     let by_path: BTreeMap<&str, &Parsed> = parsed
         .iter()
@@ -301,7 +300,7 @@ fn bind(
 
     for (done, file) in parsed.iter().enumerate() {
         if done % every == 0 {
-            eprintln!("  asked about {done} of {files} files");
+            eprintln!("  walked {done} of {files} files");
         }
         let uri = lsp::uri(&root.join(&file.path));
 
@@ -345,6 +344,11 @@ fn bind(
         occurrence.contract = contracts.get(&occurrence.locator).cloned();
     }
 
+    eprintln!(
+        "  read {} files, found {} definitions",
+        parsed.len(),
+        occurrences.len()
+    );
     Ok(mentions)
 }
 

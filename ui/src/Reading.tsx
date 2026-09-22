@@ -24,6 +24,8 @@ interface ReadingProps {
   onOpen: (id: Identity) => void;
   onToggle: () => void;
   onWiden: (width: number) => void;
+  /** Handed the diff, so whoever owns the keyboard can scroll it. */
+  onPane: (pane: HTMLDivElement) => void;
   onExpand: () => void;
   onClose: () => void;
 }
@@ -64,17 +66,18 @@ export function Reading(props: ReadingProps) {
    * first changed line is brought just under that rather than to the top of the pane. */
   createEffect(() => {
     const here = definition();
-    if (!here || !sheet) return;
+    const pane = sheet;
+    if (!here || !pane) return;
 
     queueMicrotask(() => {
-      const changed = sheet?.querySelector(".ln.a, .ln.r");
+      const changed = pane.querySelector(".ln.a, .ln.r");
       if (!changed) {
-        if (sheet) sheet.scrollTop = 0;
+        pane.scrollTop = 0;
         return;
       }
-      const above = sheet.getBoundingClientRect().top;
+      const above = pane.getBoundingClientRect().top;
       const onto = changed.getBoundingClientRect().top;
-      sheet.scrollTop += onto - above - 12;
+      pane.scrollTop += onto - above - 12;
     });
   });
 
@@ -100,7 +103,13 @@ export function Reading(props: ReadingProps) {
           <button class="ib grip" onClick={() => props.onClose()} aria-label="Close">×</button>
         </div>
 
-        <div class="sb" ref={sheet}>
+        <div
+          class="sb"
+          ref={(pane) => {
+            sheet = pane;
+            props.onPane(pane);
+          }}
+        >
           <Show
             when={props.box}
             fallback={
@@ -174,11 +183,11 @@ export function Reading(props: ReadingProps) {
               aria-label="Viewed, and back"
             >
               <span class="gl">✓ back</span>
-              <kbd>k</kbd>
+              <kbd>h</kbd>
             </button>
             <button class="go" onClick={() => props.onRead(1)} aria-label="Viewed, and next">
               <span class="gl">✓ next</span>
-              <kbd>j</kbd>
+              <kbd>l</kbd>
             </button>
           </div>
         </div>

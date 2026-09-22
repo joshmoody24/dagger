@@ -6,6 +6,10 @@ import type { Box, Identity, Raw } from "./dagger.ts";
 import { digest, layout, namesIn } from "./review.ts";
 import { next as another, wear, wearing } from "./theme.ts";
 
+/* How fast j and k scroll, in pixels a second. About sixty lines, which crosses a long
+ * definition without waiting on it and still reads on the way past. */
+const SPEED = 1240;
+
 export function App(props: { raw: Raw }) {
   const whole = createMemo(() => digest(props.raw));
 
@@ -62,6 +66,46 @@ export function App(props: { raw: Raw }) {
   /* Narrow enough that the sheet has to cover the graph rather than sit beside it. The
    * sheet is then a drawer with three heights, and the graph is only worth looking at while
    * it's out of the way — so it starts shut. Beside the graph there's nothing to shut. */
+  /* The diff, so the keys that scroll it have something to scroll. It belongs to the
+   * sheet and is handed back rather than reached for, since a page that queries its own
+   * markup has two descriptions of it. */
+  let pane: HTMLDivElement | undefined;
+
+  /* Scrolling the diff while a key is held.
+   *
+   * Driven by holding rather than by pressing, because a keyboard repeats on its own
+   * schedule: one press, half a second of nothing, then a stream of them. Moving on each
+   * repeat inherits that — it starts, stops, and starts again — however smooth each step
+   * is. So a key going down means start, a key coming up means stop, and in between this
+   * moves at one speed regardless of what the keyboard is doing.
+   */
+  let going = 0;
+  let rolling = 0;
+  let last = 0;
+
+  const roll = (now: number) => {
+    const sheet = pane;
+    if (!sheet || !going) {
+      rolling = 0;
+      return;
+    }
+    // By the clock, not by the frame, so it travels the same on any screen.
+    const since = last ? Math.min(now - last, 100) : 16;
+    last = now;
+    sheet.scrollTop += going * SPEED * (since / 1000);
+    rolling = requestAnimationFrame(roll);
+  };
+
+  const scroll = (way: number) => {
+    going = way;
+    last = 0;
+    if (!rolling) rolling = requestAnimationFrame(roll);
+  };
+  const settle = (way: number) => {
+    if (going === way) going = 0;
+  };
+  onCleanup(() => rolling && cancelAnimationFrame(rolling));
+
   const [wide, setWide] = createSignal(true);
   const [sheet, setSheet] = createSignal("closed");
 
@@ -157,9 +201,16 @@ export function App(props: { raw: Raw }) {
     /* The way through a review: done with this one, on to the next. Back is the same move
      * in the other direction — you're as finished with it either way, and a way forward
      * that marks and a way back that doesn't is two different ideas wearing one pair of
-     * keys. */
-    j: () => { markRead(); step(1); },
-    k: () => { markRead(); step(-1); },
+     * keys.
+     *
+     * Sideways, because that's what moving between definitions is. Up and down belong to
+     * the thing you're reading. */
+    l: () => { markRead(); step(1); },
+    h: () => { markRead(); step(-1); },
+    /* Through the one in front of you, which is where up and down mean what they say.
+     * A few lines at a time: one is too slow to hold, a screenful loses your place. */
+    j: () => scroll(1),
+    k: () => scroll(-1),
     /* The way around it, for when you want to look without saying you've looked. */
     n: () => step(1),
     p: () => step(-1),
@@ -190,10 +241,29 @@ export function App(props: { raw: Raw }) {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const pressed = keys[event.key as keyof typeof keys];
     if (!pressed) return;
-    void pressed();
+    /* The keyboard repeating a held key says nothing new: whatever it asked for is
+     * already happening, and doing it again is what made scrolling stutter. */
+    if (!event.repeat) void pressed();
     event.preventDefault();
   };
 
+  /* Letting go stops what holding started. Losing the window counts as letting go of
+   * everything, since no key will ever come up to say otherwise. */
+  const onLift = (event: KeyboardEvent) => {
+    if (event.key === "j") settle(1);
+    if (event.key === "k") settle(-1);
+  };
+  const onLeave = () => {
+    settle(1);
+    settle(-1);
+  };
+
+  document.addEventListener("keyup", onLift);
+  window.addEventListener("blur", onLeave);
+  onCleanup(() => {
+    document.removeEventListener("keyup", onLift);
+    window.removeEventListener("blur", onLeave);
+  });
   document.addEventListener("keydown", onKey);
   onCleanup(() => document.removeEventListener("keydown", onKey));
 
@@ -275,6 +345,7 @@ export function App(props: { raw: Raw }) {
           onToggle={toggleRead}
           sheet={facing()}
           width={width()}
+          onPane={(el: HTMLDivElement) => (pane = el)}
           onWiden={setWidth}
           onExpand={() => setSheet((was) => (was === "full" ? "half" : "full"))}
           onClose={shut}
