@@ -3,39 +3,40 @@
 This is the vocabulary dagger uses and how the words relate. The Rust types in
 `crates/core/src` are the source of truth.
 
-## A review, end to end
+## A review
 
-A review is one reading of the difference between two code snapshots. Each word below is
-defined where the tool first produces the thing it names.
+The **review** is the whole data model. It is a reading of the difference between two code
+snapshots, and everything below is part of it. Each word is defined where the tool first
+produces the thing it names.
 
-1. A **snapshot** is one version of the code, laid out on disk. The snapshot adapter turns
-   what the user asked for (`main...HEAD`, or nothing) into two snapshots, **before** and
-   **after**.
-2. In each snapshot, the extractor adapters read the files they claim. For every named thing in a
-   file they report an **occurrence**: where it is (a **locator**, the file and a path of
-   names) and what it is made of. What it is made of is a list of **pieces**, each a stretch
-   of text that belongs to one **part**: the **contract**, which callers can see; the
-   **body**, which they can't; or the **docs**. Beside the occurrences, the extractor adapters
-   report **mentions**: places where one occurrence names another.
+1. A **snapshot** is one version of the code, laid out on disk. The **snapshot adapter**
+   turns what the user asked for, such as `main...HEAD`, into two snapshots: **before**
+   and **after**.
+2. In each snapshot, the **extractor adapters** read the files they claim. For every named
+   thing in a file they report an **occurrence**. An occurrence has a **locator**, which is
+   the file and a path of names, and a list of **pieces**. A piece is a stretch of text that
+   belongs to one **part**. The parts are the **contract**, which callers can see, the
+   **body**, which callers cannot see, and the **docs**. Beside the occurrences, the
+   extractor adapters report **mentions**. A mention is a place where one occurrence names
+   another.
 3. The core matches the occurrences of the two snapshots. An occurrence in the before
    snapshot and one in the after snapshot that are the same named thing become one
-   **definition**, given an **identity**. A definition with an occurrence in only one snapshot
+   **definition** with one **identity**. A definition with an occurrence in only one snapshot
    is inferred to be "added" or "removed". One with both is "kept", and its **change** says
    which parts differ.
-4. Mentions become **references** between definitions, and the core follows them outward
+4. Mentions become **references** between definitions. The core follows references outward
    from what changed, as many steps as the **ripples** setting allows, to find what a change
-   **reached**. The references among the definitions shown become **edges**: what depends
-   on what.
-5. The core decides the **reading**: a list of **steps**, one definition each, in the order
-   to read them, nothing before what it depends on.
-6. The core shapes the definitions into **groups**, the boxes on the page, each with a
-   **tier**: how many rows down from what it depends on it sits.
-7. The page in the browser, or the terminal, renders that one **review** and decides
-   nothing else.
+   **reached**. The references among the definitions shown become **edges**. An edge says
+   what depends on what.
+5. The core decides the **reading**, which is a list of **steps**. Each step is one
+   definition. The order never reads a definition before what it depends on.
+6. The core shapes the definitions into **groups**, the boxes on the page. Each group has a
+   **tier**, which is how many rows down from what it depends on it sits.
+7. The page in the browser, or the terminal, renders the review and decides nothing else.
 
 ## The core model
 
-A `Review` is what one reading of a change comes to. Everything hangs off its definitions.
+The `Review` type holds everything above. Every other type hangs off its definitions.
 
 ```mermaid
 flowchart LR
