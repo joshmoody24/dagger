@@ -27,6 +27,18 @@ export function Diff(props: {
     readied(speaks(props.definition.file), dressing(), wearing()),
   );
 
+  /* Names link only within one language: `new` in TypeScript is a keyword, not the Rust
+   * `fn new` that happens to share its spelling. */
+  const linkable = createMemo(() => {
+    const language = speaks(props.definition.file);
+    return new Map(
+      [...props.names].filter(([, id]) => {
+        const target = props.review.definitions.get(id);
+        return target !== undefined && speaks(target.file) === language;
+      }),
+    );
+  });
+
   /* Memoised: read once per rendered line, and diffing/colouring is expensive. */
   const all = createMemo(() => {
     const [was, is] = [
@@ -124,7 +136,7 @@ export function Diff(props: {
                 ref={(line) => at() === firstChanged() && setFirst(line)}
               >
                 <span class="marker" aria-hidden="true">
-                  {one.mark === " " ? "" : one.mark}
+                  {one.mark === " " || one.line.at === null ? "" : one.mark}
                 </span>
                 <span class="gutter" aria-hidden="true">
                   {one.line.at ?? ""}
@@ -136,7 +148,7 @@ export function Diff(props: {
                   <Code
                     pieces={tinted()[at()] ?? [{ text: one.line.text }]}
                     emphasis={one.emphasis ?? []}
-                    names={props.names}
+                    names={linkable()}
                     review={props.review}
                     here={props.definition.id}
                     onOpen={props.onOpen}

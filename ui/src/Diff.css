@@ -9,6 +9,9 @@ pre.code {
  * continuation from looking like a line of its own. */
 pre.code .line {
   display: block;
+  /* A blank source line has no text, and without this it collapsed to nothing, dropping
+   * its number onto the line below. */
+  min-height: 1lh;
   padding-inline: calc(32px + var(--gutter, 3ch)) 12px;
   position: relative;
   white-space: pre-wrap;
