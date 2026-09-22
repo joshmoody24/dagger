@@ -21,7 +21,9 @@
       in
       {
         devShells.default = pkgs.mkShell {
-          packages = [ rust pkgs.nodejs_22 ];
+          # typescript here is the language server (`tsc --lsp`, TypeScript 7). The UI's
+          # own tooling pins an older TypeScript in ui/package.json.
+          packages = [ rust pkgs.nodejs_22 pkgs.typescript ];
         };
       });
 }
