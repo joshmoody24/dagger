@@ -8,8 +8,8 @@ import {
 } from "solid-js";
 import type { Definition as Def, Identity, Review, Shown } from "./dagger.ts";
 import type { Painted } from "./colouring.ts";
-import { compare, focused, paired, type Range } from "./diff.ts";
-import { broke, TINT } from "./digest.ts";
+import { compare, focused, paired, type Detailed, type Range } from "./diff.ts";
+import { TINT } from "./digest.ts";
 import { stitch } from "./text.ts";
 import { colouring, painted, readied, speaks } from "./colouring.ts";
 import { dressing, wearing } from "./theme.ts";
@@ -17,15 +17,21 @@ import "./Diff.css";
 
 export type Names = Map<string, Identity>;
 
+/** Lines a click on a collapsed run opens. */
+export const STEP = 20;
+
 export function Diff(props: {
   definition: Def;
   names: Names;
   review: Review;
   onOpen: (id: Identity) => void;
 }) {
-  createEffect(() =>
-    readied(speaks(props.definition.file), dressing(), wearing()),
-  );
+  /* Re-asked after every load as well, so a grammar that failed once is tried again
+   * rather than leaving this language plain for the rest of the session. */
+  createEffect(() => {
+    void colouring();
+    void readied(speaks(props.definition.file), dressing(), wearing());
+  });
 
   /* Names link only within one language: `new` in TypeScript is a keyword, not the Rust
    * `fn new` that happens to share its spelling. */
@@ -60,23 +66,34 @@ export function Diff(props: {
    * gaps start folded without an effect to reset them. */
   const [unfolded, setUnfolded] = createSignal<{
     of: Identity | null;
-    gaps: Set<number>;
-  }>({ of: null, gaps: new Set() });
+    /* How many lines of each gap have been opened, by where the gap starts. */
+    gaps: Map<number, number>;
+  }>({ of: null, gaps: new Map() });
   const opened = () =>
-    unfolded().of === props.definition.id ? unfolded().gaps : new Set<number>();
+    unfolded().of === props.definition.id
+      ? unfolded().gaps
+      : new Map<number, number>();
+  /* A click opens the next stretch from the top of the gap, the way a forge does, so a
+   * long gap can be opened a bit at a time. */
   const unfold = (from: number) =>
     setUnfolded({
       of: props.definition.id,
-      gaps: new Set([...opened(), from]),
+      gaps: new Map([...opened(), [from, (opened().get(from) ?? 0) + STEP]]),
     });
 
   const lines = createMemo(() =>
-    cut().flatMap((one) =>
-      one.gap && opened().has(one.gap.from)
-        ? all().slice(one.gap.from, one.gap.to)
-        : [one],
-    ),
+    cut().flatMap((one): Detailed[] => {
+      if (!one.gap) return [one];
+      const upto = Math.min(one.gap.from + shown(one.gap), one.gap.to);
+      return [
+        ...all().slice(one.gap.from, upto),
+        ...(upto < one.gap.to ? [one] : []),
+      ];
+    }),
   );
+  /* How much of a gap has been opened so far. The gap keeps its original key so a second
+   * click carries on from where the first left off. */
+  const shown = (gap: { from: number }) => opened().get(gap.from) ?? 0;
 
   const unchanged = createMemo(
     () => lines().length > 0 && lines().every((one) => one.mark === " "),
@@ -163,7 +180,7 @@ export function Diff(props: {
                 class="line fold"
                 onClick={() => unfold(gap().from)}
               >
-                {gap().to - gap().from} unchanged lines
+                {gap().to - gap().from - shown(gap())} unchanged lines
               </button>
             )}
           </Show>
@@ -183,9 +200,11 @@ function Code(props: {
   here: Identity;
   onOpen: (id: Identity) => void;
 }) {
+  /* Linked whether or not the highlighter has coloured the piece yet: a name is a name
+   * before the grammar arrives. */
   const parts = createMemo((): Led[] =>
     stressed(props.pieces, props.emphasis).flatMap((piece) =>
-      piece.colour ? split(piece, props.names, props.here) : [piece],
+      split(piece, props.names, props.here),
     ),
   );
 
@@ -193,12 +212,7 @@ function Code(props: {
     part.goes && props.review.definitions.get(part.goes)?.mark;
   const classes = (part: Led) => {
     const mark = marked(part);
-    return [
-      part.goes && "link",
-      mark && TINT[mark],
-      part.goes && broke(props.review, part.goes) && "broke",
-      part.changed && "changed",
-    ]
+    return [part.goes && "link", mark && TINT[mark], part.changed && "changed"]
       .filter(Boolean)
       .join(" ");
   };
@@ -227,6 +241,7 @@ function Code(props: {
               tabindex="0"
               class={classes(part)}
               style={colour(part)}
+              title={`open ${props.review.definitions.get(goes())?.path ?? part.text}`}
               onClick={() => props.onOpen(goes())}
               onKeyDown={(event) => {
                 if (event.key === "Enter") props.onOpen(goes());

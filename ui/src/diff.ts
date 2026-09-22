@@ -263,7 +263,9 @@ function ranges(all: Token[], kept: Set<number>): Range[] {
 
 /* Lines of context around a change. A definition can be a 10,000-line file, and far from a
  * change unchanged code is just noise. */
-const REACH = 100;
+/* Kept tight, so the scrollbar's length says how big the change is; a collapsed run opens
+ * on click. */
+const REACH = 20;
 
 /** What's worth showing: everything near a change, and a gap recording the rest. */
 export function focused(lines: Detailed[], reach = REACH): Detailed[] {

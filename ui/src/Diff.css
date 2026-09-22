@@ -92,6 +92,3 @@ pre.code .link.del {
 pre.code .link.chg {
   color: var(--chg);
 }
-pre.code .link.broke {
-  text-decoration: underline wavy;
-}

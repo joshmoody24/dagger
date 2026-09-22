@@ -1,7 +1,7 @@
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { Definition as Def, Identity, Review, Step } from "./dagger.ts";
 import { MARK, TINT, broke } from "./digest.ts";
-import { Diff, type Names } from "./Diff.tsx";
+import { Diff, type Names, STEP } from "./Diff.tsx";
 import { useHeldKeys } from "./keys.ts";
 import { ReadingNav } from "./ReadingNav.tsx";
 import { Resizer } from "./Resizer.tsx";
@@ -121,6 +121,10 @@ export function Reading(props: ReadingProps) {
               review={props.review}
               onOpen={props.onOpen}
             />
+            <p class="legend">
+              Names in the code open their definitions, coloured by how each
+              changed. A collapsed run opens {STEP} lines at a click.
+            </p>
           </div>
 
           <div class="sheet-body" ref={body}>
