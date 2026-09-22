@@ -83,7 +83,7 @@ ripples = 1
   - `markers`: files whose directory is a group. A definition belongs to the nearest marker above its file. Groups do not nest.
 - `[review]`
   - `ignore`: files left out entirely
-  - `ripples`: how many steps outward from a change to follow what it affects. `--ripples` on the command line overrides it.
+  - `ripples`: how many steps outward from a change to follow what it affects. Each step asks the language server about every definition reached so far, so on a large repository 0 keeps a review fast. `--ripples` on the command line overrides it.
 
 ## Supporting another language
 
