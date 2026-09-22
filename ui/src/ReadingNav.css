@@ -35,7 +35,7 @@
 }
 .nav .nav-quiet:disabled,
 .nav .nav-primary:disabled {
-  opacity: 0.35;
+  opacity: var(--dim);
   cursor: default;
 }
 .nav .nav-progress {

@@ -6,6 +6,8 @@
   --corner: 2px;
   --corner-panel: calc(var(--corner) * 1.5);
   --corner-small: calc(var(--corner) * 0.5);
+  /* How faded anything out of play is: read, disabled, or not near the current definition. */
+  --dim: 0.55;
 }
 
 * {
@@ -56,6 +58,6 @@ kbd {
   border: 1px solid currentColor;
   border-radius: var(--corner-small);
   padding: 0 3px;
-  opacity: 0.6;
+  opacity: var(--dim);
   font-weight: 400;
 }

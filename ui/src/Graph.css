@@ -64,7 +64,7 @@
   stroke-dasharray: 4 3;
 }
 .edge.dim {
-  opacity: 0.3;
+  opacity: var(--dim);
 }
 .edge.lit {
   stroke: var(--lean);
@@ -73,7 +73,7 @@
 }
 
 .ahead {
-  opacity: 0.55;
+  opacity: var(--dim);
   pointer-events: none;
 }
 .ahead .shaft {
@@ -103,13 +103,13 @@
   --own: var(--chg);
 }
 .definition.read {
-  opacity: 0.6;
+  opacity: var(--dim);
 }
 .definition.dim {
-  opacity: 0.55;
+  opacity: var(--dim);
 }
 .definition.read.dim {
-  opacity: 0.42;
+  opacity: calc(var(--dim) * var(--dim));
 }
 .definition.under,
 .definition.soon,
