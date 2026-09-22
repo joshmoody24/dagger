@@ -15,7 +15,7 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-musl", "x86_64-apple-d
 # The page is built by node before cargo runs, so it can be embedded in the binary.
 github-build-setup = "build-setup.yml"
 # Path that installers should place binaries in
-install-path = "CARGO_HOME"
+install-path = "~/.local/bin"
 # Where to host releases
 hosting = "github"
 # Whether to install an updater program
