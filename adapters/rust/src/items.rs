@@ -253,16 +253,25 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
             .collect(),
         Item::Trait(item) => {
             let inner = nest(scope, &item.ident.to_string());
+            // The header starts at `pub` when there is one, so making a trait public
+            // reads as a declaration change.
+            let header = [
+                visible(&item.vis),
+                item.unsafety.map(|token| token.span()),
+                item.auto_token.map(|token| token.span()),
+                Some(item.trait_token.span()),
+            ]
+            .into_iter()
+            .flatten()
+            .map(|span| range(span).start)
+            .min()
+            .expect("a trait has a trait token");
             let mut found = vec![Found {
                 scope: scope.to_vec(),
                 name: item.ident.to_string(),
                 name_at: range(item.ident.span()),
                 kind: "trait",
-                parts: parts([
-                    (Part::Type, one(range(item.ident.span()))),
-                    (Part::Body, Vec::new()),
-                    (Part::Docs, docs(&item.attrs)),
-                ]),
+                parts: framed(header, &item.brace_token, &item.attrs),
                 covers: range(item.span()),
             }];
             found.extend(item.items.iter().filter_map(|member| match member {
@@ -272,6 +281,20 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
                     &function.attrs,
                     function.default.as_ref(),
                     "trait fn",
+                    &inner,
+                )),
+                TraitItem::Type(assoc) => Some(associated(
+                    range(assoc.span()),
+                    &assoc.ident,
+                    "assoc type",
+                    &assoc.attrs,
+                    &inner,
+                )),
+                TraitItem::Const(constant) => Some(associated(
+                    range(constant.span()),
+                    &constant.ident,
+                    "assoc const",
+                    &constant.attrs,
                     &inner,
                 )),
                 _ => None,
@@ -303,6 +326,13 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
                     ]),
                     covers: range(constant.span()),
                 }),
+                ImplItem::Type(assoc) => Some(associated(
+                    range(assoc.span()),
+                    &assoc.ident,
+                    "assoc type",
+                    &assoc.attrs,
+                    &inner,
+                )),
                 _ => None,
             }));
 
@@ -326,34 +356,67 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
 /// file or crate from the type. The braces are claimed with the header so no line belongs
 /// to nobody; what's between them has definitions of its own.
 fn implementation(block: &syn::ItemImpl, scope: &[String]) -> Found {
-    let header = range(block.impl_token.span()).start;
-    let signed = block
-        .generics
-        .where_clause
-        .as_ref()
-        .map(|clause| range(clause.span()))
-        .unwrap_or_else(|| range(block.self_ty.span()));
-    let full = range(block.span());
-    let told = docs(&block.attrs);
-
+    let header = block
+        .unsafety
+        .map(|token| range(token.span()).start)
+        .unwrap_or_else(|| range(block.impl_token.span()).start);
     Found {
         scope: scope.to_vec(),
         name: format!("impl {}", implementing(block)),
         name_at: range(block.self_ty.span()),
         kind: "impl",
-        covers: full.clone(),
+        parts: framed(header, &block.brace_token, &block.attrs),
+        covers: range(block.span()),
+    }
+}
+
+/// The parts of a block that holds definitions: the header through its opening brace and
+/// the closing brace are its declaration, so no line belongs to nobody; what's between is
+/// the members' own.
+fn framed(header: usize, brace: &syn::token::Brace, attrs: &[Attribute]) -> Parts {
+    let open = range(brace.span.open());
+    let close = range(brace.span.close());
+    parts([
+        (Part::Type, vec![header..open.end, close]),
+        (Part::Body, Vec::new()),
+        (
+            Part::Docs,
+            docs(attrs)
+                .first()
+                .map(|first| one(first.start..header))
+                .unwrap_or_default(),
+        ),
+    ])
+}
+
+fn visible(vis: &syn::Visibility) -> Option<Span> {
+    match vis {
+        syn::Visibility::Public(token) => Some(token.span()),
+        syn::Visibility::Restricted(restricted) => Some(restricted.pub_token.span()),
+        syn::Visibility::Inherited => None,
+    }
+}
+
+/// An associated type or const of a trait or impl. All of it is declaration: callers
+/// rely on the whole line.
+fn associated(
+    outer: Range<usize>,
+    ident: &proc_macro2::Ident,
+    kind: &'static str,
+    attrs: &[Attribute],
+    scope: &[String],
+) -> Found {
+    let prose = docs(attrs);
+    Found {
+        scope: scope.to_vec(),
+        name: ident.to_string(),
+        name_at: range(ident.span()),
+        kind,
+        covers: outer.clone(),
         parts: parts([
-            (
-                Part::Type,
-                vec![header..signed.end, full.end.saturating_sub(1)..full.end],
-            ),
+            (Part::Type, declared(&outer, &prose, outer.end)),
             (Part::Body, Vec::new()),
-            (
-                Part::Docs,
-                told.first()
-                    .map(|first| one(first.start..header))
-                    .unwrap_or_default(),
-            ),
+            (Part::Docs, prose),
         ]),
     }
 }
@@ -574,7 +637,32 @@ mod tests {
         let found = read(source);
 
         assert_eq!(names(&found), vec!["thing", "impl Money", "pence"]);
-        assert_eq!(shown(source, named(&found, "impl Money")), "impl Money…}");
+        assert_eq!(shown(source, named(&found, "impl Money")), "impl Money {…}");
+    }
+
+    #[test]
+    fn a_trait_claims_its_header_and_its_brace_and_holds_its_associated_items() {
+        let source =
+            "pub trait Source {\n    type Item: Clone;\n    const N: u8;\n    fn open(&self);\n}\n";
+        let found = read(source);
+
+        assert_eq!(names(&found), vec!["thing", "Source", "Item", "N", "open"]);
+        assert_eq!(
+            shown(source, named(&found, "Source")),
+            "pub trait Source {…}"
+        );
+        assert_eq!(named(&found, "Item").kind, "assoc type");
+        assert_eq!(shown(source, named(&found, "Item")), "type Item: Clone;");
+        assert_eq!(named(&found, "Item").scope, vec!["thing", "Source"]);
+    }
+
+    #[test]
+    fn an_implementations_associated_type_is_a_definition() {
+        let source = "impl Source for Money {\n    type Item = u8;\n}\n";
+        let found = read(source);
+
+        assert_eq!(names(&found), vec!["thing", "impl Money as Source", "Item"]);
+        assert_eq!(shown(source, named(&found, "Item")), "type Item = u8;");
     }
 
     #[test]

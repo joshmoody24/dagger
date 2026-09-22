@@ -145,17 +145,18 @@ pub fn review(
         .chain(reached.keys().copied())
         .collect();
 
+    let latest: BTreeMap<Identity, &model::Occurrence> = definitions
+        .iter()
+        .map(|def| (def.identity, def.sides.latest()))
+        .collect();
     let parent_of: BTreeMap<Identity, Identity> = {
-        let by_name: BTreeMap<&Locator, Identity> = definitions
+        let by_name: BTreeMap<&Locator, Identity> = latest
             .iter()
-            .map(|def| (&def.sides.latest().locator, def.identity))
+            .map(|(identity, it)| (&it.locator, *identity))
             .collect();
-        definitions
+        latest
             .iter()
-            .filter_map(|def| {
-                let parent = def.sides.latest().parent.as_ref()?;
-                Some((def.identity, *by_name.get(parent)?))
-            })
+            .filter_map(|(identity, it)| Some((*identity, *by_name.get(it.parent.as_ref()?)?)))
             .collect()
     };
 

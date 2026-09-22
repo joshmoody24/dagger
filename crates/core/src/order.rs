@@ -7,7 +7,7 @@
 //! weights to tune; `pick` lists the criteria.
 
 use crate::group::Grouping;
-use crate::model::{self, Identity, Locator, Role};
+use crate::model::{self, Identity, Locator, Occurrence, Role};
 use crate::review::{Edge, placed};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -54,25 +54,23 @@ pub fn order(
         .map(|(place, identity)| (*identity, place))
         .collect();
 
-    let files: BTreeMap<Identity, &String> = definitions
+    let latest: BTreeMap<Identity, &Occurrence> = definitions
         .iter()
-        .map(|definition| (definition.identity, &definition.sides.latest().file))
+        .map(|definition| (definition.identity, definition.sides.latest()))
         .collect();
 
-    let enclosing = enclosing(definitions);
-    let homes = homes(&members, definitions, &enclosing);
+    let enclosing = enclosing(&latest);
+    let homes = homes(&members, &latest, &enclosing);
     // A container's header (a module's prose and imports, an impl's header) is read on
     // arriving at it, right before its contents.
-    let headers: Vec<bool> = {
-        let roles: BTreeMap<Identity, Role> = definitions
-            .iter()
-            .map(|definition| (definition.identity, definition.sides.latest().role))
-            .collect();
-        members
-            .iter()
-            .map(|identity| roles.get(identity) == Some(&Role::Container))
-            .collect()
-    };
+    let headers: Vec<bool> = members
+        .iter()
+        .map(|identity| {
+            latest
+                .get(identity)
+                .is_some_and(|it| it.role == Role::Container)
+        })
+        .collect();
 
     // Where each member sits, for counting jumps: the grouping's path if any, else the file.
     let wheres: Vec<&[String]> = {
@@ -81,9 +79,9 @@ pub fn order(
             .map(|identity| {
                 let grouped = grouping.path_of(*identity);
                 if grouped.is_empty() {
-                    files
+                    latest
                         .get(identity)
-                        .map(|file| std::slice::from_ref(*file))
+                        .map(|it| std::slice::from_ref(&it.file))
                         .unwrap_or_default()
                 } else {
                     grouped
@@ -201,30 +199,20 @@ fn relations(
 
 /// What each definition is written inside, nearest first, within the same file. Parents
 /// are given as names, so they're resolved by name within the file.
-fn enclosing(definitions: &[model::Definition]) -> BTreeMap<Identity, Vec<Identity>> {
-    let shown: BTreeMap<Identity, (&str, &Locator, Option<&Locator>)> = definitions
+fn enclosing(latest: &BTreeMap<Identity, &Occurrence>) -> BTreeMap<Identity, Vec<Identity>> {
+    let by_name: BTreeMap<(&str, &Locator), Identity> = latest
         .iter()
-        .map(|definition| {
-            let it = definition.sides.latest();
-            (
-                definition.identity,
-                (it.file.as_str(), &it.locator, it.parent.as_ref()),
-            )
-        })
-        .collect();
-    let by_name: BTreeMap<(&str, &Locator), Identity> = shown
-        .iter()
-        .map(|(identity, (file, locator, _))| ((*file, *locator), *identity))
+        .map(|(identity, it)| ((it.file.as_str(), &it.locator), *identity))
         .collect();
 
-    shown
+    latest
         .iter()
-        .map(|(identity, (file, _, parent))| {
+        .map(|(identity, it)| {
             let named = |parent: Option<&Locator>| {
-                parent.and_then(|name| by_name.get(&(*file, name)).copied())
+                parent.and_then(|name| by_name.get(&(it.file.as_str(), name)).copied())
             };
-            let above = std::iter::successors(named(*parent), |up| {
-                named(shown.get(up).and_then(|(_, _, parent)| *parent))
+            let above = std::iter::successors(named(it.parent.as_ref()), |up| {
+                named(latest.get(up).and_then(|up| up.parent.as_ref()))
             })
             .collect();
             (*identity, above)
@@ -237,17 +225,9 @@ fn enclosing(definitions: &[model::Definition]) -> BTreeMap<Identity, Vec<Identi
 /// nearest container would wrongly make a method and a plain function two places.
 fn homes(
     members: &[Identity],
-    definitions: &[model::Definition],
+    latest: &BTreeMap<Identity, &Occurrence>,
     enclosing: &BTreeMap<Identity, Vec<Identity>>,
 ) -> Vec<String> {
-    let shown: BTreeMap<Identity, (&str, &Locator)> = definitions
-        .iter()
-        .map(|definition| {
-            let it = definition.sides.latest();
-            (definition.identity, (it.file.as_str(), &it.locator))
-        })
-        .collect();
-
     members
         .iter()
         .map(|identity| {
@@ -255,9 +235,9 @@ fn homes(
                 .get(identity)
                 .and_then(|above| above.last())
                 .unwrap_or(identity);
-            match shown.get(outermost) {
+            match latest.get(outermost) {
                 // Neither a file name nor a path can contain a null, so the two halves can't be confused.
-                Some((file, locator)) => format!("{file}\0{locator}"),
+                Some(it) => format!("{}\0{}", it.file, it.locator),
                 None => String::new(),
             }
         })

@@ -7,6 +7,7 @@ use dagger_core::model::{Locator, Part};
 use dagger_lsp_client::Lines;
 use dagger_lsp_client::walk;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 pub struct Symbol {
@@ -76,6 +77,48 @@ impl walk::Item for Symbol {
 pub fn read(symbols: &Value, lines: &Lines, file_scope: &[String]) -> Vec<Symbol> {
     let mut found = Vec::new();
     collect(symbols, file_scope, &[], None, lines, &mut found);
+    apart(found)
+}
+
+/// Symbols declared in one statement (`const a = 1, b = 2;`) are each reported over the
+/// whole statement, so every one of them showed the same text. Each keeps its own stretch:
+/// from its name to the next name, the first from the statement's start.
+fn apart(found: Vec<Symbol>) -> Vec<Symbol> {
+    let mut shared: BTreeMap<(&[String], usize, usize), Vec<usize>> = BTreeMap::new();
+    for (at, symbol) in found.iter().enumerate() {
+        shared
+            .entry((&symbol.scope, symbol.whole.start, symbol.whole.end))
+            .or_default()
+            .push(at);
+    }
+
+    let stretches: Vec<(usize, Range<usize>)> = shared
+        .into_values()
+        .filter(|together| together.len() > 1)
+        .flat_map(|mut together| {
+            together.sort_by_key(|&at| found[at].name_at.start);
+            let whole = found[together[0]].whole.clone();
+            let starts: Vec<usize> = together.iter().map(|&at| found[at].name_at.start).collect();
+            together
+                .iter()
+                .enumerate()
+                .map(|(place, &at)| {
+                    let from = if place == 0 {
+                        whole.start
+                    } else {
+                        starts[place]
+                    };
+                    let to = starts.get(place + 1).copied().unwrap_or(whole.end);
+                    (at, from..to)
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    let mut found = found;
+    for (at, stretch) in stretches {
+        found[at].whole = stretch;
+    }
     found
 }
 
@@ -258,6 +301,27 @@ export function addMoney(a: Money, b: Money): Money {
                 "end": { "line": at.0, "character": at.2 },
             },
         })
+    }
+
+    #[test]
+    fn names_declared_together_each_keep_their_own_stretch() {
+        let source = "const A = 1, B = 2;\n";
+        let lines = Lines::new(source);
+        let symbols = read(
+            &json!([
+                reported("A", 13, (0, 0, 0, 19), (0, 6, 7)),
+                reported("B", 13, (0, 0, 0, 19), (0, 13, 14)),
+            ]),
+            &lines,
+            &[],
+        );
+
+        let text = |name: &str| {
+            let one = symbols.iter().find(|one| one.name == name).unwrap();
+            &source[one.whole.clone()]
+        };
+        assert_eq!(text("A"), "const A = 1, ");
+        assert_eq!(text("B"), "B = 2;");
     }
 
     #[test]

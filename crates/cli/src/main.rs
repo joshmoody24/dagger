@@ -482,7 +482,9 @@ fn read(
     let mut notes = Vec::new();
 
     for (extractor, files) in config.extractors.iter().zip(&assignment.extractors) {
-        if files.is_empty() {
+        // An extractor none of whose files changed has nothing to say: references never
+        // cross from one extractor's files into another's, so nothing of its was reached.
+        if !files.iter().any(|file| differs.contains(file.as_str())) {
             continue;
         }
         status(&format!(
