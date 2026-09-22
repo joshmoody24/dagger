@@ -15,7 +15,7 @@ pub fn occurrence(name: &str, parts: &[(Part, &str)]) -> Occurrence {
             .iter()
             .map(|(part, text)| (*part, vec![piece(text)]))
             .collect(),
-        type_from_compiler: None,
+        contract_from_compiler: None,
     }
 }
 

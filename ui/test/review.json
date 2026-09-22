@@ -21,7 +21,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "style.css" },
@@ -39,12 +39,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
+        "kept": { "contract_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": null,
       "mark": "body",
@@ -126,7 +126,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": [], "name": "dagger_git_adapter" },
@@ -200,12 +200,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -225,7 +225,7 @@
             "kind": "fn",
             "file": "adapters/git/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn worth_reviewing() -> Result<Revisions> ",
                   "span": { "start": 4543, "end": 4586 },
@@ -250,7 +250,7 @@
                 }
               ]
             },
-            "type_from_compiler": "fn worth_reviewing() -> Result<Revisions>"
+            "contract_from_compiler": "fn worth_reviewing() -> Result<Revisions>"
           },
           "after": {
             "locator": {
@@ -262,7 +262,7 @@
             "kind": "fn",
             "file": "adapters/git/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn worth_reviewing() -> Result<Revisions> ",
                   "span": { "start": 4543, "end": 4586 },
@@ -287,12 +287,12 @@
                 }
               ]
             },
-            "type_from_compiler": "fn worth_reviewing() -> Result<Revisions>"
+            "contract_from_compiler": "fn worth_reviewing() -> Result<Revisions>"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
+        "kept": { "contract_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": 1,
       "mark": "body",
@@ -309,7 +309,7 @@
             "kind": "fn",
             "file": "adapters/git/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> ",
                   "span": { "start": 7580, "end": 7652 },
@@ -334,7 +334,7 @@
                 }
               ]
             },
-            "type_from_compiler": "fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions>"
+            "contract_from_compiler": "fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions>"
           },
           "after": {
             "locator": { "scope": ["dagger_git_adapter"], "name": "resolve" },
@@ -343,7 +343,7 @@
             "kind": "fn",
             "file": "adapters/git/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> ",
                   "span": { "start": 7707, "end": 7779 },
@@ -368,12 +368,12 @@
                 }
               ]
             },
-            "type_from_compiler": "fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions>"
+            "contract_from_compiler": "fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions>"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
+        "kept": { "contract_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": 1,
       "mark": "body",
@@ -435,7 +435,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_cli"], "name": "adapter" },
@@ -489,12 +489,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -514,7 +514,7 @@
             "kind": "struct",
             "file": "crates/cli/src/adapter.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "pub struct Described {\n    pub include: Vec<String>,\n    /// Only a snapshot adapter fills this in.\n    pub revisions: Option<Revisions>,\n    /// How this adapter lets a change be named, a line each. Only a snapshot adapter has\n    /// anything to say here.\n    pub usage: Vec<String>,\n}",
                   "span": { "start": 3822, "end": 4109 },
@@ -523,7 +523,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": {
@@ -535,7 +535,7 @@
             "kind": "struct",
             "file": "crates/cli/src/adapter.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "pub struct Described {\n    pub include: Vec<String>,\n    /// Only a snapshot adapter fills this in.\n    pub revisions: Option<Revisions>,\n    /// How this adapter lets a change be named, a line each. Only a snapshot adapter has\n    /// anything to say here.\n    pub usage: Vec<String>,\n}",
                   "span": { "start": 3822, "end": 4109 },
@@ -544,12 +544,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -569,7 +569,7 @@
             "kind": "fn",
             "file": "crates/cli/src/adapter.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\npub fn revisions(repo: &Path, snapshots: &Adapter, asked: &[String]) -> Result<Revisions> ",
                   "span": { "start": 5047, "end": 5138 },
@@ -594,7 +594,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": {
@@ -606,7 +606,7 @@
             "kind": "fn",
             "file": "crates/cli/src/adapter.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\npub fn revisions(repo: &Path, snapshots: &Adapter, asked: &[String]) -> Result<Revisions> ",
                   "span": { "start": 5047, "end": 5138 },
@@ -631,12 +631,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -778,7 +778,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": [], "name": "dagger_cli" },
@@ -912,12 +912,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -934,7 +934,7 @@
             "kind": "fn",
             "file": "crates/cli/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "fn main() -> Result<()> ",
                   "span": { "start": 4377, "end": 4401 },
@@ -951,7 +951,7 @@
                 }
               ]
             },
-            "type_from_compiler": "fn main() -> Result<()>"
+            "contract_from_compiler": "fn main() -> Result<()>"
           },
           "after": {
             "locator": { "scope": ["dagger_cli"], "name": "main" },
@@ -960,7 +960,7 @@
             "kind": "fn",
             "file": "crates/cli/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "fn main() -> Result<()> ",
                   "span": { "start": 4377, "end": 4401 },
@@ -977,12 +977,12 @@
                 }
               ]
             },
-            "type_from_compiler": "fn main() -> Result<()>"
+            "contract_from_compiler": "fn main() -> Result<()>"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
+        "kept": { "contract_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": null,
       "mark": "body",
@@ -999,7 +999,7 @@
             "kind": "fn",
             "file": "crates/cli/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, String)> ",
                   "span": { "start": 5393, "end": 5478 },
@@ -1024,7 +1024,7 @@
                 }
               ]
             },
-            "type_from_compiler": "fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, String)>"
+            "contract_from_compiler": "fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, String)>"
           },
           "after": {
             "locator": { "scope": ["dagger_cli"], "name": "revisions" },
@@ -1033,7 +1033,7 @@
             "kind": "fn",
             "file": "crates/cli/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn revisions(\n    repo: &Path,\n    config: &Config,\n    args: &Args,\n) -> Result<(String, String, Option<String>)> ",
                   "span": { "start": 5419, "end": 5535 },
@@ -1058,19 +1058,19 @@
                 }
               ]
             },
-            "type_from_compiler": "fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, String, Option<String>)>"
+            "contract_from_compiler": "fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, String, Option<String>)>"
           }
         }
       },
       "change": {
         "kept": {
-          "type_changed": true,
+          "contract_changed": true,
           "moved": false,
-          "parts": ["type", "body"]
+          "parts": ["contract", "body"]
         }
       },
       "reached": null,
-      "mark": "type",
+      "mark": "contract",
       "parent": "255"
     },
     "264": {
@@ -1084,7 +1084,7 @@
             "kind": "fn",
             "file": "crates/cli/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "fn compare(\n    repo: &Path,\n    config: &Config,\n    claims: &[Vec<String>],\n    before: (&str, &adapter::Snapshot),\n    after: (&str, &adapter::Snapshot),\n    args: &Args,\n) -> Result<()> ",
                   "span": { "start": 8117, "end": 8307 },
@@ -1101,7 +1101,7 @@
                 }
               ]
             },
-            "type_from_compiler": "fn compare(\n    repo: &Path,\n    config: &Config,\n    claims: &[Vec<String>],\n    before: (&str, &adapter::Snapshot),\n    after: (&str, &adapter::Snapshot),\n    args: &Args\n) -> Result<()>"
+            "contract_from_compiler": "fn compare(\n    repo: &Path,\n    config: &Config,\n    claims: &[Vec<String>],\n    before: (&str, &adapter::Snapshot),\n    after: (&str, &adapter::Snapshot),\n    args: &Args\n) -> Result<()>"
           },
           "after": {
             "locator": { "scope": ["dagger_cli"], "name": "compare" },
@@ -1110,7 +1110,7 @@
             "kind": "fn",
             "file": "crates/cli/src/main.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "fn compare(\n    repo: &Path,\n    config: &Config,\n    claims: &[Vec<String>],\n    before: (&str, &adapter::Snapshot),\n    after: (&str, &adapter::Snapshot),\n    args: &Args,\n    title: Option<String>,\n) -> Result<()> ",
                   "span": { "start": 8216, "end": 8433 },
@@ -1127,19 +1127,19 @@
                 }
               ]
             },
-            "type_from_compiler": "fn compare(\n    repo: &Path,\n    config: &Config,\n    claims: &[Vec<String>],\n    before: (&str, &adapter::Snapshot),\n    after: (&str, &adapter::Snapshot),\n    args: &Args,\n    title: Option<String>\n) -> Result<()>"
+            "contract_from_compiler": "fn compare(\n    repo: &Path,\n    config: &Config,\n    claims: &[Vec<String>],\n    before: (&str, &adapter::Snapshot),\n    after: (&str, &adapter::Snapshot),\n    args: &Args,\n    title: Option<String>\n) -> Result<()>"
           }
         }
       },
       "change": {
         "kept": {
-          "type_changed": true,
+          "contract_changed": true,
           "moved": false,
-          "parts": ["type", "body"]
+          "parts": ["contract", "body"]
         }
       },
       "reached": null,
-      "mark": "type",
+      "mark": "contract",
       "parent": "255"
     },
     "277": {
@@ -1180,7 +1180,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_cli"], "name": "report" },
@@ -1216,12 +1216,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -1238,7 +1238,7 @@
             "kind": "fn",
             "file": "crates/cli/src/report.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\npub fn print(review: &Review) ",
                   "span": { "start": 1217, "end": 1248 },
@@ -1263,7 +1263,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_cli", "report"], "name": "print" },
@@ -1272,7 +1272,7 @@
             "kind": "fn",
             "file": "crates/cli/src/report.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\npub fn print(review: &Review) ",
                   "span": { "start": 1217, "end": 1248 },
@@ -1297,12 +1297,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -1390,7 +1390,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_cli"], "name": "walk" },
@@ -1470,12 +1470,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -1492,7 +1492,7 @@
             "kind": "fn",
             "file": "crates/cli/src/walk.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "pub fn walk(review: &Review) -> Result<()> ",
                   "span": { "start": 849, "end": 892 },
@@ -1509,7 +1509,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_cli", "walk"], "name": "walk" },
@@ -1518,7 +1518,7 @@
             "kind": "fn",
             "file": "crates/cli/src/walk.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "pub fn walk(review: &Review) -> Result<()> ",
                   "span": { "start": 849, "end": 892 },
@@ -1535,12 +1535,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -1557,7 +1557,7 @@
             "kind": "fn",
             "file": "crates/cli/src/walk.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "fn show(\n    review: &Review,\n    step: &Step,\n    definition: &Definition,\n    place: usize,\n    names: &BTreeMap<Identity, String>,\n    paint: &Paint,\n) ",
                   "span": { "start": 1655, "end": 1810 },
@@ -1574,7 +1574,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_cli", "walk"], "name": "show" },
@@ -1583,7 +1583,7 @@
             "kind": "fn",
             "file": "crates/cli/src/walk.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "fn show(\n    review: &Review,\n    step: &Step,\n    definition: &Definition,\n    place: usize,\n    names: &BTreeMap<Identity, String>,\n    paint: &Paint,\n) ",
                   "span": { "start": 1655, "end": 1810 },
@@ -1600,12 +1600,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -1622,7 +1622,7 @@
             "kind": "fn",
             "file": "crates/cli/src/walk.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn culprits(review: &Review, identity: Identity) -> Vec<Identity> ",
                   "span": { "start": 4225, "end": 4292 },
@@ -1647,7 +1647,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_cli", "walk"], "name": "culprits" },
@@ -1656,7 +1656,7 @@
             "kind": "fn",
             "file": "crates/cli/src/walk.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn culprits(review: &Review, identity: Identity) -> Vec<Identity> ",
                   "span": { "start": 4225, "end": 4292 },
@@ -1681,12 +1681,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -1703,7 +1703,7 @@
             "kind": "fn",
             "file": "crates/cli/src/walk.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn leaned_on(review: &Review, identity: Identity) -> Vec<Identity> ",
                   "span": { "start": 4680, "end": 4748 },
@@ -1728,7 +1728,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_cli", "walk"], "name": "leaned_on" },
@@ -1737,7 +1737,7 @@
             "kind": "fn",
             "file": "crates/cli/src/walk.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\nfn leaned_on(review: &Review, identity: Identity) -> Vec<Identity> ",
                   "span": { "start": 4680, "end": 4748 },
@@ -1762,12 +1762,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -1855,7 +1855,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_core"], "name": "review" },
@@ -1935,12 +1935,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -1957,7 +1957,7 @@
             "kind": "struct",
             "file": "crates/core/src/review.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\n#[derive(Debug, Clone, Serialize, Deserialize)]\n#[cfg_attr(feature = \"typescript\", derive(ts_rs::TS))]\npub struct Review {\n    pub definitions: BTreeMap<Identity, Definition>,\n    /// What to read, in order. Whatever a step names is worth reading; everything else in\n    /// `definitions` is here to be drawn around it.\n    pub reading: Vec<Step>,\n    pub edges: Vec<Edge>,\n    pub groups: Vec<Group>,\n    /// What a reader calls the grouping: \"package\", \"crate\".\n    pub grouping: Option<String>,\n    /// How far this reading was told to follow a change outward.\n    pub ripples: u32,\n    pub cost: Cost,\n    pub warnings: Vec<Warning>,\n}",
                   "span": { "start": 4209, "end": 4849 },
@@ -1974,7 +1974,7 @@
                 }
               ]
             },
-            "type_from_compiler": "pub struct Review {\n    pub definitions: BTreeMap<Identity, Definition>,\n    pub reading: Vec<Step>,\n    pub edges: Vec<Edge>,\n    pub groups: Vec<Group>,\n    pub grouping: Option<String>,\n    /* … */\n}"
+            "contract_from_compiler": "pub struct Review {\n    pub definitions: BTreeMap<Identity, Definition>,\n    pub reading: Vec<Step>,\n    pub edges: Vec<Edge>,\n    pub groups: Vec<Group>,\n    pub grouping: Option<String>,\n    /* … */\n}"
           },
           "after": {
             "locator": { "scope": ["dagger_core", "review"], "name": "Review" },
@@ -1983,7 +1983,7 @@
             "kind": "struct",
             "file": "crates/core/src/review.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\n#[derive(Debug, Clone, Serialize, Deserialize)]\n#[cfg_attr(feature = \"typescript\", derive(ts_rs::TS))]\npub struct Review {\n    /// What the commit under review is called, when whoever laid out the snapshots could\n    /// say. Not dagger's to work out — a directory has no commit message, only the\n    /// adapter that read the history knows whether there was one.\n    pub title: Option<String>,\n    pub definitions: BTreeMap<Identity, Definition>,\n    /// What to read, in order. Whatever a step names is worth reading; everything else in\n    /// `definitions` is here to be drawn around it.\n    pub reading: Vec<Step>,\n    pub edges: Vec<Edge>,\n    pub groups: Vec<Group>,\n    /// What a reader calls the grouping: \"package\", \"crate\".\n    pub grouping: Option<String>,\n    /// How far this reading was told to follow a change outward.\n    pub ripples: u32,\n    pub cost: Cost,\n    pub warnings: Vec<Warning>,\n}",
                   "span": { "start": 4209, "end": 5123 },
@@ -2000,15 +2000,19 @@
                 }
               ]
             },
-            "type_from_compiler": "pub struct Review {\n    pub title: Option<String>,\n    pub definitions: BTreeMap<Identity, Definition>,\n    pub reading: Vec<Step>,\n    pub edges: Vec<Edge>,\n    pub groups: Vec<Group>,\n    /* … */\n}"
+            "contract_from_compiler": "pub struct Review {\n    pub title: Option<String>,\n    pub definitions: BTreeMap<Identity, Definition>,\n    pub reading: Vec<Step>,\n    pub edges: Vec<Edge>,\n    pub groups: Vec<Group>,\n    /* … */\n}"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": true, "moved": false, "parts": ["type"] }
+        "kept": {
+          "contract_changed": true,
+          "moved": false,
+          "parts": ["contract"]
+        }
       },
       "reached": null,
-      "mark": "type",
+      "mark": "contract",
       "parent": "461"
     },
     "468": {
@@ -2022,7 +2026,7 @@
             "kind": "fn",
             "file": "crates/core/src/review.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\npub fn review(\n    definitions: Vec<model::Definition>,\n    references: &[Reference],\n    ripples: u32,\n    grouping: &Grouping,\n    notes: Vec<Warning>,\n    found: Vec<Diagnostic>,\n) -> Review ",
                   "span": { "start": 5137, "end": 5332 },
@@ -2047,7 +2051,7 @@
                 }
               ]
             },
-            "type_from_compiler": "pub fn review(\n    definitions: Vec<model::Definition>,\n    references: &[Reference],\n    ripples: u32,\n    grouping: &Grouping,\n    notes: Vec<Warning>,\n    found: Vec<Diagnostic>\n) -> Review"
+            "contract_from_compiler": "pub fn review(\n    definitions: Vec<model::Definition>,\n    references: &[Reference],\n    ripples: u32,\n    grouping: &Grouping,\n    notes: Vec<Warning>,\n    found: Vec<Diagnostic>\n) -> Review"
           },
           "after": {
             "locator": { "scope": ["dagger_core", "review"], "name": "review" },
@@ -2056,7 +2060,7 @@
             "kind": "fn",
             "file": "crates/core/src/review.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\npub fn review(\n    definitions: Vec<model::Definition>,\n    references: &[Reference],\n    ripples: u32,\n    grouping: &Grouping,\n    notes: Vec<Warning>,\n    found: Vec<Diagnostic>,\n    title: Option<String>,\n) -> Review ",
                   "span": { "start": 5411, "end": 5633 },
@@ -2081,19 +2085,19 @@
                 }
               ]
             },
-            "type_from_compiler": "pub fn review(\n    definitions: Vec<model::Definition>,\n    references: &[Reference],\n    ripples: u32,\n    grouping: &Grouping,\n    notes: Vec<Warning>,\n    found: Vec<Diagnostic>,\n    title: Option<String>\n) -> Review"
+            "contract_from_compiler": "pub fn review(\n    definitions: Vec<model::Definition>,\n    references: &[Reference],\n    ripples: u32,\n    grouping: &Grouping,\n    notes: Vec<Warning>,\n    found: Vec<Diagnostic>,\n    title: Option<String>\n) -> Review"
           }
         }
       },
       "change": {
         "kept": {
-          "type_changed": true,
+          "contract_changed": true,
           "moved": false,
-          "parts": ["type", "body"]
+          "parts": ["contract", "body"]
         }
       },
       "reached": 1,
-      "mark": "type",
+      "mark": "contract",
       "parent": "461"
     },
     "475": {
@@ -2107,7 +2111,7 @@
             "kind": "module",
             "file": "crates/core/src/review.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "}",
                   "span": { "start": 20406, "end": 20407 },
@@ -2136,7 +2140,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_core", "review"], "name": "tests" },
@@ -2145,7 +2149,7 @@
             "kind": "module",
             "file": "crates/core/src/review.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "}",
                   "span": { "start": 20740, "end": 20741 },
@@ -2174,12 +2178,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -2199,7 +2203,7 @@
             "kind": "fn",
             "file": "crates/core/src/review.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "fn reviewed(\n        definitions: Vec<model::Definition>,\n        references: &[Reference],\n        ripples: u32,\n    ) -> Review ",
                   "span": { "start": 15726, "end": 15856 },
@@ -2216,7 +2220,7 @@
                 }
               ]
             },
-            "type_from_compiler": "fn reviewed(definitions: Vec<model::Definition>, references: &[Reference], ripples: u32) -> Review"
+            "contract_from_compiler": "fn reviewed(definitions: Vec<model::Definition>, references: &[Reference], ripples: u32) -> Review"
           },
           "after": {
             "locator": {
@@ -2228,7 +2232,7 @@
             "kind": "fn",
             "file": "crates/core/src/review.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "fn reviewed(\n        definitions: Vec<model::Definition>,\n        references: &[Reference],\n        ripples: u32,\n    ) -> Review ",
                   "span": { "start": 16042, "end": 16172 },
@@ -2245,12 +2249,12 @@
                 }
               ]
             },
-            "type_from_compiler": "fn reviewed(definitions: Vec<model::Definition>, references: &[Reference], ripples: u32) -> Review"
+            "contract_from_compiler": "fn reviewed(definitions: Vec<model::Definition>, references: &[Reference], ripples: u32) -> Review"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
+        "kept": { "contract_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": 1,
       "mark": "body",
@@ -2302,7 +2306,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": [], "name": "dagger_protocol" },
@@ -2346,12 +2350,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -2368,7 +2372,7 @@
             "kind": "struct",
             "file": "crates/protocol/src/lib.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\n#[derive(Debug, Clone, Serialize, Deserialize)]\npub struct Revisions {\n    pub before: String,\n    pub after: String,\n}",
                   "span": { "start": 3869, "end": 3989 },
@@ -2385,7 +2389,7 @@
                 }
               ]
             },
-            "type_from_compiler": "pub struct Revisions {\n    pub before: String,\n    pub after: String,\n}"
+            "contract_from_compiler": "pub struct Revisions {\n    pub before: String,\n    pub after: String,\n}"
           },
           "after": {
             "locator": { "scope": ["dagger_protocol"], "name": "Revisions" },
@@ -2394,7 +2398,7 @@
             "kind": "struct",
             "file": "crates/protocol/src/lib.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "\n#[derive(Debug, Clone, Serialize, Deserialize)]\npub struct Revisions {\n    pub before: String,\n    pub after: String,\n    /// What the commit under review is called, when the adapter can say. A snapshot\n    /// adapter knows what \"after\" means in its own history — git reads it off the commit\n    /// message — and dagger's own model of a change has nothing of the kind to fall back\n    /// on, so this is only ever a suggestion, never required.\n    #[serde(default)]\n    pub title: Option<String>,\n}",
                   "span": { "start": 3869, "end": 4374 },
@@ -2411,15 +2415,19 @@
                 }
               ]
             },
-            "type_from_compiler": "pub struct Revisions {\n    pub before: String,\n    pub after: String,\n    pub title: Option<String>,\n}"
+            "contract_from_compiler": "pub struct Revisions {\n    pub before: String,\n    pub after: String,\n    pub title: Option<String>,\n}"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": true, "moved": false, "parts": ["type"] }
+        "kept": {
+          "contract_changed": true,
+          "moved": false,
+          "parts": ["contract"]
+        }
       },
       "reached": null,
-      "mark": "type",
+      "mark": "contract",
       "parent": "576"
     },
     "584": {
@@ -2433,7 +2441,7 @@
             "kind": "enum",
             "file": "crates/protocol/src/lib.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "#[derive(Debug, Clone, Serialize, Deserialize)]\n#[serde(tag = \"result\", rename_all = \"snake_case\")]\npub enum Response {\n    Described {\n        /// Glob patterns this adapter claims by default. A repo that says `include`\n        /// replaces this outright rather than adding to it.\n        include: Vec<String>,\n        /// What to compare when the user named nothing. Only a snapshot adapter knows\n        /// what a sensible answer is, since only it knows whether there's uncommitted\n        /// work sitting around.\n        #[serde(default)]\n        revisions: Option<Revisions>,\n        /// The ways of naming a change this adapter answers to, a line each, for dagger\n        /// to show alongside its own help. Written here because the words are this\n        /// adapter's: dagger printing them itself would be a second copy of a list only\n        /// one of them can keep right.\n        #[serde(default)]\n        usage: Vec<String>,\n    },\n    Resolved {\n        revisions: Revisions,\n    },\n    Materialized {\n        dir: String,\n        /// Whether dagger should delete the directory when it's done. An adapter that\n        /// pointed at a path it doesn't own says false.\n        temporary: bool,\n        /// What's in there worth reading, if the adapter knows. Left out means \"have a\n        /// look yourself\", which is the only option when the directory is just a\n        /// directory. A version control adapter does know, and saying so is how\n        /// ignored files stay out without every repo listing its build directory.\n        #[serde(default)]\n        files: Option<Vec<String>>,\n    },\n    Extracted {\n        extraction: Extraction,\n        /// Anything that went less than perfectly. An adapter that skipped a file it\n        /// couldn't read says so here rather than failing the whole run.\n        #[serde(default)]\n        notes: Vec<Note>,\n    },\n    /// Something went wrong that the user should hear about, worded for them.\n    Failed {\n        message: String,\n    },\n}",
                   "span": { "start": 6740, "end": 8742 },
@@ -2442,7 +2450,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["dagger_protocol"], "name": "Response" },
@@ -2451,7 +2459,7 @@
             "kind": "enum",
             "file": "crates/protocol/src/lib.rs",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "#[derive(Debug, Clone, Serialize, Deserialize)]\n#[serde(tag = \"result\", rename_all = \"snake_case\")]\npub enum Response {\n    Described {\n        /// Glob patterns this adapter claims by default. A repo that says `include`\n        /// replaces this outright rather than adding to it.\n        include: Vec<String>,\n        /// What to compare when the user named nothing. Only a snapshot adapter knows\n        /// what a sensible answer is, since only it knows whether there's uncommitted\n        /// work sitting around.\n        #[serde(default)]\n        revisions: Option<Revisions>,\n        /// The ways of naming a change this adapter answers to, a line each, for dagger\n        /// to show alongside its own help. Written here because the words are this\n        /// adapter's: dagger printing them itself would be a second copy of a list only\n        /// one of them can keep right.\n        #[serde(default)]\n        usage: Vec<String>,\n    },\n    Resolved {\n        revisions: Revisions,\n    },\n    Materialized {\n        dir: String,\n        /// Whether dagger should delete the directory when it's done. An adapter that\n        /// pointed at a path it doesn't own says false.\n        temporary: bool,\n        /// What's in there worth reading, if the adapter knows. Left out means \"have a\n        /// look yourself\", which is the only option when the directory is just a\n        /// directory. A version control adapter does know, and saying so is how\n        /// ignored files stay out without every repo listing its build directory.\n        #[serde(default)]\n        files: Option<Vec<String>>,\n    },\n    Extracted {\n        extraction: Extraction,\n        /// Anything that went less than perfectly. An adapter that skipped a file it\n        /// couldn't read says so here rather than failing the whole run.\n        #[serde(default)]\n        notes: Vec<Note>,\n    },\n    /// Something went wrong that the user should hear about, worded for them.\n    Failed {\n        message: String,\n    },\n}",
                   "span": { "start": 7125, "end": 9127 },
@@ -2460,12 +2468,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -2482,7 +2490,7 @@
             "kind": "function",
             "file": "ui/src/App.tsx",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function App(props: ",
                   "span": { "start": 693, "end": 720 },
@@ -2499,7 +2507,7 @@
                 }
               ]
             },
-            "type_from_compiler": "function App(props: {\n    raw: Raw;\n}): JSX.Element"
+            "contract_from_compiler": "function App(props: {\n    raw: Raw;\n}): JSX.Element"
           },
           "after": {
             "locator": { "scope": ["ui", "src", "App"], "name": "App" },
@@ -2508,7 +2516,7 @@
             "kind": "function",
             "file": "ui/src/App.tsx",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function App(props: ",
                   "span": { "start": 716, "end": 743 },
@@ -2525,12 +2533,12 @@
                 }
               ]
             },
-            "type_from_compiler": "function App(props: {\n    raw: Raw;\n}): JSX.Element"
+            "contract_from_compiler": "function App(props: {\n    raw: Raw;\n}): JSX.Element"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
+        "kept": { "contract_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": null,
       "mark": "body",
@@ -2556,7 +2564,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "App" },
@@ -2574,12 +2582,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
+        "kept": { "contract_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": null,
       "mark": "body",
@@ -2599,7 +2607,7 @@
             "kind": "interface",
             "file": "ui/src/Graph.tsx",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "interface GraphProps {\n  review: Review;\n  laid: Laid;\n  here: Identity | null;\n  next: Identity | null;\n  read: Set<Identity>;\n  box: string | null;\n  onOpen: (id: Identity) => void;\n  onOpenBox: (key: string) => void;\n}\n",
                   "span": { "start": 2385, "end": 2607 },
@@ -2608,7 +2616,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": {
@@ -2620,7 +2628,7 @@
             "kind": "interface",
             "file": "ui/src/Graph.tsx",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "interface GraphProps {\n  review: Review;\n  laid: Laid;\n  here: Identity | null;\n  next: Identity | null;\n  read: Set<Identity>;\n  box: string | null;\n  onOpen: (id: Identity) => void;\n  onOpenBox: (key: string) => void;\n}\n",
                   "span": { "start": 2385, "end": 2607 },
@@ -2629,12 +2637,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -2654,7 +2662,7 @@
             "kind": "function",
             "file": "ui/src/Graph.tsx",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "function neighbours(review: Review, here: Identity | null) ",
                   "span": { "start": 21957, "end": 22016 },
@@ -2671,7 +2679,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": {
@@ -2683,7 +2691,7 @@
             "kind": "function",
             "file": "ui/src/Graph.tsx",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "function neighbours(review: Review, here: Identity | null) ",
                   "span": { "start": 21957, "end": 22016 },
@@ -2700,12 +2708,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -2731,7 +2739,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "Graph" },
@@ -2749,12 +2757,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -2774,7 +2782,7 @@
             "kind": "interface",
             "file": "ui/src/Reading.tsx",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "interface ReadingProps {\n  review: Review;\n  here: Identity | null;\n  box: Box | null;\n  step: Step | undefined;\n  at: number;\n  names: Names;\n  read: boolean;\n  viewed: Set<Identity>;\n  sheet: string;\n  width: number;\n  onStep: (by: number) => void;\n  onRead: (by: number) => void;\n  onOpen: (id: Identity) => void;\n  onToggle: () => void;\n  onWiden: (width: number) => void;\n  /** Handed the diff, so whoever owns the keyboard can scroll it. */\n  onPane: (pane: HTMLDivElement) => void;\n  onExpand: () => void;\n  onClose: () => void;\n}\n",
                   "span": { "start": 615, "end": 1153 },
@@ -2783,7 +2791,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": {
@@ -2795,7 +2803,7 @@
             "kind": "interface",
             "file": "ui/src/Reading.tsx",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "interface ReadingProps {\n  review: Review;\n  here: Identity | null;\n  box: Box | null;\n  step: Step | undefined;\n  at: number;\n  names: Names;\n  read: boolean;\n  viewed: Set<Identity>;\n  sheet: string;\n  width: number;\n  onStep: (by: number) => void;\n  onRead: (by: number) => void;\n  onOpen: (id: Identity) => void;\n  onToggle: () => void;\n  onWiden: (width: number) => void;\n  /** Handed the diff, so whoever owns the keyboard can scroll it. */\n  onPane: (pane: HTMLDivElement) => void;\n  onExpand: () => void;\n  onClose: () => void;\n}\n",
                   "span": { "start": 615, "end": 1153 },
@@ -2804,12 +2812,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -2841,7 +2849,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "Reading" },
@@ -2865,12 +2873,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -2887,7 +2895,7 @@
             "kind": "class",
             "file": "ui/src/dagger.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export type Raw = wire.Review;\n",
                   "span": { "start": 1544, "end": 1575 },
@@ -2904,7 +2912,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src", "dagger"], "name": "Raw" },
@@ -2913,7 +2921,7 @@
             "kind": "class",
             "file": "ui/src/dagger.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export type Raw = wire.Review;\n",
                   "span": { "start": 1544, "end": 1575 },
@@ -2930,12 +2938,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -2952,7 +2960,7 @@
             "kind": "interface",
             "file": "ui/src/dagger.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export interface Review {\n  definitions: Map<Identity, Definition>;\n  steps: Step[];\n  edges: Edge[];\n  /** How far this reading followed a change, which is as far as the page can offer. */\n  ripples: number;\n  cost: Cost;\n  grouping?: string | undefined;\n  /** How deep each group sits among the groups, worked out by dagger rather than here. */\n  bands: Map<string, number>;\n  warnings: Warning[];\n}\n",
                   "span": { "start": 2542, "end": 2944 },
@@ -2961,7 +2969,7 @@
                 }
               ]
             },
-            "type_from_compiler": "interface Review"
+            "contract_from_compiler": "interface Review"
           },
           "after": {
             "locator": { "scope": ["ui", "src", "dagger"], "name": "Review" },
@@ -2970,7 +2978,7 @@
             "kind": "interface",
             "file": "ui/src/dagger.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export interface Review {\n  /** What the commit under review is called, when the adapter that read it could say. */\n  title: string | null;\n  definitions: Map<Identity, Definition>;\n  steps: Step[];\n  edges: Edge[];\n  /** How far this reading followed a change, which is as far as the page can offer. */\n  ripples: number;\n  cost: Cost;\n  grouping?: string | undefined;\n  /** How deep each group sits among the groups, worked out by dagger rather than here. */\n  bands: Map<string, number>;\n  warnings: Warning[];\n}\n",
                   "span": { "start": 2542, "end": 3058 },
@@ -2979,15 +2987,19 @@
                 }
               ]
             },
-            "type_from_compiler": "interface Review"
+            "contract_from_compiler": "interface Review"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": true, "moved": false, "parts": ["type"] }
+        "kept": {
+          "contract_changed": true,
+          "moved": false,
+          "parts": ["contract"]
+        }
       },
       "reached": null,
-      "mark": "type",
+      "mark": "contract",
       "parent": "649"
     },
     "649": {
@@ -3016,7 +3028,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "dagger" },
@@ -3040,12 +3052,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -3062,7 +3074,7 @@
             "kind": "function",
             "file": "ui/src/digest.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function digest(raw: Raw): Review ",
                   "span": { "start": 1142, "end": 1183 },
@@ -3087,7 +3099,7 @@
                 }
               ]
             },
-            "type_from_compiler": "function digest(raw: Raw): Review"
+            "contract_from_compiler": "function digest(raw: Raw): Review"
           },
           "after": {
             "locator": { "scope": ["ui", "src", "digest"], "name": "digest" },
@@ -3096,7 +3108,7 @@
             "kind": "function",
             "file": "ui/src/digest.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function digest(raw: Raw): Review ",
                   "span": { "start": 1142, "end": 1183 },
@@ -3121,12 +3133,12 @@
                 }
               ]
             },
-            "type_from_compiler": "function digest(raw: Raw): Review"
+            "contract_from_compiler": "function digest(raw: Raw): Review"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
+        "kept": { "contract_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": 1,
       "mark": "body",
@@ -3143,7 +3155,7 @@
             "kind": "function",
             "file": "ui/src/digest.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function broke(review: Review, id: Identity) ",
                   "span": { "start": 3179, "end": 3231 },
@@ -3168,7 +3180,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src", "digest"], "name": "broke" },
@@ -3177,7 +3189,7 @@
             "kind": "function",
             "file": "ui/src/digest.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function broke(review: Review, id: Identity) ",
                   "span": { "start": 3201, "end": 3253 },
@@ -3202,12 +3214,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -3233,7 +3245,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "digest" },
@@ -3251,12 +3263,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -3273,7 +3285,7 @@
             "kind": "function",
             "file": "ui/src/layout.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function layout(review: Review): Laid ",
                   "span": { "start": 3387, "end": 3432 },
@@ -3298,7 +3310,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src", "layout"], "name": "layout" },
@@ -3307,7 +3319,7 @@
             "kind": "function",
             "file": "ui/src/layout.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function layout(review: Review): Laid ",
                   "span": { "start": 3387, "end": 3432 },
@@ -3332,12 +3344,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -3354,7 +3366,7 @@
             "kind": "function",
             "file": "ui/src/layout.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "function bands(boxes: Box[], review: Review) ",
                   "span": { "start": 16640, "end": 16685 },
@@ -3379,7 +3391,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src", "layout"], "name": "bands" },
@@ -3388,7 +3400,7 @@
             "kind": "function",
             "file": "ui/src/layout.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "function bands(boxes: Box[], review: Review) ",
                   "span": { "start": 16640, "end": 16685 },
@@ -3413,12 +3425,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -3444,7 +3456,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "layout" },
@@ -3462,12 +3474,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -3484,7 +3496,7 @@
             "kind": "function",
             "file": "ui/src/text.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function namesIn(review: Review) ",
                   "span": { "start": 2945, "end": 2985 },
@@ -3509,7 +3521,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src", "text"], "name": "namesIn" },
@@ -3518,7 +3530,7 @@
             "kind": "function",
             "file": "ui/src/text.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export function namesIn(review: Review) ",
                   "span": { "start": 2945, "end": 2985 },
@@ -3543,12 +3555,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
       "mark": "reached",
@@ -3574,7 +3586,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "text" },
@@ -3592,12 +3604,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -3617,7 +3629,7 @@
             "kind": "class",
             "file": "ui/src/types.generated.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export type Review = { definitions: { [key in Identity]: Definition }, \n/**\n * What to read, in order. Whatever a step names is worth reading; everything else in\n * `definitions` is here to be drawn around it.\n */\nreading: Array<Step>, edges: Array<Edge>, groups: Array<Group>, \n/**\n * What a reader calls the grouping: \"package\", \"crate\".\n */\ngrouping: string | null, \n/**\n * How far this reading was told to follow a change outward.\n */\nripples: number, cost: Cost, warnings: Array<Warning>, };\n",
                   "span": { "start": 5415, "end": 5912 },
@@ -3626,7 +3638,7 @@
                 }
               ]
             },
-            "type_from_compiler": "type Review = {\n    definitions: { [key in Identity]: Definition; };\n    reading: Array<Step>;\n    edges: Array<Edge>;\n    groups: Array<Group>;\n    grouping: string | null;\n    ripples: number;\n    cost: Cost;\n    warnings: Array<Warning>;\n}"
+            "contract_from_compiler": "type Review = {\n    definitions: { [key in Identity]: Definition; };\n    reading: Array<Step>;\n    edges: Array<Edge>;\n    groups: Array<Group>;\n    grouping: string | null;\n    ripples: number;\n    cost: Cost;\n    warnings: Array<Warning>;\n}"
           },
           "after": {
             "locator": {
@@ -3638,7 +3650,7 @@
             "kind": "class",
             "file": "ui/src/types.generated.ts",
             "parts": {
-              "type": [
+              "contract": [
                 {
                   "text": "export type Review = { \n/**\n * What the commit under review is called, when whoever laid out the snapshots could\n * say. Not dagger's to work out — a directory has no commit message, only the\n * adapter that read the history knows whether there was one.\n */\ntitle: string | null, definitions: { [key in Identity]: Definition }, \n/**\n * What to read, in order. Whatever a step names is worth reading; everything else in\n * `definitions` is here to be drawn around it.\n */\nreading: Array<Step>, edges: Array<Edge>, groups: Array<Group>, \n/**\n * What a reader calls the grouping: \"package\", \"crate\".\n */\ngrouping: string | null, \n/**\n * How far this reading was told to follow a change outward.\n */\nripples: number, cost: Cost, warnings: Array<Warning>, };\n",
                   "span": { "start": 5415, "end": 6171 },
@@ -3647,15 +3659,19 @@
                 }
               ]
             },
-            "type_from_compiler": "type Review = {\n    title: string | null;\n    definitions: { [key in Identity]: Definition; };\n    reading: Array<Step>;\n    edges: Array<Edge>;\n    groups: Array<Group>;\n    grouping: string | null;\n    ripples: number;\n    cost: Cost;\n    warnings: Array<Warning>;\n}"
+            "contract_from_compiler": "type Review = {\n    title: string | null;\n    definitions: { [key in Identity]: Definition; };\n    reading: Array<Step>;\n    edges: Array<Edge>;\n    groups: Array<Group>;\n    grouping: string | null;\n    ripples: number;\n    cost: Cost;\n    warnings: Array<Warning>;\n}"
           }
         }
       },
       "change": {
-        "kept": { "type_changed": true, "moved": false, "parts": ["type"] }
+        "kept": {
+          "contract_changed": true,
+          "moved": false,
+          "parts": ["contract"]
+        }
       },
       "reached": null,
-      "mark": "type",
+      "mark": "contract",
       "parent": "724"
     },
     "724": {
@@ -3678,7 +3694,7 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           },
           "after": {
             "locator": { "scope": ["ui", "src"], "name": "types.generated" },
@@ -3696,12 +3712,12 @@
                 }
               ]
             },
-            "type_from_compiler": null
+            "contract_from_compiler": null
           }
         }
       },
       "change": {
-        "kept": { "type_changed": false, "moved": false, "parts": [] }
+        "kept": { "contract_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
       "mark": "untouched",
@@ -3717,7 +3733,7 @@
           "kind": "fn",
           "file": "adapters/git/src/main.rs",
           "parts": {
-            "type": [
+            "contract": [
               {
                 "text": "\nfn subject(commit: &str) -> Option<String> ",
                 "span": { "start": 8529, "end": 8573 },
@@ -3742,7 +3758,7 @@
               }
             ]
           },
-          "type_from_compiler": "fn subject(commit: &str) -> Option<String>"
+          "contract_from_compiler": "fn subject(commit: &str) -> Option<String>"
         }
       },
       "change": "added",

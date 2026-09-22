@@ -16,7 +16,7 @@ pub fn segments(path: &Path) -> Vec<String> {
 #[serde(rename_all = "snake_case")]
 pub enum Part {
     /// What callers can see. Changing it can break them.
-    Type,
+    Contract,
     /// Internal. Changing it can't break callers.
     Body,
     /// Written for callers, but changing it can't break them.
@@ -101,9 +101,9 @@ pub struct Occurrence {
     /// somewhere. Each part's pieces are in source order.
     pub parts: BTreeMap<Part, Vec<Piece>>,
     /// The compiler's view of the definition from outside; not in the source, so kept
-    /// apart from the parts. When present it overrides the type part for deciding whether
+    /// apart from the parts. When present it overrides the contract part for deciding whether
     /// callers broke, so an inferred return type change can't pass as a body change.
-    pub type_from_compiler: Option<String>,
+    pub contract_from_compiler: Option<String>,
 }
 
 impl Occurrence {
@@ -235,8 +235,8 @@ mod tests {
             parent: None,
             kind: "function".to_string(),
             file: "own.c".to_string(),
-            parts: BTreeMap::from([(Part::Type, pieces)]),
-            type_from_compiler: None,
+            parts: BTreeMap::from([(Part::Contract, pieces)]),
+            contract_from_compiler: None,
         }
     }
 
@@ -248,6 +248,6 @@ mod tests {
             at("other.h", 0, 1),
             at("own.c", 2, 3),
         ]);
-        assert_eq!(occurrence.files_of(Part::Type), ["other.h", "own.c"]);
+        assert_eq!(occurrence.files_of(Part::Contract), ["other.h", "own.c"]);
     }
 }

@@ -18,7 +18,7 @@ pub enum Change {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Edits {
     /// How it looks to callers, including its name.
-    pub type_changed: bool,
+    pub contract_changed: bool,
     /// Landed in a different file or scope. Nobody breaks over this, so on its own
     /// it isn't worth reviewing.
     pub moved: bool,
@@ -33,7 +33,7 @@ impl Edits {
 
     /// Worth putting in front of a reader. A pure move isn't.
     pub fn worth_reading(&self) -> bool {
-        self.type_changed || !self.parts.is_empty()
+        self.contract_changed || !self.parts.is_empty()
     }
 }
 
@@ -43,7 +43,7 @@ impl Change {
         match self {
             Change::Added => false,
             Change::Removed => true,
-            Change::Kept(edits) => edits.type_changed,
+            Change::Kept(edits) => edits.contract_changed,
         }
     }
 
@@ -77,16 +77,16 @@ fn changed_parts(before: &Occurrence, after: &Occurrence) -> BTreeSet<Part> {
 }
 
 /// Whether callers see something different: the name, the written signature, or the
-/// compiler's type. Any one is enough. The compiler's type can be a summary (hover text) that
+/// compiler's contract. Any one is enough. The compiler's contract can be a summary (hover text) that
 /// stays the same while the declaration changed, so it must not overrule the written text.
-fn type_changed(before: &Occurrence, after: &Occurrence) -> bool {
+fn contract_changed(before: &Occurrence, after: &Occurrence) -> bool {
     let told = before
-        .type_from_compiler
+        .contract_from_compiler
         .as_deref()
-        .zip(after.type_from_compiler.as_deref())
+        .zip(after.contract_from_compiler.as_deref())
         .is_some_and(|(before, after)| before != after);
 
-    told || before.text_of(Part::Type) != after.text_of(Part::Type)
+    told || before.text_of(Part::Contract) != after.text_of(Part::Contract)
         || before.locator.name != after.locator.name
 }
 
@@ -96,13 +96,13 @@ pub fn classify(def: &Definition) -> (Change, Option<Diagnostic>) {
         Sides::Removed(_) => (Change::Removed, None),
         Sides::Kept { before, after } => {
             let lopsided =
-                before.type_from_compiler.is_some() != after.type_from_compiler.is_some();
+                before.contract_from_compiler.is_some() != after.contract_from_compiler.is_some();
             let change = Change::Kept(Edits {
-                type_changed: type_changed(before, after),
+                contract_changed: contract_changed(before, after),
                 moved: moved(before, after),
                 parts: changed_parts(before, after),
             });
-            let diagnostic = lopsided.then_some(Diagnostic::LopsidedType {
+            let diagnostic = lopsided.then_some(Diagnostic::LopsidedContract {
                 definition: def.identity,
             });
             (change, diagnostic)
@@ -132,40 +132,43 @@ mod tests {
 
     #[test]
     fn presence_decides_added_and_removed() {
-        let occ = occurrence("zero", &[(Part::Type, "sig")]);
+        let occ = occurrence("zero", &[(Part::Contract, "sig")]);
         assert_eq!(classify_sides(Sides::Added(occ.clone())).0, Change::Added);
         assert_eq!(classify_sides(Sides::Removed(occ)).0, Change::Removed);
     }
 
     #[test]
     fn a_body_edit_leaves_the_type_alone() {
-        let before = occurrence("addMoney", &[(Part::Type, "sig"), (Part::Body, "a + b")]);
+        let before = occurrence(
+            "addMoney",
+            &[(Part::Contract, "sig"), (Part::Body, "a + b")],
+        );
         let after = occurrence(
             "addMoney",
-            &[(Part::Type, "sig"), (Part::Body, "add(a, b)")],
+            &[(Part::Contract, "sig"), (Part::Body, "add(a, b)")],
         );
         let edits = edits(Sides::Kept { before, after });
 
-        assert!(!edits.type_changed);
+        assert!(!edits.contract_changed);
         assert!(edits.changed(Part::Body));
-        assert!(!edits.changed(Part::Type));
+        assert!(!edits.changed(Part::Contract));
         assert!(edits.worth_reading());
     }
 
     #[test]
     fn a_rename_breaks_callers() {
-        let before = occurrence("addMoney", &[(Part::Type, "sig")]);
-        let after = occurrence("plusMoney", &[(Part::Type, "sig")]);
+        let before = occurrence("addMoney", &[(Part::Contract, "sig")]);
+        let after = occurrence("plusMoney", &[(Part::Contract, "sig")]);
 
-        assert!(edits(Sides::Kept { before, after }).type_changed);
+        assert!(edits(Sides::Kept { before, after }).contract_changed);
     }
 
     /// A C declaration migrating to a different header, body left where it was.
     #[test]
     fn a_part_can_move_on_its_own() {
-        let before = occurrence("zero", &[(Part::Type, "sig")]);
-        let mut after = occurrence("zero", &[(Part::Type, "sig")]);
-        after.parts.get_mut(&Part::Type).unwrap()[0].file = "money.h".to_string();
+        let before = occurrence("zero", &[(Part::Contract, "sig")]);
+        let mut after = occurrence("zero", &[(Part::Contract, "sig")]);
+        after.parts.get_mut(&Part::Contract).unwrap()[0].file = "money.h".to_string();
         let edits = edits(Sides::Kept { before, after });
 
         assert!(edits.moved);
@@ -196,8 +199,8 @@ mod tests {
     #[test]
     fn a_part_can_sit_in_two_files_without_having_moved() {
         let split = || {
-            let mut occurrence = occurrence("helper", &[(Part::Type, "int helper(void);")]);
-            let pieces = occurrence.parts.get_mut(&Part::Type).unwrap();
+            let mut occurrence = occurrence("helper", &[(Part::Contract, "int helper(void);")]);
+            let pieces = occurrence.parts.get_mut(&Part::Contract).unwrap();
             pieces[0].file = "money.h".to_string();
             pieces.push(piece("int helper(void)"));
             occurrence
@@ -214,16 +217,16 @@ mod tests {
     /// A body showing up where there wasn't one isn't a part changing address.
     #[test]
     fn gaining_a_part_is_not_a_move() {
-        let before = occurrence("zero", &[(Part::Type, "sig")]);
-        let after = occurrence("zero", &[(Part::Type, "sig"), (Part::Body, "return 0")]);
+        let before = occurrence("zero", &[(Part::Contract, "sig")]);
+        let after = occurrence("zero", &[(Part::Contract, "sig"), (Part::Body, "return 0")]);
 
         assert!(!edits(Sides::Kept { before, after }).moved);
     }
 
     #[test]
     fn moving_is_not_worth_reading_on_its_own() {
-        let before = occurrence("zero", &[(Part::Type, "sig")]);
-        let mut after = occurrence("zero", &[(Part::Type, "sig")]);
+        let before = occurrence("zero", &[(Part::Contract, "sig")]);
+        let mut after = occurrence("zero", &[(Part::Contract, "sig")]);
         after.file = "amount.ts".to_string();
         let edits = edits(Sides::Kept { before, after });
 
@@ -234,58 +237,64 @@ mod tests {
     /// The signature is untouched, but the compiler says callers see something else.
     #[test]
     fn an_inferred_return_type_counts_as_a_type_change() {
-        let mut before = occurrence("parseId", &[(Part::Type, "sig"), (Part::Body, "Number(s)")]);
-        before.type_from_compiler = Some("parseId(s: string): number".to_string());
-        let mut after = occurrence("parseId", &[(Part::Type, "sig"), (Part::Body, "s.trim()")]);
-        after.type_from_compiler = Some("parseId(s: string): string".to_string());
+        let mut before = occurrence(
+            "parseId",
+            &[(Part::Contract, "sig"), (Part::Body, "Number(s)")],
+        );
+        before.contract_from_compiler = Some("parseId(s: string): number".to_string());
+        let mut after = occurrence(
+            "parseId",
+            &[(Part::Contract, "sig"), (Part::Body, "s.trim()")],
+        );
+        after.contract_from_compiler = Some("parseId(s: string): string".to_string());
         let edits = edits(Sides::Kept { before, after });
 
-        assert!(edits.type_changed);
-        assert!(!edits.changed(Part::Type));
+        assert!(edits.contract_changed);
+        assert!(!edits.changed(Part::Contract));
     }
 
-    /// A reflowed signature counts because the compiler's type may be a summary that hides real breaks.
+    /// A reflowed signature counts because the compiler's contract may be a summary that hides real breaks.
     #[test]
     fn a_rewritten_signature_counts_even_when_the_compiler_agrees() {
-        let mut before = occurrence("parseId", &[(Part::Type, "parseId(s: string)")]);
-        before.type_from_compiler = Some("parseId(s: string): number".to_string());
-        let mut after = occurrence("parseId", &[(Part::Type, "parseId(\n  s: string,\n)")]);
-        after.type_from_compiler = Some("parseId(s: string): number".to_string());
+        let mut before = occurrence("parseId", &[(Part::Contract, "parseId(s: string)")]);
+        before.contract_from_compiler = Some("parseId(s: string): number".to_string());
+        let mut after = occurrence("parseId", &[(Part::Contract, "parseId(\n  s: string,\n)")]);
+        after.contract_from_compiler = Some("parseId(s: string): number".to_string());
         let edits = edits(Sides::Kept { before, after });
 
-        assert!(edits.type_changed);
-        assert!(edits.changed(Part::Type));
+        assert!(edits.contract_changed);
+        assert!(edits.changed(Part::Contract));
     }
 
     #[test]
     fn a_summarising_type_cannot_hide_a_changed_declaration() {
         let mut before = occurrence(
             "Money",
-            &[(Part::Type, "interface Money { amount: number }")],
+            &[(Part::Contract, "interface Money { amount: number }")],
         );
-        before.type_from_compiler = Some("interface Money".to_string());
+        before.contract_from_compiler = Some("interface Money".to_string());
         let mut after = occurrence(
             "Money",
             &[(
-                Part::Type,
+                Part::Contract,
                 "interface Money { amount: number; precise: boolean }",
             )],
         );
-        after.type_from_compiler = Some("interface Money".to_string());
+        after.contract_from_compiler = Some("interface Money".to_string());
 
-        assert!(edits(Sides::Kept { before, after }).type_changed);
+        assert!(edits(Sides::Kept { before, after }).contract_changed);
     }
 
     #[test]
     fn a_type_on_only_one_side_is_reported() {
-        let mut before = occurrence("parseId", &[(Part::Type, "sig")]);
-        before.type_from_compiler = Some("parseId(s: string): number".to_string());
-        let after = occurrence("parseId", &[(Part::Type, "sig")]);
+        let mut before = occurrence("parseId", &[(Part::Contract, "sig")]);
+        before.contract_from_compiler = Some("parseId(s: string): number".to_string());
+        let after = occurrence("parseId", &[(Part::Contract, "sig")]);
 
         let (_, diagnostic) = classify_sides(Sides::Kept { before, after });
         assert_eq!(
             diagnostic,
-            Some(Diagnostic::LopsidedType {
+            Some(Diagnostic::LopsidedContract {
                 definition: Identity(0)
             })
         );
@@ -301,7 +310,7 @@ mod tests {
 pub enum Mark {
     Added,
     Removed,
-    Type,
+    Contract,
     Body,
     Docs,
     /// Unchanged, but a change reached it.
@@ -313,7 +322,7 @@ impl Mark {
     pub const ALL: [Mark; 7] = [
         Mark::Added,
         Mark::Removed,
-        Mark::Type,
+        Mark::Contract,
         Mark::Body,
         Mark::Docs,
         Mark::Reached,
@@ -324,7 +333,7 @@ impl Mark {
         match self {
             Mark::Added => '+',
             Mark::Removed => '-',
-            Mark::Type => '!',
+            Mark::Contract => '!',
             Mark::Body => '~',
             Mark::Docs => '"',
             Mark::Reached => '=',
@@ -336,7 +345,7 @@ impl Mark {
         match self {
             Mark::Added => "added",
             Mark::Removed => "removed",
-            Mark::Type => "type changed",
+            Mark::Contract => "contract changed",
             Mark::Body => "body changed",
             Mark::Docs => "docs changed",
             Mark::Reached => "reached, unchanged",
@@ -360,8 +369,8 @@ impl Change {
         match self {
             Change::Added => Mark::Added,
             Change::Removed => Mark::Removed,
-            Change::Kept(edits) if edits.type_changed => Mark::Type,
-            Change::Kept(edits) if edits.changed(Part::Type) || edits.changed(Part::Body) => {
+            Change::Kept(edits) if edits.contract_changed => Mark::Contract,
+            Change::Kept(edits) if edits.changed(Part::Contract) || edits.changed(Part::Body) => {
                 Mark::Body
             }
             Change::Kept(edits) if edits.changed(Part::Docs) => Mark::Docs,

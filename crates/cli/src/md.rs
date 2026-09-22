@@ -58,7 +58,7 @@ pub fn render(review: &Review) -> String {
         if !broken_by.is_empty() {
             let _ = writeln!(
                 out,
-                "Depends on types that changed: {}.\n",
+                "Depends on contracts that changed: {}.\n",
                 broken_by.join(", ")
             );
         }

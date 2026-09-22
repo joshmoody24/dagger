@@ -18,7 +18,7 @@ export const MARK = Object.fromEntries(
 export const TINT = {
   added: "add",
   removed: "del",
-  type: "chg",
+  contract: "chg",
   body: "chg",
   docs: "chg",
   reached: "reached",
@@ -77,5 +77,5 @@ function digested(id: Identity, one: RawDefinition): Definition {
 /** Whether a change to this one means its callers have to change too. */
 export function broke(review: Review, id: Identity) {
   const mark = review.definitions.get(id)?.mark;
-  return mark === "removed" || mark === "type";
+  return mark === "removed" || mark === "contract";
 }

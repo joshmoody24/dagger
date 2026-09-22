@@ -304,7 +304,7 @@ mod tests {
             }],
         );
         occurrence.parts.insert(
-            Part::Type,
+            Part::Contract,
             vec![Piece {
                 text: "const one = 1;".to_string(),
                 span: Span { start: 13, end: 27 },
@@ -334,7 +334,7 @@ mod tests {
             }],
         );
         occurrence.parts.insert(
-            Part::Type,
+            Part::Contract,
             vec![Piece {
                 text: "const one = 1;".to_string(),
                 span: Span { start: 13, end: 27 },
@@ -363,7 +363,7 @@ mod tests {
             }],
         );
         occurrence.parts.insert(
-            Part::Type,
+            Part::Contract,
             vec![Piece {
                 text: "const one = 1;".to_string(),
                 span: Span { start: 12, end: 26 },
@@ -425,7 +425,7 @@ mod tests {
         let [Change::Kept(edits)] = changes.as_slice() else {
             panic!("expected one kept definition, got {changes:?}");
         };
-        assert!(edits.type_changed);
+        assert!(edits.contract_changed);
         assert!(!edits.changed(Part::Body));
     }
 
@@ -460,7 +460,7 @@ mod tests {
             panic!("expected the rename to be paired up, got {changed:?}");
         };
 
-        assert!(edits.type_changed, "a new name is a new type");
+        assert!(edits.contract_changed, "a new name is a new contract");
         assert!(edits.changed(Part::Body));
     }
 

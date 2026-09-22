@@ -137,12 +137,12 @@ fn extract(
         source,
         seen,
         mentions,
-        types,
+        contracts,
         mut notes,
     } = walk.finish();
     notes.extend(source.notes);
 
-    let occurrences = definitions(&seen, &types);
+    let occurrences = definitions(&seen, &contracts);
     eprintln!(
         "{}",
         Progress::Finished {
@@ -160,7 +160,7 @@ fn extract(
     ))
 }
 
-/// Finds a file's definitions with `documentSymbol` and reads a type out of hover.
+/// Finds a file's definitions with `documentSymbol` and reads a contract out of hover.
 #[derive(Default)]
 struct LspSource {
     /// What was left out of a file and why.
@@ -180,7 +180,7 @@ impl Source for LspSource {
         Ok((lines, items))
     }
 
-    fn type_text(&self, hover: &Value) -> Option<String> {
+    fn contract(&self, hover: &Value) -> Option<String> {
         lsp::fenced(hover, None)
     }
 }
@@ -304,7 +304,7 @@ fn path_scope(path: &str) -> Vec<String> {
 
 fn definitions(
     seen: &BTreeMap<String, File>,
-    types: &BTreeMap<Locator, String>,
+    contracts: &BTreeMap<Locator, String>,
 ) -> Vec<Occurrence> {
     seen.values()
         .flat_map(|file| {
@@ -322,8 +322,10 @@ fn definitions(
                 };
 
                 let declared = from..until;
-                let mut parts =
-                    BTreeMap::from([(Part::Type, pieces(file, std::slice::from_ref(&declared)))]);
+                let mut parts = BTreeMap::from([(
+                    Part::Contract,
+                    pieces(file, std::slice::from_ref(&declared)),
+                )]);
                 if let Some(body) = body {
                     parts.insert(Part::Body, pieces(file, &[body]));
                 }
@@ -333,7 +335,7 @@ fn definitions(
 
                 let locator = symbol.locator.clone();
                 Occurrence {
-                    type_from_compiler: types.get(&locator).cloned(),
+                    contract_from_compiler: contracts.get(&locator).cloned(),
                     locator,
                     role: match symbols::holds(symbol.kind) {
                         true => Role::Container,
@@ -369,7 +371,7 @@ fn module(file: &File) -> Option<Occurrence> {
         kind: "module".to_string(),
         file: file.path.clone(),
         parts: BTreeMap::from([(Part::Body, pieces(file, &leftovers))]),
-        type_from_compiler: None,
+        contract_from_compiler: None,
     })
 }
 

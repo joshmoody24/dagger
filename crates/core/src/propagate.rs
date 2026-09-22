@@ -5,8 +5,8 @@ use crate::reference::{Reference, Target};
 use std::collections::{BTreeMap, VecDeque};
 use std::num::NonZeroU32;
 
-/// Unchanged definitions downstream of a type break, each with how many hops out it
-/// is. Only type parts are followed: a body can call anything without its callers caring.
+/// Unchanged definitions downstream of a contract break, each with how many hops out it
+/// is. Only contract parts are followed: a body can call anything without its callers caring.
 /// `ripples` is how far to follow; zero means not at all.
 pub fn reached(
     changes: &BTreeMap<Identity, Change>,
@@ -19,7 +19,7 @@ pub fn reached(
     for reference in references.iter().filter(|r| mentioned_in_type(r)) {
         match &reference.to {
             Target::Known(to) => callers.entry(*to).or_default().push(reference.from),
-            Target::Unknown { symbol } => diagnostics.push(Diagnostic::UnboundInType {
+            Target::Unknown { symbol } => diagnostics.push(Diagnostic::UnboundInContract {
                 definition: reference.from,
                 symbol: symbol.clone(),
             }),
@@ -54,7 +54,10 @@ pub fn reached(
 /// Whether the mention still stands in the newer snapshot, somewhere its own callers
 /// can see. A call that was deleted breaks nobody.
 fn mentioned_in_type(reference: &Reference) -> bool {
-    reference.after.iter().any(|site| site.part == Part::Type)
+    reference
+        .after
+        .iter()
+        .any(|site| site.part == Part::Contract)
 }
 
 #[cfg(test)]
@@ -64,12 +67,12 @@ mod tests {
     use crate::testing::reference;
     use std::collections::BTreeSet;
 
-    /// A type break at `0`, and nothing else changed.
+    /// A contract break at `0`, and nothing else changed.
     fn broken_at_zero() -> BTreeMap<Identity, Change> {
         BTreeMap::from([(
             Identity(0),
             Change::Kept(Edits {
-                type_changed: true,
+                contract_changed: true,
                 ..Edits::default()
             }),
         )])
@@ -95,9 +98,9 @@ mod tests {
     #[test]
     fn a_type_reference_carries_the_break_along() {
         let references = [
-            reference(1, 0, Part::Type),
-            reference(2, 1, Part::Type),
-            reference(3, 2, Part::Type),
+            reference(1, 0, Part::Contract),
+            reference(2, 1, Part::Contract),
+            reference(3, 2, Part::Contract),
         ];
 
         assert_eq!(
@@ -108,7 +111,7 @@ mod tests {
 
     #[test]
     fn a_body_reference_stops_the_trail() {
-        let references = [reference(1, 0, Part::Body), reference(2, 1, Part::Type)];
+        let references = [reference(1, 0, Part::Body), reference(2, 1, Part::Contract)];
 
         assert!(reached(&references).is_empty());
     }
@@ -116,14 +119,14 @@ mod tests {
     /// `1` still gets hit, but nothing rides along behind it.
     #[test]
     fn the_trail_stops_at_the_first_body() {
-        let references = [reference(1, 0, Part::Type), reference(2, 1, Part::Body)];
+        let references = [reference(1, 0, Part::Contract), reference(2, 1, Part::Body)];
 
         assert_eq!(reached(&references), BTreeSet::from([Identity(1)]));
     }
 
     #[test]
     fn a_mention_that_was_deleted_breaks_nobody() {
-        let mut deleted = reference(1, 0, Part::Type);
+        let mut deleted = reference(1, 0, Part::Contract);
         deleted.after.clear();
 
         assert!(reached(&[deleted]).is_empty());
@@ -132,7 +135,7 @@ mod tests {
     #[test]
     fn nothing_is_reached_when_nothing_breaks() {
         let untouched = BTreeMap::from([(Identity(0), Change::Kept(Edits::default()))]);
-        let references = [reference(1, 0, Part::Type)];
+        let references = [reference(1, 0, Part::Contract)];
 
         assert!(
             super::reached(&untouched, &references, u32::MAX)
@@ -143,7 +146,10 @@ mod tests {
 
     #[test]
     fn a_cycle_settles() {
-        let references = [reference(1, 0, Part::Type), reference(0, 1, Part::Type)];
+        let references = [
+            reference(1, 0, Part::Contract),
+            reference(0, 1, Part::Contract),
+        ];
 
         assert_eq!(
             reached(&references),
@@ -154,9 +160,9 @@ mod tests {
     #[test]
     fn each_one_says_how_far_out_it_sits() {
         let references = [
-            reference(1, 0, Part::Type),
-            reference(2, 1, Part::Type),
-            reference(3, 2, Part::Type),
+            reference(1, 0, Part::Contract),
+            reference(2, 1, Part::Contract),
+            reference(3, 2, Part::Contract),
         ];
 
         assert_eq!(
@@ -167,7 +173,7 @@ mod tests {
 
     #[test]
     fn following_no_distance_at_all_reaches_nobody() {
-        let references = [reference(1, 0, Part::Type)];
+        let references = [reference(1, 0, Part::Contract)];
 
         assert!(away(&references, 0).is_empty());
     }
@@ -175,9 +181,9 @@ mod tests {
     #[test]
     fn the_trail_stops_where_it_was_told_to() {
         let references = [
-            reference(1, 0, Part::Type),
-            reference(2, 1, Part::Type),
-            reference(3, 2, Part::Type),
+            reference(1, 0, Part::Contract),
+            reference(2, 1, Part::Contract),
+            reference(3, 2, Part::Contract),
         ];
 
         assert_eq!(away(&references, 1), BTreeMap::from([(Identity(1), 1)]));
@@ -190,9 +196,9 @@ mod tests {
     #[test]
     fn the_shortest_way_is_the_one_that_counts() {
         let references = [
-            reference(1, 0, Part::Type),
-            reference(2, 1, Part::Type),
-            reference(2, 0, Part::Type),
+            reference(1, 0, Part::Contract),
+            reference(2, 1, Part::Contract),
+            reference(2, 0, Part::Contract),
         ];
 
         assert_eq!(away(&references, u32::MAX)[&Identity(2)], 1);
@@ -200,7 +206,7 @@ mod tests {
 
     #[test]
     fn a_name_we_could_not_place_is_reported() {
-        let mut unbound = reference(1, 0, Part::Type);
+        let mut unbound = reference(1, 0, Part::Contract);
         unbound.to = Target::Unknown {
             symbol: "Money".to_string(),
         };
@@ -208,7 +214,7 @@ mod tests {
         let (_, diagnostics) = super::reached(&broken_at_zero(), &[unbound], u32::MAX);
         assert_eq!(
             diagnostics,
-            vec![Diagnostic::UnboundInType {
+            vec![Diagnostic::UnboundInContract {
                 definition: Identity(1),
                 symbol: "Money".to_string()
             }]

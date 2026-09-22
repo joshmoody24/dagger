@@ -472,7 +472,7 @@ const paged = (groups: Group[], read: string[], hidden: string[] = []) => {
     kind: "function",
     file: "one.rs",
     parts: {},
-    type_from_compiler: null,
+    contract_from_compiler: null,
   };
   return layout({
     title: null,

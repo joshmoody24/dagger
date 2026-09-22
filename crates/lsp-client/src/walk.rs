@@ -46,7 +46,7 @@ pub trait Source {
 
     /// What a hover response says the definition looks like from outside. Every server
     /// writes this differently.
-    fn type_text(&self, hover: &Value) -> Option<String>;
+    fn contract(&self, hover: &Value) -> Option<String>;
 }
 
 /// How far a walk may go, and who it's walking for.
@@ -86,7 +86,7 @@ pub struct Walk<S: Source> {
     source: S,
     seen: BTreeMap<String, Opened<S::Item>>,
     mentions: Vec<Mention>,
-    types: BTreeMap<Locator, String>,
+    contracts: BTreeMap<Locator, String>,
     notes: Vec<Note>,
     walk_limit: usize,
     open_limit: usize,
@@ -98,7 +98,7 @@ pub struct Walked<S: Source> {
     pub source: S,
     pub seen: BTreeMap<String, Opened<S::Item>>,
     pub mentions: Vec<Mention>,
-    pub types: BTreeMap<Locator, String>,
+    pub contracts: BTreeMap<Locator, String>,
     pub notes: Vec<Note>,
 }
 
@@ -112,7 +112,7 @@ impl<S: Source> Walk<S> {
             source,
             seen: BTreeMap::new(),
             mentions: Vec::new(),
-            types: BTreeMap::new(),
+            contracts: BTreeMap::new(),
             notes: Vec::new(),
             walk_limit: reach.walk_limit,
             open_limit: reach.open_limit,
@@ -237,9 +237,9 @@ impl<S: Source> Walk<S> {
         for (at, to, name) in questions {
             // Hover is written for a person, so the source decides how far to trust it.
             if let Ok(hover) = self.server.request("textDocument/hover", at.clone())
-                && let Some(type_text) = self.source.type_text(&hover)
+                && let Some(contract) = self.source.contract(&hover)
             {
-                self.types.insert(to.clone(), type_text);
+                self.contracts.insert(to.clone(), contract);
             }
 
             let mut question = at;
@@ -323,7 +323,7 @@ impl<S: Source> Walk<S> {
 
             // Callers of this one can be broken too, so the trail carries on through it.
             // A mention inside a body stops here: nobody outside can see it.
-            if part == Part::Type {
+            if part == Part::Contract {
                 onward.push((path, inside));
             }
         }
@@ -336,7 +336,7 @@ impl<S: Source> Walk<S> {
             source: self.source,
             seen: self.seen,
             mentions: self.mentions,
-            types: self.types,
+            contracts: self.contracts,
             notes: self.notes,
         }
     }

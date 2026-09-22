@@ -33,7 +33,7 @@ impl Found {
 
     pub fn part_at(&self, at: usize) -> Option<Part> {
         // Declarations win on overlap: the question is whether a caller could break.
-        [Part::Type, Part::Body, Part::Docs]
+        [Part::Contract, Part::Body, Part::Docs]
             .into_iter()
             .find(|part| {
                 self.parts
@@ -141,7 +141,7 @@ fn merged(found: Vec<Found>) -> Vec<Found> {
 }
 
 /// The module as a definition, so its imports and `//!` docs belong to something. `use` is
-/// body; `pub use` is type, since removing one breaks everyone importing through it.
+/// body; `pub use` is contract, since removing one breaks everyone importing through it.
 pub fn module(
     attrs: &[Attribute],
     items: &[Item],
@@ -182,7 +182,7 @@ pub fn module(
         name_at: extent.start..extent.start,
         kind: "module",
         parts: parts([
-            (Part::Type, exposed),
+            (Part::Contract, exposed),
             (Part::Body, workings),
             (Part::Docs, told),
         ]),
@@ -320,7 +320,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
                     name_at: range(constant.ident.span()),
                     kind: "assoc const",
                     parts: parts([
-                        (Part::Type, one(range(constant.ident.span()))),
+                        (Part::Contract, one(range(constant.ident.span()))),
                         (Part::Body, one(range(constant.expr.span()))),
                         (Part::Docs, docs(&constant.attrs)),
                     ]),
@@ -377,7 +377,7 @@ fn framed(header: usize, brace: &syn::token::Brace, attrs: &[Attribute]) -> Part
     let open = range(brace.span.open());
     let close = range(brace.span.close());
     parts([
-        (Part::Type, vec![header..open.end, close]),
+        (Part::Contract, vec![header..open.end, close]),
         (Part::Body, Vec::new()),
         (
             Part::Docs,
@@ -414,7 +414,7 @@ fn associated(
         kind,
         covers: outer.clone(),
         parts: parts([
-            (Part::Type, declared(&outer, &prose, outer.end)),
+            (Part::Contract, declared(&outer, &prose, outer.end)),
             (Part::Body, Vec::new()),
             (Part::Docs, prose),
         ]),
@@ -457,7 +457,7 @@ fn callable(
         kind,
         covers: outer.clone(),
         parts: parts([
-            (Part::Type, declared(&outer, &prose, until)),
+            (Part::Contract, declared(&outer, &prose, until)),
             (Part::Body, workings.map(one).unwrap_or_default()),
             (Part::Docs, prose),
         ]),
@@ -482,7 +482,7 @@ fn whole(
         kind,
         covers: full.clone(),
         parts: parts([
-            (Part::Type, declared(&full, &prose, full.end)),
+            (Part::Contract, declared(&full, &prose, full.end)),
             (Part::Body, Vec::new()),
             (Part::Docs, prose),
         ]),
@@ -583,7 +583,7 @@ mod tests {
         let add = named(&found, "add");
 
         assert!(source[add.parts[&Part::Docs][0].clone()].contains("Adds them up"));
-        assert!(source[add.parts[&Part::Type][0].clone()].contains("pub fn add(a: u8) -> u8"));
+        assert!(source[add.parts[&Part::Contract][0].clone()].contains("pub fn add(a: u8) -> u8"));
         assert!(source[add.parts[&Part::Body][0].clone()].starts_with('{'));
     }
 
@@ -594,7 +594,7 @@ mod tests {
         let money = named(&found, "Money");
 
         assert!(!money.parts.contains_key(&Part::Body));
-        assert!(source[money.parts[&Part::Type][0].clone()].contains("pub pence"));
+        assert!(source[money.parts[&Part::Contract][0].clone()].contains("pub pence"));
         assert_eq!(shown(source, money), source.trim_end());
     }
 
@@ -626,7 +626,7 @@ mod tests {
         let found = read(source);
         let module = named(&found, "thing");
 
-        assert!(source[module.parts[&Part::Type][0].clone()].contains("pub use one::Thing"));
+        assert!(source[module.parts[&Part::Contract][0].clone()].contains("pub use one::Thing"));
         assert!(source[module.parts[&Part::Body][0].clone()].contains("use two::Other"));
     }
 
@@ -711,7 +711,7 @@ mod tests {
         let found = read(source);
         let add = named(&found, "add");
 
-        assert_eq!(add.part_at(0), Some(Part::Type));
+        assert_eq!(add.part_at(0), Some(Part::Contract));
         assert_eq!(add.part_at(source.find("    a").unwrap()), Some(Part::Body));
     }
 }
