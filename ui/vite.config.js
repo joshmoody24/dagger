@@ -2,12 +2,14 @@ import { spawn } from "node:child_process";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
-/* Where the page gets a review when it's open in a browser rather than in the window.
+/* Where the page gets a review while it's being developed here rather than served by
+ * `dagger open`.
  *
- * The window asks dagger through Tauri. A browser has no way to run anything, so it asks
- * here and this runs the same command — `dagger --json`, no revisions, which is the working
- * changes. Reading a file instead is what made the page quietly show yesterday's answer
- * every time anything changed.
+ * The window asks dagger through Tauri, and `dagger open` runs dagger itself. A browser
+ * has no way to run anything, so it asks here and this runs the same command — `dagger
+ * --json`, no revisions, which is the working changes. Reading a file instead is what made
+ * the page quietly show yesterday's answer every time anything changed. `dagger open`
+ * answers /review the same way, line for line, so the page can't tell them apart.
  *
  * The fixture the tests run against is a different thing and stays pinned: a test wants the
  * same input every time, and a page wants the current one.

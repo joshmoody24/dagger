@@ -7,16 +7,11 @@ use std::process::Command;
 #[test]
 fn the_typescript_fixture_reads_as_expected() {
     let fixture = fixture();
-    let adapter = target().join("dagger-lsp");
 
     // Fails rather than skipping quietly: a skipped test looks like a passing one, and the
     // dev shell provides tsc, so its absence is a broken setup. DAGGER_WITHOUT_TSC opts out.
-    if !on_path("tsc") || !adapter.exists() {
-        let missing = if on_path("tsc") {
-            format!("{} hasn't been built — run ./build", adapter.display())
-        } else {
-            "tsc isn't on PATH — this needs the dev shell, or nix develop".to_string()
-        };
+    if !on_path("tsc") {
+        let missing = "tsc isn't on PATH — this needs the dev shell, or nix develop";
         assert!(
             std::env::var_os("DAGGER_WITHOUT_TSC").is_some(),
             "the one test that reads a repository end to end can't run: {missing}.\n\
@@ -48,16 +43,6 @@ fn fixture() -> PathBuf {
         .join("../../fixtures/typescript")
         .canonicalize()
         .expect("the fixture should be where it always is")
-}
-
-/// Where cargo put the binaries, worked out from where it put this test.
-fn target() -> PathBuf {
-    std::env::current_exe()
-        .expect("a test knows where it is")
-        .parent()
-        .and_then(|deps| deps.parent())
-        .expect("target/debug")
-        .to_path_buf()
 }
 
 fn on_path(program: &str) -> bool {

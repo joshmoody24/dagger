@@ -11,6 +11,9 @@ path = "src/main.rs"
 [dependencies]
 dagger-core = { path = "../core" }
 dagger-protocol = { path = "../protocol" }
+dagger-git-adapter = { path = "../../adapters/git" }
+dagger-lsp-adapter = { path = "../../adapters/lsp" }
+dagger-rust-adapter = { path = "../../adapters/rust" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -18,3 +21,6 @@ toml = "0.9"
 glob = "0.3"
 similar = "2"
 crossterm = "0.29"
+tiny_http = "0.12"
+include_dir = "0.7"
+open = "5"

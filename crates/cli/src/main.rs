@@ -8,6 +8,7 @@ mod config;
 mod diff;
 mod fallback;
 mod grouping;
+mod open;
 mod report;
 mod walk;
 
@@ -84,8 +85,14 @@ fn parse_args() -> Result<Args> {
 /// name a change isn't kept in two places.
 fn help(repo: &Path, config: &Config) {
     println!("dagger [--json] [--explain] [--list] [--ripples <n>] [what to read]");
+    println!("dagger open [what to read]");
     println!();
-    println!("Named nothing, dagger reads whatever you're working on.");
+    println!("Named nothing, dagger reads whatever you're working on. `open` shows the");
+    println!("review in a browser instead of the terminal.");
+    println!();
+    println!("The built-in adapters run as subcommands: dagger git, dagger lsp, dagger rust.");
+    println!("Name one as `adapter = \"git\"` in dagger.toml, or leave the file out and dagger");
+    println!("picks them from what the repository holds.");
     println!();
     println!("--ripples <n> follows what a change reaches n steps out. Nought reads only");
     println!("what changed. Each step costs, so raise it knowingly. A repository can say");
@@ -125,6 +132,15 @@ fn status(saying: &str) {
 }
 
 fn main() -> Result<()> {
+    let mut given = std::env::args().skip(1);
+    match given.next().as_deref() {
+        Some("git") => return dagger_protocol::serve(dagger_git_adapter::answer),
+        Some("lsp") => return dagger_protocol::serve(dagger_lsp_adapter::answer),
+        Some("rust") => return dagger_protocol::serve(dagger_rust_adapter::answer),
+        Some("open") => return open::serve(&std::env::current_dir()?, given.collect()),
+        _ => {}
+    }
+
     let args = parse_args()?;
     let repo = std::env::current_dir()?;
     let config = Config::read(&repo)?;
@@ -235,7 +251,9 @@ fn explain(config: &Config, claims: &[Vec<String>], snapshot: &adapter::Snapshot
         .zip(claims)
         .zip(&assignment.extractors)
     {
-        let source = if extractor.include.is_empty() {
+        let source = if extractor.inferred {
+            "inferred"
+        } else if extractor.include.is_empty() {
             "declared"
         } else {
             "configured"

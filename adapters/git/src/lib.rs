@@ -11,10 +11,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-fn main() -> Result<()> {
-    dagger_protocol::serve(answer)
-}
-
 /// What a repo can tell this adapter.
 #[derive(Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -36,7 +32,7 @@ impl Default for Settings {
     }
 }
 
-fn answer(request: Request) -> Result<Response> {
+pub fn answer(request: Request) -> Result<Response> {
     match request {
         Request::Materialize { rev, .. } if rev == CURRENT => Ok(Response::Materialized {
             dir: std::env::current_dir()?.to_string_lossy().into_owned(),

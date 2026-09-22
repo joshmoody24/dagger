@@ -1,7 +1,6 @@
 [workspace]
 members = ["adapters/git", "adapters/rust", "crates/cli", "adapters/lsp", "crates/core", "crates/lsp-client", "crates/protocol", "crates/typescript"]
-# Adapters install separately, so a plain build stays to the tool itself.
-default-members = ["crates/cli", "adapters/lsp", "crates/core", "crates/lsp-client", "crates/protocol"]
+# The built-in adapters are part of the one dagger binary, so a plain build is everything.
 # The window around the page is its own thing: it pulls in a webview and everything under it,
 # which has no business slowing down a build of the tool.
 exclude = ["ui/src-tauri"]

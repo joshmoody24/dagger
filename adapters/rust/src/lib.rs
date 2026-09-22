@@ -20,11 +20,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::path::Path;
 
-fn main() -> Result<()> {
-    dagger_protocol::serve(answer)
-}
-
-fn answer(request: Request) -> Result<Response> {
+pub fn answer(request: Request) -> Result<Response> {
     match request {
         Request::Describe { settings } => Ok(Response::Described(Described {
             // Settings are checked here so a bad one is reported before any snapshot is laid out.

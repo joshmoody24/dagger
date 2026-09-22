@@ -4,10 +4,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[[bin]]
-name = "dagger-git"
-path = "src/main.rs"
-
 [dependencies]
 dagger-protocol = { path = "../../crates/protocol" }
 anyhow.workspace = true

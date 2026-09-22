@@ -2,7 +2,7 @@
 # which is what makes this runnable without a repository.
 
 [[extractors]]
-adapter = "../../target/debug/dagger-lsp"
+adapter = "lsp"
 include = ["**/*.ts"]
 
 [extractors.settings]

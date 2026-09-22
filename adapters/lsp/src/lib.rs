@@ -55,11 +55,7 @@ fn files_to_open() -> usize {
     Reach::OPEN
 }
 
-fn main() -> Result<()> {
-    dagger_protocol::serve(answer)
-}
-
-fn answer(request: Request) -> Result<Response> {
+pub fn answer(request: Request) -> Result<Response> {
     match request {
         Request::Describe { settings } => Ok(Response::Described(Described {
             include: settings_of(settings)?.include,

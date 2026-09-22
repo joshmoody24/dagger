@@ -11,13 +11,20 @@ fn json(settings: &toml::Value) -> serde_json::Value {
     serde_json::to_value(settings).unwrap_or(serde_json::Value::Null)
 }
 
-/// Shell rules: a slash makes it a path in the repo, anything else comes off PATH.
-fn resolve(repo: &Path, adapter: &str) -> PathBuf {
-    if adapter.contains('/') {
+pub const BUILT_IN: [&str; 3] = ["git", "lsp", "rust"];
+
+/// A built-in name runs this same binary as that subcommand. Otherwise shell rules: a
+/// slash makes it a path in the repo, anything else comes off PATH.
+fn resolve(repo: &Path, adapter: &str) -> Result<(PathBuf, Vec<String>)> {
+    if BUILT_IN.contains(&adapter) {
+        return Ok((std::env::current_exe()?, vec![adapter.to_string()]));
+    }
+    let program = if adapter.contains('/') {
         repo.join(adapter)
     } else {
         PathBuf::from(adapter)
-    }
+    };
+    Ok((program, Vec::new()))
 }
 
 /// Asks an adapter one thing and waits for the answer. `saying` prefixes the adapter's
@@ -30,8 +37,9 @@ fn ask(
     request: &Request,
     saying: Option<&str>,
 ) -> Result<Response> {
-    let program = resolve(repo, adapter);
+    let (program, first) = resolve(repo, adapter)?;
     let mut child = Command::new(&program)
+        .args(first)
         .args(args)
         .current_dir(repo)
         .stdin(Stdio::piped())

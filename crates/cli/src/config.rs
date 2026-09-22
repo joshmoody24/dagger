@@ -32,7 +32,8 @@ pub struct GroupingConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Adapter {
-    /// A command: a slash makes it a path in the repo, anything else comes off PATH.
+    /// A command. `git`, `lsp` and `rust` are the adapters built into dagger itself;
+    /// otherwise a slash makes it a path in the repo, anything else comes off PATH.
     pub adapter: String,
     #[serde(default)]
     pub args: Vec<String>,
@@ -53,6 +54,9 @@ pub struct Extractor {
     /// broad rule can be narrowed by a later one. Unclaimed files are read whole.
     #[serde(default)]
     pub include: Vec<String>,
+    /// Set when dagger picked this extractor itself rather than reading it from the file.
+    #[serde(skip)]
+    pub inferred: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -73,14 +77,63 @@ fn nothing() -> toml::Value {
 impl Config {
     pub fn read(repo: &Path) -> Result<Self> {
         let path = repo.join(FILE);
-        match std::fs::read_to_string(&path) {
+        let written = match std::fs::read_to_string(&path) {
             Ok(text) => {
                 // The parse error goes in the message itself, since it's the actionable part.
                 toml::from_str(&text)
-                    .map_err(|why| anyhow::anyhow!("{} doesn't parse: {}", path.display(), why))
+                    .map_err(|why| anyhow::anyhow!("{} doesn't parse: {}", path.display(), why))?
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(error) => Err(error).with_context(|| format!("couldn't read {}", path.display())),
-        }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Self::default(),
+            Err(error) => {
+                return Err(error).with_context(|| format!("couldn't read {}", path.display()));
+            }
+        };
+        Ok(inferred(repo, written))
+    }
+}
+
+/// Fills in what wasn't configured from what the repository visibly is, so a repository
+/// with no dagger.toml still gets its git history and its languages read.
+fn inferred(repo: &Path, config: Config) -> Config {
+    let built_in = |adapter: &str, include: &[&str], settings: toml::Value| Extractor {
+        adapter: adapter.to_string(),
+        args: Vec::new(),
+        settings,
+        include: include.iter().map(|glob| glob.to_string()).collect(),
+        inferred: true,
+    };
+
+    let snapshots = config.snapshots.or_else(|| {
+        repo.join(".git").exists().then(|| Adapter {
+            adapter: "git".to_string(),
+            args: Vec::new(),
+            settings: nothing(),
+        })
+    });
+
+    let extractors = if config.extractors.is_empty() {
+        let rust = repo
+            .join("Cargo.toml")
+            .exists()
+            .then(|| built_in("rust", &[], nothing()));
+        let typescript = (repo.join("tsconfig.json").exists()
+            || repo.join("package.json").exists())
+        .then(|| {
+            let settings = toml::toml! { server = ["tsc", "--lsp", "--stdio"] };
+            built_in(
+                "lsp",
+                &["**/*.ts", "**/*.tsx"],
+                toml::Value::Table(settings),
+            )
+        });
+        rust.into_iter().chain(typescript).collect()
+    } else {
+        config.extractors
+    };
+
+    Config {
+        snapshots,
+        extractors,
+        ..config
     }
 }

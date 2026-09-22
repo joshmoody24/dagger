@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Adapters live outside the default build, so building "everything" means --workspace.
+# The page is embedded in the dagger binary, so it's built first when its tooling is there.
 set -euo pipefail
 cd "$(dirname "$0")"
+if [ -d ui/node_modules ]; then
+  (cd ui && npx --no-install vite build)
+fi
 cargo build --workspace "$@"
