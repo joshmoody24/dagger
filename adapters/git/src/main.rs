@@ -398,55 +398,86 @@ fn carry(dir: &Path) -> Result<()> {
         if let Some(parent) = link.parent() {
             fs::create_dir_all(parent)?;
         }
-        if target
-            .file_name()
-            .is_some_and(|name| name == "node_modules")
-        {
-            packages(&repo, dir, &target, &link)?;
-        } else {
-            std::os::unix::fs::symlink(&target, &link)
-                .with_context(|| format!("couldn't point {path} at the real one"))?;
-        }
+        carried(
+            &Carry {
+                repo: repo.clone(),
+                snapshot: dir.to_path_buf(),
+                root: target.clone(),
+            },
+            &target,
+            &link,
+            DEEP,
+        )
+        .with_context(|| format!("couldn't point {path} at the real one"))?;
     }
 
     Ok(())
 }
 
-/// Installed packages, an entry at a time rather than the directory whole.
+/// How far into a carried directory to look for links back into the repository. Two is
+/// as deep as any package manager keeps its installed links: a package, or a package in a
+/// scope of packages.
+const DEEP: u32 = 2;
+
+/// The three roots a carried link is judged against.
+struct Carry {
+    repo: PathBuf,
+    snapshot: PathBuf,
+    /// The ignored directory being carried. A link that stays inside it is left alone.
+    root: PathBuf,
+}
+
+/// One entry of an ignored directory, pointed at the real one — unless it's a link that
+/// leads back into the repository, or a directory holding one.
 ///
-/// A workspace package is a link back into the repository, and carried whole, the directory
-/// carried that link with it: a file in the snapshot importing a package from the same
-/// repository reached the live copy of it rather than the snapshot's, and the language
-/// server saw two files where the snapshot has one. Every reference from one package to
-/// another was lost that way — the snapshot's definition had no users, and its users
-/// pointed at a definition nobody was asking about. So a link that leads into the
-/// repository is turned to lead into the snapshot instead; everything else keeps pointing
-/// at what's installed.
-fn packages(repo: &Path, dir: &Path, installed: &Path, link: &Path) -> Result<()> {
-    fs::create_dir_all(link)?;
-    for entry in fs::read_dir(installed)? {
-        let name = entry?.file_name();
-        let (real, ours) = (installed.join(&name), link.join(&name));
-
-        // Scoped packages sit one level down, in a plain directory of their own.
-        if name.to_string_lossy().starts_with('@') && real.is_dir() && !real.is_symlink() {
-            packages(repo, dir, &real, &ours)?;
-            continue;
-        }
-
-        let leads_to = fs::read_link(&real)
-            .ok()
-            .and_then(|to| installed.join(to).canonicalize().ok());
-        let target = match leads_to {
-            Some(to) if to.starts_with(repo) && !to.starts_with(installed) => {
-                dir.join(to.strip_prefix(repo)?)
-            }
-            _ => real,
-        };
-        std::os::unix::fs::symlink(&target, &ours)
-            .with_context(|| format!("couldn't point {} at the real one", ours.display()))?;
+/// An installed package can be a link to its source elsewhere in the same repository.
+/// Carried whole, the directory carried that link with it: a file in the snapshot
+/// importing a package from the same repository reached the live copy of it rather than
+/// the snapshot's, and the language server saw two files where the snapshot has one.
+/// Every reference from one package to another was lost that way. So a link that leads
+/// into the repository is turned to lead into the snapshot instead, and a directory
+/// holding such a link is carried an entry at a time so that one can be. Nothing here
+/// knows what a package manager is: any link back into the repository gets the same
+/// treatment, whichever tool made it.
+fn carried(carry: &Carry, real: &Path, ours: &Path, deep: u32) -> Result<()> {
+    if let Some(into) = leads_home(carry, real) {
+        return Ok(std::os::unix::fs::symlink(into, ours)?);
     }
-    Ok(())
+    if deep > 0 && real.is_dir() && !real.is_symlink() && holds_a_way_home(carry, real, deep)? {
+        fs::create_dir_all(ours)?;
+        for entry in fs::read_dir(real)? {
+            let name = entry?.file_name();
+            carried(carry, &real.join(&name), &ours.join(&name), deep - 1)?;
+        }
+        return Ok(());
+    }
+    Ok(std::os::unix::fs::symlink(real, ours)?)
+}
+
+/// Where a link leads within the snapshot, when it leads back into the repository.
+fn leads_home(carry: &Carry, real: &Path) -> Option<PathBuf> {
+    let to = fs::read_link(real).ok()?;
+    let to = real.parent()?.join(to).canonicalize().ok()?;
+    let inside = to.starts_with(&carry.repo) && !to.starts_with(&carry.root);
+    let within = to.strip_prefix(&carry.repo).ok()?;
+    inside.then(|| carry.snapshot.join(within))
+}
+
+fn holds_a_way_home(carry: &Carry, dir: &Path, deep: u32) -> Result<bool> {
+    for entry in fs::read_dir(dir)? {
+        let real = entry?.path();
+        if leads_home(carry, &real).is_some() {
+            return Ok(true);
+        }
+        if deep > 1
+            && real.is_dir()
+            && !real.is_symlink()
+            && holds_a_way_home(carry, &real, deep - 1)?
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn rev_parse(rev: &str) -> Result<String> {
@@ -581,36 +612,47 @@ mod tests {
         }
     }
 
-    /* The link that lost every cross-package reference: a workspace package is installed as
-     * a link back into the repository, and carried whole, node_modules carried that link
-     * with it — so a snapshot importing its own sibling package reached the live copy. */
+    /* The link that lost every cross-package reference: a package installed as a link back
+     * into the repository, carried whole with the directory around it — so a snapshot
+     * importing its own sibling package reached the live copy. */
     #[test]
-    fn a_workspace_package_is_pointed_at_the_snapshots_copy() {
+    fn a_link_back_into_the_repository_is_pointed_at_the_snapshots_copy() {
         let root = std::env::temp_dir().join(format!("dagger-carry-{}", std::process::id()));
         let (repo, snap) = (root.join("repo"), root.join("snap"));
-        let installed = repo.join("node_modules");
+        let installed = repo.join("deps");
         fs::create_dir_all(repo.join("pkgs/a")).unwrap();
-        fs::create_dir_all(installed.join("@s")).unwrap();
+        fs::create_dir_all(installed.join("scope")).unwrap();
         fs::create_dir_all(installed.join("b")).unwrap();
-        std::os::unix::fs::symlink("../../pkgs/a", installed.join("@s/a")).unwrap();
+        fs::create_dir_all(repo.join("cache/x")).unwrap();
+        std::os::unix::fs::symlink("../../pkgs/a", installed.join("scope/a")).unwrap();
         std::os::unix::fs::symlink("b", installed.join("c")).unwrap();
         let repo = repo.canonicalize().unwrap();
 
-        packages(
-            &repo,
-            &snap,
-            &repo.join("node_modules"),
-            &snap.join("node_modules"),
-        )
-        .unwrap();
+        for name in ["deps", "cache"] {
+            let carry = Carry {
+                repo: repo.clone(),
+                snapshot: snap.clone(),
+                root: repo.join(name),
+            };
+            carried(&carry, &repo.join(name), &snap.join(name), DEEP).unwrap();
+        }
 
-        let led = |name: &str| fs::read_link(snap.join("node_modules").join(name)).unwrap();
-        assert_eq!(led("@s/a"), snap.join("pkgs/a"), "into the snapshot");
-        assert_eq!(led("b"), repo.join("node_modules/b"), "at what's installed");
+        let led = |path: &str| fs::read_link(snap.join(path)).unwrap();
         assert_eq!(
-            led("c"),
-            repo.join("node_modules/c"),
-            "a link within node_modules is left alone"
+            led("deps/scope/a"),
+            snap.join("pkgs/a"),
+            "into the snapshot"
+        );
+        assert_eq!(led("deps/b"), repo.join("deps/b"), "at what's installed");
+        assert_eq!(
+            led("deps/c"),
+            repo.join("deps/c"),
+            "a link that stays inside is left alone"
+        );
+        assert_eq!(
+            led("cache"),
+            repo.join("cache"),
+            "nothing leading home, so carried whole"
         );
         fs::remove_dir_all(&root).unwrap();
     }
