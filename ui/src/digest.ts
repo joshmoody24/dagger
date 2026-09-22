@@ -13,12 +13,12 @@ import type {
 
 export const MARK = {
   added: "+",
-  removed: "−",
+  removed: "-",
   type: "!",
   body: "~",
   docs: '"',
-  reached: "≈",
-  still: "·",
+  reached: "=",
+  still: ".",
 };
 export const TINT = {
   added: "add",
