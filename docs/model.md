@@ -37,59 +37,32 @@ defined where the tool first produces the thing it names.
 A `Review` is what one reading of a change comes to. Everything hangs off its definitions.
 
 ```mermaid
-erDiagram
-    Review ||--|{ Definition : "definitions"
-    Review ||--|{ Step : "reading"
-    Review ||--o{ Edge : "edges"
-    Review ||--o{ Group : "groups"
-    Definition ||--o| Occurrence : "before"
-    Definition ||--o| Occurrence : "after"
-    Occurrence ||--|| Locator : "locator"
-    Occurrence ||--|{ Piece : "parts"
-    Edge }o--|| Definition : "from"
-    Edge }o--|| Definition : "to"
-    Step ||--|| Definition : "definition"
-    Group ||--o{ Group : "children"
-    Group |o--o| Definition : "node"
+flowchart LR
+    Review["<b>Review</b><br>title<br>ripples"]
+    Definition["<b>Definition</b><br>id<br>role<br>change<br>parent"]
+    Occurrence["<b>Occurrence</b><br>file<br>kind"]
+    Locator["<b>Locator</b><br>scope<br>name"]
+    Piece["<b>Piece</b><br>part<br>text<br>line"]
+    Edge["<b>Edge</b><br>from<br>to"]
+    Step["<b>Step</b><br>definition<br>on_faith"]
+    Group["<b>Group</b><br>name<br>tier"]
 
-    Review {
-        string title
-        int ripples
-    }
-    Definition {
-        Identity id
-        Role role "container or item"
-        Change change "added, removed, or kept with edits"
-        Identity parent "what it is written inside"
-    }
-    Occurrence {
-        string file
-        string kind "function, struct, module..."
-    }
-    Locator {
-        strings scope
-        string name
-    }
-    Piece {
-        Part part "contract, body, or docs"
-        string text
-        int line
-    }
-    Edge {
-        Identity from
-        Identity to "what from depends on"
-    }
-    Step {
-        Identity definition
-        Identities on_faith "dependencies not yet read"
-    }
-    Group {
-        string name
-        int tier "rows down from what it depends on"
-    }
+    Review -- "definitions 1..*" --> Definition
+    Review -- "reading 1..*" --> Step
+    Review -- "edges 0..*" --> Edge
+    Review -- "groups 0..*" --> Group
+    Definition -- "before 0..1" --> Occurrence
+    Definition -- "after 0..1" --> Occurrence
+    Occurrence -- "locator 1" --> Locator
+    Occurrence -- "parts 1..*" --> Piece
+    Edge -- "from 1" --> Definition
+    Edge -- "to 1" --> Definition
+    Step -- "definition 1" --> Definition
+    Group -- "children 0..*" --> Group
+    Group -- "node 0..1" --> Definition
 ```
 
-A definition has an occurrence in the before snapshot, the after snapshot, or both. Groups nest: a group from `[group]` in `dagger.toml` holds the definitions in it, and a definition that holds others, like a module, is a group of its own with a node for itself when it is read.
+A definition has an occurrence in the before snapshot, the after snapshot, or both. Groups nest in one way only: a group from `[group]` in `dagger.toml` holds the definitions under it, and a definition that holds other definitions, such as a module, impl, or class, is a group of its own inside that, with a node for itself when it is read. Two groups from markers never contain each other.
 
 ## Glossary
 
