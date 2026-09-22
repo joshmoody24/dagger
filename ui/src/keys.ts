@@ -59,7 +59,7 @@ const KEYS: Record<string, keyof ReviewActions> = {
   ArrowUp: "back",
   " ": "next",
   m: "toggleRead",
-  d: "toggleSheet",
+  "[": "toggleSheet",
   r: "ripples",
   t: "theme",
   g: "first",

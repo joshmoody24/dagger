@@ -64,10 +64,10 @@ export function Graph(props: GraphProps) {
 
   const onKey = (event: KeyboardEvent) => {
     if (event.metaKey || event.altKey || editing(event.target)) return;
-    if (event.key === "+" || event.key === "=") view.scaleBy(1.2);
+    if (event.key === "+") view.scaleBy(1.2);
     else if (event.key === "-" || event.key === "_") view.scaleBy(1 / 1.2);
     else if (event.key === "0") view.fit();
-    else if (event.key === "1") closer();
+    else if (event.key === "=") closer();
     else return;
     event.preventDefault();
   };
@@ -183,7 +183,7 @@ export function Graph(props: GraphProps) {
       </svg>
 
       <div class="viewkeys">
-        <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current · <kbd>t</kbd>{" "}
+        <kbd>0</kbd> fit all · <kbd>=</kbd> zoom to current · <kbd>t</kbd>{" "}
         {wearing()}
       </div>
     </div>
