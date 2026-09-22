@@ -85,29 +85,6 @@ impl<'a> Shape<'a> {
         }
     }
 
-    /// The tier of the top-level box or node each definition is in. What the reading goes
-    /// by, so that it runs down the page.
-    pub fn tops(&self, edges: &[Edge]) -> BTreeMap<Identity, u32> {
-        let units: Vec<BTreeSet<Identity>> = self
-            .outermost
-            .iter()
-            .flat_map(|(path, held)| {
-                let units = held.iter().map(|id| self.all_within(*id));
-                if path.is_empty() {
-                    units.collect()
-                } else {
-                    vec![units.flatten().collect()]
-                }
-            })
-            .collect();
-        let tiers = tiers(&units, edges);
-        units
-            .into_iter()
-            .zip(tiers)
-            .flat_map(|(members, tier)| members.into_iter().map(move |id| (id, tier)))
-            .collect()
-    }
-
     /// Everything drawn, as it nests.
     pub fn groups(&self, edges: &[Edge], steps: &[Step]) -> Vec<Group> {
         let first: BTreeMap<Identity, usize> = steps
@@ -154,19 +131,6 @@ impl<'a> Shape<'a> {
                 }
             }
         }
-    }
-
-    fn all_within(&self, id: Identity) -> BTreeSet<Identity> {
-        let mut out = BTreeSet::from([id]);
-        let mut queue = vec![id];
-        while let Some(one) = queue.pop() {
-            for child in self.children.get(&one).into_iter().flatten() {
-                if out.insert(*child) {
-                    queue.push(*child);
-                }
-            }
-        }
-        out
     }
 }
 
@@ -407,9 +371,16 @@ mod tests {
         .into_iter()
         .collect();
         let grouping = grouping(&[(1, &["app"]), (2, &["lib"])]);
-        let tops = Shape::new(&definitions, &grouping).tops(&[edge(1, 2), edge(3, 1)]);
-        assert_eq!(tops[&Identity(2)], 0);
-        assert_eq!(tops[&Identity(1)], 1);
-        assert_eq!(tops[&Identity(3)], 2);
+        let steps: Vec<Step> = [1, 2, 3]
+            .iter()
+            .map(|id| Step {
+                definition: Identity(*id),
+                on_faith: Vec::new(),
+            })
+            .collect();
+        let groups = Shape::new(&definitions, &grouping).groups(&[edge(1, 2), edge(3, 1)], &steps);
+        assert_eq!(boxed(&groups, "lib").unwrap().tier(), 0);
+        assert_eq!(boxed(&groups, "app").unwrap().tier(), 1);
+        assert_eq!(node(&groups, 3).unwrap().tier(), 2);
     }
 }

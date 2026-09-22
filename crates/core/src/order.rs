@@ -69,7 +69,6 @@ pub fn order(
     edges: &[Edge],
     definitions: &[model::Definition],
     grouping: &Grouping,
-    tiers: &BTreeMap<Identity, u32>,
 ) -> Ordering {
     let members: Vec<Identity> = read.iter().copied().collect();
     let places: BTreeMap<Identity, usize> = members
@@ -118,12 +117,6 @@ pub fn order(
     };
 
     let (leans_on, holds_up) = relations(edges, &places, members.len(), &enclosing);
-    /* How far down the page the top-level box each one sits in is. Worked out once, by
-     * whoever draws the page, so that a reading runs down it. */
-    let bands: Vec<u32> = members
-        .iter()
-        .map(|identity| tiers.get(identity).copied().unwrap_or(0))
-        .collect();
 
     let mut read = vec![false; members.len()];
     let mut unread_leans: Vec<usize> = leans_on.iter().map(BTreeSet::len).collect();
@@ -145,7 +138,6 @@ pub fn order(
             Where {
                 groups: &wheres,
                 homes: &homes,
-                bands: &bands,
                 group: last_where,
                 home: last_home,
             },
@@ -320,7 +312,6 @@ fn homes(
 struct Where<'a> {
     groups: &'a [&'a [String]],
     homes: &'a [String],
-    bands: &'a [u32],
     group: Option<&'a [String]>,
     home: Option<&'a str>,
 }
@@ -363,11 +354,6 @@ fn pick(
                 // Stay in the module you're in: a reader pulled out of one has to come
                 // back to it later and find the thread again.
                 at.away(candidate),
-                // Then which group. Whatever leans on no other group is read before what
-                // leans on it, which is the order the page draws them in from the top. At
-                // the first step there's nowhere to stay, so this decides where to begin,
-                // and the page puts whatever is read first at the top left.
-                at.bands[candidate] as isize,
                 // Arriving somewhere, read what it says it is before what it holds: a
                 // module's own definition is its file's prose and what it brings in.
                 //
@@ -427,17 +413,11 @@ mod tests {
 
     fn reading(count: u32, leans: &[(u32, u32)]) -> Vec<u32> {
         let (read, edges, definitions) = built(count, leans, &[]);
-        order(
-            &read,
-            &edges,
-            &definitions,
-            &Grouping::default(),
-            &BTreeMap::new(),
-        )
-        .steps
-        .iter()
-        .map(|step| step.definition.0)
-        .collect()
+        order(&read, &edges, &definitions, &Grouping::default())
+            .steps
+            .iter()
+            .map(|step| step.definition.0)
+            .collect()
     }
 
     #[test]
@@ -489,13 +469,7 @@ mod tests {
     #[test]
     fn a_circle_is_read_with_one_thing_taken_on_faith() {
         let (read, edges, definitions) = built(3, &[(0, 1), (1, 2), (2, 0)], &[]);
-        let ordering = order(
-            &read,
-            &edges,
-            &definitions,
-            &Grouping::default(),
-            &BTreeMap::new(),
-        );
+        let ordering = order(&read, &edges, &definitions, &Grouping::default());
 
         assert_eq!(ordering.steps.len(), 3);
         assert_eq!(ordering.cost.taken_on_faith, 1);
@@ -506,15 +480,9 @@ mod tests {
         let (read, edges, definitions) = built(4, &[(0, 1), (1, 2), (2, 3)], &[]);
 
         assert_eq!(
-            order(
-                &read,
-                &edges,
-                &definitions,
-                &Grouping::default(),
-                &BTreeMap::new()
-            )
-            .cost
-            .taken_on_faith,
+            order(&read, &edges, &definitions, &Grouping::default(),)
+                .cost
+                .taken_on_faith,
             0
         );
     }
@@ -524,13 +492,7 @@ mod tests {
     #[test]
     fn a_reading_would_rather_stay_in_one_file() {
         let (read, edges, definitions) = built(3, &[(0, 1), (0, 2)], &["a.rs", "b.rs", "a.rs"]);
-        let ordering = order(
-            &read,
-            &edges,
-            &definitions,
-            &Grouping::default(),
-            &BTreeMap::new(),
-        );
+        let ordering = order(&read, &edges, &definitions, &Grouping::default());
 
         assert_eq!(ordering.cost.jumps, 1);
     }
@@ -540,15 +502,9 @@ mod tests {
         let (read, edges, definitions) = built(5, &[(0, 1), (1, 2), (2, 3), (3, 4)], &[]);
 
         assert_eq!(
-            order(
-                &read,
-                &edges,
-                &definitions,
-                &Grouping::default(),
-                &BTreeMap::new()
-            )
-            .cost
-            .peak_open,
+            order(&read, &edges, &definitions, &Grouping::default(),)
+                .cost
+                .peak_open,
             1
         );
     }
@@ -558,15 +514,9 @@ mod tests {
         let (read, edges, definitions) = built(4, &[], &[]);
 
         assert_eq!(
-            order(
-                &read,
-                &edges,
-                &definitions,
-                &Grouping::default(),
-                &BTreeMap::new()
-            )
-            .cost
-            .peak_open,
+            order(&read, &edges, &definitions, &Grouping::default(),)
+                .cost
+                .peak_open,
             0
         );
     }
@@ -596,17 +546,11 @@ mod tests {
             }
         }
 
-        let reading: Vec<u32> = order(
-            &read,
-            &edges,
-            &definitions,
-            &Grouping::default(),
-            &BTreeMap::new(),
-        )
-        .steps
-        .iter()
-        .map(|step| step.definition.0)
-        .collect();
+        let reading: Vec<u32> = order(&read, &edges, &definitions, &Grouping::default())
+            .steps
+            .iter()
+            .map(|step| step.definition.0)
+            .collect();
         assert_eq!(reading, vec![2, 0, 1]);
     }
 }

@@ -189,7 +189,7 @@ pub fn review(
         .collect();
 
     let shape = Shape::new(&kept, grouping);
-    let ordering = order(&read, &edges, &definitions, grouping, &shape.tops(&edges));
+    let ordering = order(&read, &edges, &definitions, grouping);
     let groups = shape.groups(&edges, &ordering.steps);
 
     Review {
