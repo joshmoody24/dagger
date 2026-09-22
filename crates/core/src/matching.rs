@@ -69,12 +69,8 @@ fn tangled(occurrence: &Occurrence) -> Option<Diagnostic> {
     pieces.sort_by_key(|piece| piece.span.start);
 
     let over = pieces.windows(2).find(|pair| {
-        /* Pieces of different files sit in different files, so they can't overlap. Asked
-         * through the occurrence, because a piece says which file it's in only when that
-         * isn't the definition's own — so `None` and `Some(its own file)` are the same
-         * place written two ways, and comparing them as written misses the overlap. */
-        occurrence.home_of(pair[0]) == occurrence.home_of(pair[1])
-            && pair[1].span.start < pair[0].span.end
+        // Pieces of different files sit in different files, so they can't overlap.
+        pair[0].file == pair[1].file && pair[1].span.start < pair[0].span.end
     })?;
 
     Some(Diagnostic::Tangled {
@@ -149,6 +145,14 @@ fn rescue_renames(
     let mut candidates: Vec<(usize, usize, usize)> = Vec::new();
     for &was in &earlier {
         for &is in &later {
+            /* A box and a thing are never the same thing, however alike they read. A
+             * module and a function of the same name would otherwise fold into one
+             * definition that changed its own nature, and everything drawn from it — what
+             * holds what, what gets a box — would be answered from whichever side was
+             * asked. */
+            if before[was].role != after[is].role {
+                continue;
+            }
             let alike = likeness(&before[was], &after[is]);
             if alike >= ALIKE_ENOUGH {
                 // Scaled to an integer so pairs sort without comparing floats.
@@ -323,7 +327,7 @@ mod tests {
                 text: "/** One. */\nconst ".to_string(),
                 span: Span { start: 0, end: 19 },
                 line: 1,
-                file: None,
+                file: "money.ts".to_string(),
             }],
         );
         occurrence.parts.insert(
@@ -332,7 +336,7 @@ mod tests {
                 text: "const one = 1;".to_string(),
                 span: Span { start: 13, end: 27 },
                 line: 2,
-                file: None,
+                file: "money.ts".to_string(),
             }],
         );
 
@@ -357,7 +361,7 @@ mod tests {
                 text: "/** One. */\nconst ".to_string(),
                 span: Span { start: 0, end: 19 },
                 line: 1,
-                file: None,
+                file: "money.ts".to_string(),
             }],
         );
         occurrence.parts.insert(
@@ -366,8 +370,7 @@ mod tests {
                 text: "const one = 1;".to_string(),
                 span: Span { start: 13, end: 27 },
                 line: 2,
-                // The definition's own file, said out loud.
-                file: Some("money.ts".to_string()),
+                file: "money.ts".to_string(),
             }],
         );
 
@@ -387,7 +390,7 @@ mod tests {
                 text: "/** One. */\n".to_string(),
                 span: Span { start: 0, end: 12 },
                 line: 1,
-                file: None,
+                file: "money.ts".to_string(),
             }],
         );
         occurrence.parts.insert(
@@ -396,7 +399,7 @@ mod tests {
                 text: "const one = 1;".to_string(),
                 span: Span { start: 12, end: 26 },
                 line: 2,
-                file: None,
+                file: "money.ts".to_string(),
             }],
         );
 

@@ -13,7 +13,7 @@ mod modules;
 
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
 use dagger_core::prose::preamble;
 use dagger_core::reference::{BinderId, Mention, Site, Target};
 use dagger_lsp_client::{self as lsp, Lines, Server};
@@ -140,7 +140,7 @@ fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parse
     let file = syn::parse_file(&source).with_context(|| format!("couldn't parse {path}"))?;
     let scope = modules.path_of(dir, path);
 
-    let mut found = items::module(&file.attrs, &file.items, &scope, 0..source.len())
+    let mut found = items::module(&file.attrs, &file.items, &scope, 0..source.len(), false)
         .into_iter()
         .collect::<Vec<_>>();
     found.extend(items::find(&file.items, &scope));
@@ -206,7 +206,7 @@ fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
                         end: range.end as u32,
                     },
                     line: file.lines.position(range.start).0 + 1,
-                    file: None,
+                    file: file.path.clone(),
                 })
                 .collect();
             (*part, pieces)
@@ -215,11 +215,38 @@ fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
 
     Occurrence {
         locator: locator(found),
+        role: role_of(found.kind),
+        parent: holding(file, found).map(locator),
         kind: found.kind.to_string(),
         file: file.path.clone(),
         parts,
         contract: None,
     }
+}
+
+/// Whether this kind of thing can hold others. A property of the language, which is why the
+/// extractor is the one to say it: nothing downstream knows that Rust has `impl` blocks.
+fn role_of(kind: &str) -> Role {
+    match kind {
+        "module" | "impl" | "trait" => Role::Container,
+        _ => Role::Item,
+    }
+}
+
+/// What this is written inside: the smallest thing that covers it and isn't it.
+///
+/// Read straight off the spans, because Rust nests — a method is written inside its `impl`,
+/// which is written inside its module. Nothing has to be inferred from names, which is the
+/// point: a method's scope names the type it belongs to, not the `impl` block it sits in,
+/// so anything working backwards from the scope gets this wrong in the ordinary case.
+fn holding<'a>(file: &'a Parsed, found: &items::Found) -> Option<&'a items::Found> {
+    file.found
+        .iter()
+        .filter(|other| other.covers != found.covers)
+        .filter(|other| {
+            other.covers.start <= found.covers.start && other.covers.end >= found.covers.end
+        })
+        .min_by_key(|other| other.covers.end - other.covers.start)
 }
 
 fn locator(found: &items::Found) -> Locator {

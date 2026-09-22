@@ -1,4 +1,4 @@
-use crate::model::{Identity, Locator, Occurrence, Part, Piece, Span};
+use crate::model::{Identity, Locator, Occurrence, Part, Piece, Role, Span};
 use crate::reference::{BinderId, Reference, Site, Target};
 
 pub fn occurrence(name: &str, parts: &[(Part, &str)]) -> Occurrence {
@@ -7,6 +7,8 @@ pub fn occurrence(name: &str, parts: &[(Part, &str)]) -> Occurrence {
             scope: Vec::new(),
             name: name.to_string(),
         },
+        role: Role::Item,
+        parent: None,
         kind: "function".to_string(),
         file: "money.ts".to_string(),
         parts: parts
@@ -22,7 +24,7 @@ pub fn piece(text: &str) -> Piece {
         text: text.to_string(),
         span: Span { start: 0, end: 0 },
         line: 1,
-        file: None,
+        file: "money.ts".to_string(),
     }
 }
 

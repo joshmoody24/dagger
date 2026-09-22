@@ -5,6 +5,7 @@
 //! guessed, and the guess is made from the symbol's kind: something callable has a
 //! signature and then a body, while a type is contract all the way through.
 
+use dagger_core::model::Locator;
 use dagger_lsp_client::Lines;
 use serde_json::Value;
 use std::ops::Range;
@@ -19,6 +20,12 @@ pub struct Symbol {
     pub name_at: Range<usize>,
     /// The signature, when the kind is one that has a body to be told apart from.
     pub signature: Option<Range<usize>>,
+    /// What this is written inside, when it's written inside anything.
+    ///
+    /// A server answers with a tree and this is where the tree went: flattening it threw
+    /// away the one thing only the server knew, and anything downstream then had to guess
+    /// it back from names. `None` at the top of a file — the file's own module takes those.
+    pub parent: Option<Locator>,
 }
 
 impl Symbol {
@@ -37,11 +44,26 @@ impl Symbol {
 /// Flattens the tree a server reports, keeping enclosing names as scope.
 pub fn read(symbols: &Value, lines: &Lines) -> Vec<Symbol> {
     let mut found = Vec::new();
-    collect(symbols, &[], lines, &mut found);
+    collect(symbols, &[], None, lines, &mut found);
     found
 }
 
-fn collect(symbols: &Value, scope: &[String], lines: &Lines, found: &mut Vec<Symbol>) {
+/// Whether this kind of thing can hold others.
+///
+/// The same question as whether to descend into it, which is why it's the same answer: if a
+/// server's children are worth reading as definitions of their own, the thing holding them
+/// is a box around them rather than a thing on its own.
+pub fn holds(kind: &str) -> bool {
+    holds_definitions(kind)
+}
+
+fn collect(
+    symbols: &Value,
+    scope: &[String],
+    parent: Option<&Locator>,
+    lines: &Lines,
+    found: &mut Vec<Symbol>,
+) {
     let Some(symbols) = symbols.as_array() else {
         return;
     };
@@ -66,6 +88,7 @@ fn collect(symbols: &Value, scope: &[String], lines: &Lines, found: &mut Vec<Sym
         found.push(Symbol {
             name: name.to_string(),
             scope: scope.to_vec(),
+            parent: parent.cloned(),
             kind,
             signature: splits(kind)
                 .then(|| signature(&whole, &name_at, lines))
@@ -80,7 +103,11 @@ fn collect(symbols: &Value, scope: &[String], lines: &Lines, found: &mut Vec<Sym
 
         let mut inner = scope.to_vec();
         inner.push(name.to_string());
-        collect(&symbol["children"], &inner, lines, found);
+        let holding = Locator {
+            scope: scope.to_vec(),
+            name: name.to_string(),
+        };
+        collect(&symbol["children"], &inner, Some(&holding), lines, found);
     }
 }
 

@@ -354,3 +354,45 @@ test("a long file of repeated lines is compared without weighing every pair", ()
     is.map((one) => one.text),
   );
 });
+
+/* A file is not always one module. Where a language lets a file be a place to put things
+ * rather than a thing in itself, several containers can sit at the top of one — and the
+ * page used to keep whichever it saw last, drawing that one and silently losing the rest
+ * along with every box inside them. */
+test("a file holding several containers draws all of them", () => {
+  const one = (id: number, name: string, role: "item" | "container", parent: number | null) => {
+    const kind = role === "container" ? "class" : "function";
+    const shown = { locator: { scope: [], name }, role, parent: null, kind, file: "one.ts", parts: {}, contract: null };
+    return [id, { id, name, scope: [], path: name, file: "one.ts", kind, role,
+      change: "added" as const, before: null, after: shown, mark: "added" as const,
+      away: 0, parent, group: [] }] as const;
+  };
+
+  const definitions = new Map([
+    one(1, "Alpha", "container", null),
+    one(2, "Beta", "container", null),
+    one(3, "aMethod", "item", 1),
+    one(4, "bMethod", "item", 2),
+  ] as never);
+
+  const laid = layout({
+    definitions,
+    steps: [1, 2, 3, 4].map((definition) => ({ definition, on_faith: [] })),
+    edges: [],
+    ripples: 1,
+    cost: { peak_open: 0, total_open: 0, taken_on_faith: 0, jumps: 0 },
+    bands: new Map(),
+    warnings: [],
+  } as never);
+
+  const boxes: string[] = [];
+  const walk = (box: { label: string; boxes: unknown[] }) => {
+    boxes.push(box.label);
+    (box.boxes as typeof box[]).forEach(walk);
+  };
+  laid.boxes.forEach(walk);
+
+  assert.ok(boxes.includes("Alpha"), `Alpha was not drawn: ${boxes.join(", ")}`);
+  assert.ok(boxes.includes("Beta"), `Beta was not drawn: ${boxes.join(", ")}`);
+  assert.equal(laid.at.size, 2, "both methods keep a place");
+});

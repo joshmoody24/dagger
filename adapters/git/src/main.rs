@@ -11,6 +11,7 @@
 use anyhow::{Context, Result, bail};
 use dagger_protocol::{Request, Response, Revisions};
 use serde::Deserialize;
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -285,13 +286,27 @@ fn commit(name: &str) -> Result<String> {
 /// Tracked files plus anything new that isn't ignored, which is the same set git
 /// status talks about.
 fn current_files() -> Result<Vec<String>> {
-    listing(&[
+    let listed = listing(&[
         "ls-files",
         "--cached",
         "--others",
         "--exclude-standard",
         "-z",
-    ])
+    ])?;
+
+    /* Minus whatever has been deleted but not yet staged. `--cached` means the index, and
+     * the index still holds a file somebody has only removed from disk — so the snapshot
+     * claimed a file that wasn't there, the extractor was asked to read it, and the review
+     * carried "this might not be showing you something" about a deletion it was showing
+     * perfectly well. Alarm about nothing teaches a reader to ignore alarm. */
+    let gone: BTreeSet<String> = listing(&["ls-files", "--deleted", "-z"])?
+        .into_iter()
+        .collect();
+
+    Ok(listed
+        .into_iter()
+        .filter(|file| !gone.contains(file))
+        .collect())
 }
 
 /// One line of answer, with the newline git puts after it taken off.

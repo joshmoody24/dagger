@@ -40,9 +40,14 @@ pub struct Piece {
     /// whoever read the file can say which line that is, so it's said here rather than
     /// worked out later from text nobody kept.
     pub line: u32,
-    /// Set when this piece lives somewhere other than the definition's own file, the
-    /// way a C declaration sits in a header away from its body.
-    pub file: Option<String>,
+    /// Which file this stretch is in.
+    ///
+    /// Always said, even when it's the definition's own. It used to be set only when it
+    /// differed, which made one place spell itself two ways — and everything comparing two
+    /// pieces had to know that, or quietly decide that a piece saying nothing and a piece
+    /// naming its own file were in different files. Two bugs came of it: an overlap that
+    /// went unreported, and a part that read as having moved when it hadn't.
+    pub file: String,
 }
 
 /// Where a definition lives in one snapshot. Extractors have to keep this unique,
@@ -55,17 +60,45 @@ pub struct Locator {
     pub name: String,
 }
 
+/// Whether a definition can hold others.
+///
+/// Told apart because a page draws the two differently: a container is the box, and what it
+/// holds are the things in it. Intrinsic, and the extractor's to say — a module is a
+/// container whether or not anything inside it changed, and the empty box drawn around
+/// nothing is exactly the case that needs saying out loud.
+///
+/// This used to be a string comparison against `"module"`, in four places across a protocol
+/// boundary, which meant every language had to spell its containers that one way or go
+/// undrawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    /// Read on its own, holds nothing.
+    #[default]
+    Item,
+    /// Can hold other definitions. May still change, and still be worth reading.
+    Container,
+}
+
 /// A definition as it exists in one snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Occurrence {
     pub locator: Locator,
-    /// What the extractor calls this, like "function" or "test".
+    /// Whether this holds other definitions.
+    #[serde(default)]
+    pub role: Role,
+    /// What it's written inside, in the language's own structure: a method's impl, an
+    /// impl's module, a module's module. `None` at the root.
     ///
-    /// Display metadata, with one exception that ought not to be one: "module" is read as
-    /// meaning a container — something drawn as a box around others rather than read on its
-    /// own. That's a convention held in a string across a protocol boundary, and it belongs
-    /// in the model instead.
+    /// Said by whoever parsed the file, because only they know. Worked out afterwards from
+    /// the scope and the kind, it comes out wrong in the ordinary cases — a method's scope
+    /// names its type, not the impl block it sits in — and it costs fifty lines to be wrong
+    /// in.
+    #[serde(default)]
+    pub parent: Option<Locator>,
+    /// What the extractor calls this, like "function" or "test". Display only.
     pub kind: String,
     /// Where the definition lives, and where its parts live unless they say otherwise.
     pub file: String,
@@ -105,7 +138,7 @@ impl Occurrence {
             .get(&part)
             .into_iter()
             .flatten()
-            .map(|piece| self.home_of(piece))
+            .map(|piece| piece.file.as_str())
             .collect();
         /* Sorted before the duplicates come out, since `dedup` only drops the ones next to
          * each other. A part whose pieces sit in one file, then another, then the first
@@ -116,20 +149,13 @@ impl Occurrence {
         files
     }
 
-    /// Which file a piece is in. A piece says so only when it's somewhere other than the
-    /// definition's own file, so the two ways of saying "here" have to be settled before
-    /// anything compares them.
-    pub fn home_of<'a>(&'a self, piece: &'a Piece) -> &'a str {
-        piece.file.as_deref().unwrap_or(&self.file)
-    }
-
     /// Every piece of every part, in the order they appear, with the file each sits in.
     pub fn pieces(&self) -> Vec<(&str, &Piece)> {
         let mut pieces: Vec<(&str, &Piece)> = self
             .parts
             .values()
             .flatten()
-            .map(|piece| (self.home_of(piece), piece))
+            .map(|piece| (piece.file.as_str(), piece))
             .collect();
         pieces.sort_by_key(|(file, piece)| (*file, piece.span.start));
         pieces
@@ -137,9 +163,27 @@ impl Occurrence {
 }
 
 /// Handed out by matching. Means nothing on its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+///
+/// Written as a string, because that's what it becomes. JSON has no number for an object
+/// key, so every one of these used to arrive at the page spelled differently depending on
+/// whether it was a key or a value — and the page turned the keys back into numbers to
+/// match. A handle that means nothing may as well be the shape it travels in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(type = "string"))]
 pub struct Identity(pub u32);
+
+impl Serialize for Identity {
+    fn serialize<S: serde::Serializer>(&self, out: S) -> Result<S::Ok, S::Error> {
+        out.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Identity {
+    fn deserialize<D: serde::Deserializer<'de>>(from: D) -> Result<Self, D::Error> {
+        let said = String::deserialize(from)?;
+        said.parse().map(Identity).map_err(serde::de::Error::custom)
+    }
+}
 
 /// Which snapshots a definition showed up in. Being missing on one side is the only
 /// thing that makes adding and removing different from any other change.
@@ -190,12 +234,12 @@ pub struct Definition {
 mod tests {
     use super::*;
 
-    fn at(file: Option<&str>, start: u32, end: u32) -> Piece {
+    fn at(file: &str, start: u32, end: u32) -> Piece {
         Piece {
             text: String::new(),
             span: Span { start, end },
             line: 1,
-            file: file.map(str::to_string),
+            file: file.to_string(),
         }
     }
 
@@ -205,6 +249,8 @@ mod tests {
                 scope: Vec::new(),
                 name: "one".to_string(),
             },
+            role: Role::Item,
+            parent: None,
             kind: "function".to_string(),
             file: "own.c".to_string(),
             parts: BTreeMap::from([(Part::Type, pieces)]),
@@ -217,24 +263,10 @@ mod tests {
     #[test]
     fn a_part_that_returns_to_a_file_is_not_in_it_twice() {
         let occurrence = spread(vec![
-            at(None, 0, 1),
-            at(Some("other.h"), 0, 1),
-            at(None, 2, 3),
+            at("own.c", 0, 1),
+            at("other.h", 0, 1),
+            at("own.c", 2, 3),
         ]);
         assert_eq!(occurrence.files_of(Part::Type), ["other.h", "own.c"]);
-    }
-
-    /* A piece names its file only when it isn't the definition's own, so the same place has
-     * two spellings. Compared as written they look like different files. */
-    #[test]
-    fn a_piece_saying_nothing_is_in_the_definitions_own_file() {
-        let occurrence = spread(vec![at(None, 0, 1), at(Some("own.c"), 2, 3)]);
-        assert_eq!(occurrence.files_of(Part::Type), ["own.c"]);
-
-        let pieces = occurrence.parts[&Part::Type].clone();
-        assert_eq!(
-            occurrence.home_of(&pieces[0]),
-            occurrence.home_of(&pieces[1])
-        );
     }
 }

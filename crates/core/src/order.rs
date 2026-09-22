@@ -22,8 +22,8 @@
 //! the one reading, and the numbers it costs are in `Cost` for arguing with.
 
 use crate::group::Grouping;
-use crate::model::{Definition, Identity};
-use crate::review::Review;
+use crate::model::{self, Identity, Locator, Role};
+use crate::review::Edge;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -59,8 +59,18 @@ pub struct Cost {
     pub jumps: usize,
 }
 
-pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -> Ordering {
-    let members: Vec<Identity> = review.members.iter().copied().collect();
+/// `read` is what's worth reading; `edges` is what leans on what among everything drawn.
+///
+/// Takes the two things it uses rather than the whole review, which is what let the review
+/// be one object: a function asking for more than it needs was the only reason the analysis
+/// had to exist as a separate type before the reading could be worked out from it.
+pub fn order(
+    read: &BTreeSet<Identity>,
+    edges: &[Edge],
+    definitions: &[model::Definition],
+    grouping: &Grouping,
+) -> Ordering {
+    let members: Vec<Identity> = read.iter().copied().collect();
     let places: BTreeMap<Identity, usize> = members
         .iter()
         .enumerate()
@@ -73,16 +83,16 @@ pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -
         .collect();
 
     let homes = homes(&members, definitions);
-    /* A module is the top of its own file: what it says it is, and what it brings in.
-     * Read after the things it holds, it's a header arriving once nobody needs it. */
+    /* Whatever holds others says what it is before the things it holds: a module's prose
+     * and imports, an impl's header. Read afterwards, it arrives once nobody needs it. */
     let headers: Vec<bool> = {
-        let kinds: BTreeMap<Identity, &str> = definitions
+        let roles: BTreeMap<Identity, Role> = definitions
             .iter()
-            .map(|definition| (definition.identity, definition.sides.latest().kind.as_str()))
+            .map(|definition| (definition.identity, definition.sides.latest().role))
             .collect();
         members
             .iter()
-            .map(|identity| kinds.get(identity) == Some(&"module"))
+            .map(|identity| roles.get(identity) == Some(&Role::Container))
             .collect()
     };
 
@@ -105,7 +115,7 @@ pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -
             .collect()
     };
 
-    let (leans_on, holds_up) = relations(review, &places, members.len());
+    let (leans_on, holds_up) = relations(edges, &places, members.len());
     /* Worked out once, by whoever knows how the groups sit, and read here. The page reads
      * the same numbers, which is what keeps a reading running down it. */
     let bands: Vec<u32> = members
@@ -181,14 +191,14 @@ pub fn order(review: &Review, definitions: &[Definition], grouping: &Grouping) -
 
 /// Which members lean on which, and the same the other way round.
 fn relations(
-    review: &Review,
+    edges: &[Edge],
     places: &BTreeMap<Identity, usize>,
     count: usize,
 ) -> (Vec<BTreeSet<usize>>, Vec<BTreeSet<usize>>) {
     let mut leans_on = vec![BTreeSet::new(); count];
     let mut holds_up = vec![BTreeSet::new(); count];
 
-    for edge in &review.edges {
+    for edge in edges {
         if let (Some(&from), Some(&to)) = (places.get(&edge.from), places.get(&edge.to))
             && from != to
         {
@@ -206,54 +216,51 @@ fn relations(
 /// nearly work — but a file holding two modules holds two trains of thought, and the reader
 /// knows it even when the filesystem doesn't.
 ///
-/// Two things this has to get right, and got wrong first:
-///
-/// A module's own definition belongs to itself, not to what contains it. A file's module is
-/// written with the scope of its parent, and taken at face value that puts it somewhere
-/// other than everything it holds — so it was read after all of them, which is nobody's
-/// idea of reading a file.
-///
-/// And anything deeper than a module belongs to the module, not to the nearest thing that
-/// happens to enclose it. A reader moving between two methods of one type has not gone
-/// anywhere, and being told they have sends them away and brings them back for no reason.
-fn homes(members: &[Identity], definitions: &[Definition]) -> Vec<String> {
-    let known: Vec<(&str, Vec<String>)> = definitions
-        .iter()
-        .filter(|definition| definition.sides.latest().kind == "module")
-        .map(|definition| {
-            let shown = definition.sides.latest();
-            let mut path = shown.locator.scope.clone();
-            path.push(shown.locator.name.clone());
-            (shown.file.as_str(), path)
-        })
-        .collect();
-
-    // A file can't hold a null and neither can a path, so the two can't be confused.
-    let named = |file: &str, path: &[String]| format!("{file}\0{}", path.join("::"));
-    let inside: BTreeMap<Identity, String> = definitions
+/// Found by walking up what each thing is written inside, as far as that stays in the same
+/// file. The outermost container a file holds is that file's module, whatever the language
+/// calls it, so this needs to know nothing about modules to find one. Stopping at the first
+/// container instead would make a method and a plain function in one module two places,
+/// and a reader moving between them has not gone anywhere.
+fn homes(members: &[Identity], definitions: &[model::Definition]) -> Vec<String> {
+    let shown: BTreeMap<Identity, (&str, &Locator, Option<&Locator>)> = definitions
         .iter()
         .map(|definition| {
-            let shown = definition.sides.latest();
-            let mut own = shown.locator.scope.clone();
-            if shown.kind == "module" {
-                own.push(shown.locator.name.clone());
-            }
-
-            /* The innermost module this sits in, which is the longest module path the
-             * thing's own path starts with. A module matches itself. */
-            let home = known
-                .iter()
-                .filter(|(file, path)| *file == shown.file && own.starts_with(path))
-                .max_by_key(|(_, path)| path.len())
-                .map(|(file, path)| named(file, path))
-                .unwrap_or_else(|| named(&shown.file, &[]));
-            (definition.identity, home)
+            let it = definition.sides.latest();
+            (
+                definition.identity,
+                (it.file.as_str(), &it.locator, it.parent.as_ref()),
+            )
         })
         .collect();
+    let by_name: BTreeMap<(&str, &Locator), Identity> = shown
+        .iter()
+        .map(|(identity, (file, locator, _))| ((*file, *locator), *identity))
+        .collect();
+
+    // A file can't hold a null and neither can a name, so the two can't be confused.
+    let named = |file: &str, locator: &Locator| {
+        let mut path = locator.scope.clone();
+        path.push(locator.name.clone());
+        format!("{file}\0{}", path.join("::"))
+    };
 
     members
         .iter()
-        .map(|identity| inside.get(identity).cloned().unwrap_or_default())
+        .map(|identity| {
+            let Some(&(file, locator, parent)) = shown.get(identity) else {
+                return String::new();
+            };
+
+            let (mut at, mut held) = (locator, parent);
+            while let Some(above) = held
+                .and_then(|above| by_name.get(&(file, above)))
+                .and_then(|above| shown.get(above))
+            {
+                at = above.1;
+                held = above.2;
+            }
+            named(file, at)
+        })
         .collect()
 }
 
@@ -330,61 +337,45 @@ fn pick(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change::{Change, Edits};
     use crate::model::{Part, Sides};
     use crate::review::Edge;
     use crate::testing::occurrence;
 
-    /// A review of `count` definitions, all edited, wired up by the given pairs. Each
-    /// pair reads "the first leans on the second".
-    fn built(count: u32, leans: &[(u32, u32)], files: &[&str]) -> (Review, Vec<Definition>) {
-        let definitions: Vec<Definition> = (0..count)
+    /// `count` definitions, all edited, wired up by the given pairs. Each pair reads
+    /// "the first leans on the second".
+    fn built(
+        count: u32,
+        leans: &[(u32, u32)],
+        files: &[&str],
+    ) -> (BTreeSet<Identity>, Vec<Edge>, Vec<model::Definition>) {
+        let definitions: Vec<model::Definition> = (0..count)
             .map(|id| {
                 let mut before = occurrence(&format!("d{id}"), &[(Part::Body, "old")]);
                 let mut after = occurrence(&format!("d{id}"), &[(Part::Body, "new")]);
                 let file = files.get(id as usize).copied().unwrap_or("one.rs");
                 before.file = file.to_string();
                 after.file = file.to_string();
-                Definition {
+                model::Definition {
                     identity: Identity(id),
                     sides: Sides::Kept { before, after },
                 }
             })
             .collect();
 
-        let review = Review {
-            changes: (0..count)
-                .map(|id| {
-                    (
-                        Identity(id),
-                        Change::Kept(Edits {
-                            parts: BTreeSet::from([Part::Body]),
-                            ..Edits::default()
-                        }),
-                    )
-                })
-                .collect(),
-            affected: BTreeMap::new(),
-            ripples: 1,
-            members: (0..count).map(Identity).collect(),
-            context: BTreeSet::new(),
-            edges: leans
-                .iter()
-                .map(|(from, to)| Edge {
-                    from: Identity(*from),
-                    to: Identity(*to),
-                    via: Vec::new(),
-                })
-                .collect(),
-            diagnostics: Vec::new(),
-        };
+        let edges = leans
+            .iter()
+            .map(|(from, to)| Edge {
+                from: Identity(*from),
+                to: Identity(*to),
+            })
+            .collect();
 
-        (review, definitions)
+        ((0..count).map(Identity).collect(), edges, definitions)
     }
 
     fn reading(count: u32, leans: &[(u32, u32)]) -> Vec<u32> {
-        let (review, definitions) = built(count, leans, &[]);
-        order(&review, &definitions, &Grouping::default())
+        let (read, edges, definitions) = built(count, leans, &[]);
+        order(&read, &edges, &definitions, &Grouping::default())
             .steps
             .iter()
             .map(|step| step.definition.0)
@@ -439,8 +430,8 @@ mod tests {
 
     #[test]
     fn a_circle_is_read_with_one_thing_taken_on_faith() {
-        let (review, definitions) = built(3, &[(0, 1), (1, 2), (2, 0)], &[]);
-        let ordering = order(&review, &definitions, &Grouping::default());
+        let (read, edges, definitions) = built(3, &[(0, 1), (1, 2), (2, 0)], &[]);
+        let ordering = order(&read, &edges, &definitions, &Grouping::default());
 
         assert_eq!(ordering.steps.len(), 3);
         assert_eq!(ordering.cost.taken_on_faith, 1);
@@ -448,10 +439,10 @@ mod tests {
 
     #[test]
     fn nothing_is_taken_on_faith_when_it_doesnt_have_to_be() {
-        let (review, definitions) = built(4, &[(0, 1), (1, 2), (2, 3)], &[]);
+        let (read, edges, definitions) = built(4, &[(0, 1), (1, 2), (2, 3)], &[]);
 
         assert_eq!(
-            order(&review, &definitions, &Grouping::default())
+            order(&read, &edges, &definitions, &Grouping::default())
                 .cost
                 .taken_on_faith,
             0
@@ -462,18 +453,18 @@ mod tests {
     /// the reading should stay put rather than hop out and back.
     #[test]
     fn a_reading_would_rather_stay_in_one_file() {
-        let (review, definitions) = built(3, &[(0, 1), (0, 2)], &["a.rs", "b.rs", "a.rs"]);
-        let ordering = order(&review, &definitions, &Grouping::default());
+        let (read, edges, definitions) = built(3, &[(0, 1), (0, 2)], &["a.rs", "b.rs", "a.rs"]);
+        let ordering = order(&read, &edges, &definitions, &Grouping::default());
 
         assert_eq!(ordering.cost.jumps, 1);
     }
 
     #[test]
     fn a_chain_keeps_only_one_thing_in_mind_at_a_time() {
-        let (review, definitions) = built(5, &[(0, 1), (1, 2), (2, 3), (3, 4)], &[]);
+        let (read, edges, definitions) = built(5, &[(0, 1), (1, 2), (2, 3), (3, 4)], &[]);
 
         assert_eq!(
-            order(&review, &definitions, &Grouping::default())
+            order(&read, &edges, &definitions, &Grouping::default())
                 .cost
                 .peak_open,
             1
@@ -482,10 +473,10 @@ mod tests {
 
     #[test]
     fn unrelated_definitions_leave_nothing_open() {
-        let (review, definitions) = built(4, &[], &[]);
+        let (read, edges, definitions) = built(4, &[], &[]);
 
         assert_eq!(
-            order(&review, &definitions, &Grouping::default())
+            order(&read, &edges, &definitions, &Grouping::default())
                 .cost
                 .peak_open,
             0

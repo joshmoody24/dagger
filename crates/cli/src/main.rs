@@ -17,10 +17,8 @@ use anyhow::{Context, Result, bail};
 use config::Config;
 use dagger_core::group::Grouping;
 use dagger_core::matching::{Extraction, match_snapshots};
-use dagger_core::order::order;
-use dagger_core::review::review;
+use dagger_core::review::{Impact, Warning, review};
 use dagger_protocol::Note;
-use dagger_protocol::said::Said;
 use std::io::{IsTerminal, Write};
 use std::path::Path;
 
@@ -287,43 +285,57 @@ fn compare(
     notes.append(&mut later);
 
     let matched = match_snapshots(before, after);
-    let mut review = review(&matched.definitions, &matched.references, ripples);
 
-    // The reading order leans on this to know whether reading the next definition takes
-    // the reader somewhere else.
-    let mut grouping = match config.grouping.as_ref() {
+    // Which group each definition is in. Only this side can answer it, since it means
+    // looking for marker files on disk, so it's worked out here and handed over.
+    let grouping = match config.grouping.as_ref() {
         Some(wanted) => grouping::of(wanted, &after_dir, &matched.definitions),
         None => Grouping::default(),
     };
-    // How the groups sit relative to each other, which needs the edges and so can't be
-    // settled while grouping. Both the reading and the page go by it.
-    grouping.settle(
-        &review
-            .edges
-            .iter()
-            .map(|edge| (edge.from, edge.to))
-            .collect::<Vec<_>>(),
-    );
-    let ordering = order(&review, &matched.definitions, &grouping);
 
-    review.diagnostics.extend(completeness::check(
+    /* Everything anyone had to say before the review was worked out: what the adapters
+     * couldn't do, and what the two snapshots turned out to disagree about. Dagger's own
+     * findings join them inside. */
+    let warnings: Vec<Warning> = notes
+        .into_iter()
+        .map(|note| Warning {
+            // An adapter's note is always about something it couldn't do, so whatever it
+            // was about isn't in the review.
+            impact: Impact::Incomplete,
+            message: match &note.file {
+                Some(file) => format!("{file}: {}", note.message),
+                None => note.message.clone(),
+            },
+            about: None,
+        })
+        .collect();
+    let mut found = matched.diagnostics;
+    found.extend(completeness::check(
         &before_dir,
         &after_dir,
         &changed,
         &matched.definitions,
     ));
 
+    let review = review(
+        matched.definitions,
+        &matched.references,
+        ripples,
+        &grouping,
+        warnings,
+        found,
+    );
+
     if args.json {
-        let said = Said::of(&matched.definitions, review, ordering, grouping, notes);
         let _ = writeln!(
             std::io::stdout().lock(),
             "{}",
-            serde_json::to_string_pretty(&said)?
+            serde_json::to_string_pretty(&review)?
         );
     } else {
-        report::print(&review, &ordering, &matched.definitions, &notes);
+        report::print(&review);
         if !args.list && std::io::stdout().is_terminal() {
-            walk::walk(&review, &ordering, &matched.definitions)?;
+            walk::walk(&review)?;
         }
     }
     Ok(())

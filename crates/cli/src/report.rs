@@ -1,9 +1,6 @@
 use dagger_core::change::Change;
-use dagger_core::model::{Definition, Identity, Part};
-use dagger_core::order::Ordering;
-use dagger_core::review::Review;
-use dagger_protocol::Note;
-use std::collections::BTreeMap;
+use dagger_core::model::Part;
+use dagger_core::review::{Definition, Impact, Review};
 use std::io::Write;
 
 /// A one-character shorthand for what happened, borrowed from the mock: additions and
@@ -31,55 +28,48 @@ pub fn name(definition: &Definition) -> String {
 
 /// Writing rather than printing, because a reader quitting out of a pager closes the
 /// pipe, and that shouldn't look like a crash.
-pub fn print(review: &Review, ordering: &Ordering, definitions: &[Definition], notes: &[Note]) {
+pub fn print(review: &Review) {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
-    let by_identity: BTreeMap<Identity, &Definition> = definitions
-        .iter()
-        .map(|definition| (definition.identity, definition))
-        .collect();
 
     // A definition can be both changed and downstream of someone else's change, so
     // these two counts overlap and don't add up to the total on purpose.
+    let read = review.reading.len();
     let changed = review
-        .members
+        .reading
         .iter()
-        .filter(|identity| {
-            review
-                .changes
-                .get(identity)
-                .is_some_and(|change| change.worth_reading())
-        })
+        .filter_map(|step| review.definitions.get(&step.definition))
+        .filter(|one| one.change.worth_reading())
+        .count();
+    let reached = review
+        .definitions
+        .values()
+        .filter(|one| one.reached.is_some())
         .count();
 
     let _ = writeln!(
         out,
-        "{} definitions, {} to read ({} changed, {} affected)",
-        definitions.len(),
-        review.members.len(),
-        changed,
-        review.affected.len()
+        "{} definitions, {read} to read ({changed} changed, {reached} affected)",
+        review.definitions.len(),
     );
     let _ = writeln!(
         out,
         "+ new   - gone   ! callers affected   ~ body   \" docs   . untouched\n\
          at most {} held in mind at once, {} read early, {} jumps between files\n",
-        ordering.cost.peak_open, ordering.cost.taken_on_faith, ordering.cost.jumps
+        review.cost.peak_open, review.cost.taken_on_faith, review.cost.jumps
     );
 
-    for (step, place) in ordering.steps.iter().zip(1..) {
-        let identity = &step.definition;
-        let Some(definition) = by_identity.get(identity) else {
+    for (step, place) in review.reading.iter().zip(1..) {
+        let Some(definition) = review.definitions.get(&step.definition) else {
             continue;
         };
-        let mark = match review.changes.get(identity) {
-            Some(change) if change.worth_reading() => glyph(change),
-            _ => '=',
+        let mark = match definition.change.worth_reading() {
+            true => glyph(&definition.change),
+            false => '=',
         };
-        let affected = if review.affected.contains_key(identity) {
-            " (affected)"
-        } else {
-            ""
+        let affected = match definition.reached {
+            Some(_) => " (affected)",
+            None => "",
         };
         let faith = if step.on_faith.is_empty() {
             String::new()
@@ -97,32 +87,25 @@ pub fn print(review: &Review, ordering: &Ordering, definitions: &[Definition], n
     // Whatever might be hiding a change is said first, and said as the worse news it is.
     // Told all together, the one that matters is buried among the ones that don't.
     let (hiding, weaker): (Vec<_>, Vec<_>) = review
-        .diagnostics
+        .warnings
         .iter()
-        .partition(|diagnostic| diagnostic.hides());
+        .partition(|warning| warning.impact == Impact::Incomplete);
 
-    if !hiding.is_empty() || !notes.is_empty() {
+    if !hiding.is_empty() {
         let _ = writeln!(
             out,
             "\n{} things this review might not be showing:",
-            hiding.len() + notes.len()
+            hiding.len()
         );
-        for note in notes {
-            let about = match &note.file {
-                Some(file) => format!("{file}: "),
-                None => String::new(),
-            };
-            let _ = writeln!(out, "  {about}{}", note.message);
-        }
-        for diagnostic in hiding {
-            let _ = writeln!(out, "  {diagnostic:?}");
+        for warning in hiding {
+            let _ = writeln!(out, "  {}", warning.message);
         }
     }
 
     if !weaker.is_empty() {
         let _ = writeln!(out, "\n{} worked out a weaker way:", weaker.len());
-        for diagnostic in weaker {
-            let _ = writeln!(out, "  {diagnostic:?}");
+        for warning in weaker {
+            let _ = writeln!(out, "  {}", warning.message);
         }
     }
 }

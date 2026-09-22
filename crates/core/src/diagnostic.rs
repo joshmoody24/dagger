@@ -49,6 +49,21 @@ pub enum Diagnostic {
 }
 
 impl Diagnostic {
+    /// Which definition this is about, where it's about one that has an identity.
+    ///
+    /// Some aren't: lines belonging to nothing are about a file, and a name reported twice
+    /// is about a name that couldn't become an identity in the first place.
+    pub fn about(&self) -> Option<Identity> {
+        match self {
+            Diagnostic::LopsidedContract { definition }
+            | Diagnostic::UnboundInContract { definition, .. } => Some(*definition),
+            Diagnostic::MentionFromNowhere { .. }
+            | Diagnostic::Tangled { .. }
+            | Diagnostic::TwoOfOneName { .. }
+            | Diagnostic::Unattributed { .. } => None,
+        }
+    }
+
     /// Whether this one means the review might not be showing something that changed.
     ///
     /// These aren't all the same kind of bad news, and reporting them as though they were

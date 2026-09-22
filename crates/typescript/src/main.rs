@@ -14,12 +14,10 @@
 use anyhow::{Context, Result};
 use dagger_core::change::{Change, Edits};
 use dagger_core::diagnostic::Diagnostic;
-use dagger_core::group::Grouping;
-use dagger_core::model::{Definition, Identity, Locator, Occurrence, Part, Piece, Sides, Span};
+use dagger_core::model::{Identity, Locator, Occurrence, Part, Piece, Role, Sides, Span};
 use dagger_core::order::{Cost, Ordering, Step};
-use dagger_core::review::{Edge, Review};
+use dagger_core::review::{Definition, Edge, Group, Impact, Review, Warning};
 use dagger_protocol::Note;
-use dagger_protocol::said::Said;
 use std::io::Write;
 use ts_rs::{Config, TS};
 
@@ -40,9 +38,13 @@ fn main() -> Result<()> {
         Span::decl(&how),
         Piece::decl(&how),
         Locator::decl(&how),
+        Role::decl(&how),
         Occurrence::decl(&how),
         Sides::decl(&how),
         Definition::decl(&how),
+        Group::decl(&how),
+        Impact::decl(&how),
+        Warning::decl(&how),
         Edits::decl(&how),
         Change::decl(&how),
         Edge::decl(&how),
@@ -51,9 +53,7 @@ fn main() -> Result<()> {
         Cost::decl(&how),
         Step::decl(&how),
         Ordering::decl(&how),
-        Grouping::decl(&how),
         Note::decl(&how),
-        Said::decl(&how),
     ] {
         out.push_str("export ");
         out.push_str(declaration.trim_end_matches(';'));

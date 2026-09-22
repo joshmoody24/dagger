@@ -1,6 +1,20 @@
+//! Everything one reading of a repository comes to.
+//!
+//! One object, and everything about a single definition lives on that definition. Learning
+//! what happened to one thing used to mean six lookups — one map for what changed, another
+//! for how far a change reached it, another for its group — and three of those maps held
+//! entries for definitions that were never handed over at all, which nobody downstream
+//! could resolve and nothing noticed.
+//!
+//! Built in one place, at the end, from everything that's known by then. Assembled a piece
+//! at a time by whoever happened to know each piece, it could always be half-built, and a
+//! fact about something that isn't here could always be written down.
+
 use crate::change::{Change, classify};
 use crate::diagnostic::Diagnostic;
-use crate::model::{Definition, Identity};
+use crate::group::Grouping;
+use crate::model::{self, Identity, Locator, Role, Sides};
+use crate::order::{Cost, Step, order};
 use crate::propagate::affected;
 use crate::reference::{Reference, Target};
 use serde::{Deserialize, Serialize};
@@ -14,79 +28,270 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 pub struct Edge {
     pub from: Identity,
     pub to: Identity,
-    /// Definitions the chain passed through on the way, in order. Empty when the two
-    /// mention each other directly.
-    pub via: Vec<Identity>,
 }
 
-/// Everything worth reading in a change, and how it hangs together.
+/// How much trust a warning costs the review it's about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[serde(rename_all = "snake_case")]
+pub enum Impact {
+    /// Something that changed might not be here at all, and a reader trusting the review
+    /// would never learn of it.
+    Incomplete,
+    /// It's here and it's shown, but it was worked out from worse information than it
+    /// should have been.
+    Degraded,
+}
+
+/// A reason this review might be wrong.
+///
+/// Dagger's own findings and an adapter's apologies, in one list, because they are one
+/// thing to whoever is reading: something that happened on the way that they should know
+/// about. What separates them is `impact`, which is what a reader actually acts on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct Warning {
+    pub impact: Impact,
+    /// Worded here rather than on the page, so there's one wording rather than one per
+    /// reader, and so the names in it can be looked up while they're still to hand.
+    pub message: String,
+    /// What it's about, when it's about one definition. For pointing somebody at it.
+    pub about: Option<Identity>,
+}
+
+/// A group of files, and how deep it sits among the groups.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct Group {
+    /// Outermost first. Written as it is rather than joined, so nothing has to agree on a
+    /// separator that a path component might contain.
+    pub path: Vec<String>,
+    /// Nought for a group that leans on no other. The page draws its rows by this and the
+    /// reading order follows it, which is what keeps a reading running down the page.
+    pub band: u32,
+}
+
+/// One definition, and everything this review knows about it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub struct Definition {
+    /// Whether it holds others. Said by whoever read the file.
+    pub role: Role,
+    /// What it was on each side.
+    pub sides: Sides,
+    /// What happened to it.
+    pub change: Change,
+    /// How many hops away the nearest change that reached it is. Never nought: whether it
+    /// changed on its own account is what `change` is for, and a definition can be both.
+    pub reached: Option<u32>,
+    /// What it's written inside. Always present in this review when it isn't `None`.
+    pub parent: Option<Identity>,
+    /// The group its file belongs to, matching one of the paths in `groups`.
+    pub group: Option<Vec<String>>,
+}
+
+/// Everything one reading of a repository comes to.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Review {
-    pub changes: BTreeMap<Identity, Change>,
-    /// What a change reached by following what uses what, and how many hops away each one
-    /// sits. One means it uses a changed definition itself; two means it uses something
-    /// that does, and so on outward.
-    ///
-    /// Something that changed can be reached as well, and is worth saying so: a definition
-    /// that broke on its own account and also stands downstream of another break is a
-    /// different thing to read than one that merely broke.
-    pub affected: BTreeMap<Identity, u32>,
-    /// How far this reading followed a change outward. What the page offers to show is
-    /// bounded by what was actually looked for, so it's said here rather than guessed at
-    /// from the deepest thing that happens to have turned up.
-    pub ripples: u32,
-    /// Worth reading: what changed, and what a change reached.
-    pub members: BTreeSet<Identity>,
-    /// Not worth reading, but the reading doesn't make sense without it on the page.
-    ///
-    /// A module is where its definitions live, and a page draws it as the box around them.
-    /// Left out when nothing about the module itself changed, that box stands for nothing —
-    /// it can't be pointed at, and an edge that ends at it has nowhere to land. Putting it
-    /// among the members instead would mean asking somebody to read a file's imports
-    /// because something else in the file changed, which is a waste of the one thing this
-    /// tool is trying to save.
-    pub context: BTreeSet<Identity>,
+    pub definitions: BTreeMap<Identity, Definition>,
+    /// What to read, in order. Whatever a step names is worth reading; everything else in
+    /// `definitions` is here to be drawn around it.
+    pub reading: Vec<Step>,
     pub edges: Vec<Edge>,
-    pub diagnostics: Vec<Diagnostic>,
+    pub groups: Vec<Group>,
+    /// What a reader calls the grouping: "package", "crate".
+    pub grouping: Option<String>,
+    /// How far this reading was told to follow a change outward.
+    pub ripples: u32,
+    pub cost: Cost,
+    pub warnings: Vec<Warning>,
 }
 
-pub fn review(definitions: &[Definition], references: &[Reference], ripples: u32) -> Review {
-    let mut diagnostics = Vec::new();
+/// Works the whole thing out, from everything that's known.
+///
+/// `notes` is whatever the adapters had to say, already worded, since only they know what
+/// they ran into. `found` is everything dagger noticed on the way here, worded below where
+/// the definitions are still to hand.
+pub fn review(
+    definitions: Vec<model::Definition>,
+    references: &[Reference],
+    ripples: u32,
+    grouping: &Grouping,
+    notes: Vec<Warning>,
+    found: Vec<Diagnostic>,
+) -> Review {
+    let mut findings = found;
     let changes: BTreeMap<Identity, Change> = definitions
         .iter()
         .map(|def| {
-            let (change, mut found) = classify(def);
-            diagnostics.append(&mut found);
+            let (change, mut more) = classify(def);
+            findings.append(&mut more);
             (def.identity, change)
         })
         .collect();
 
-    let (affected, mut found) = affected(&changes, references, ripples);
-    diagnostics.append(&mut found);
+    let (reached, mut more) = affected(&changes, references, ripples);
+    findings.append(&mut more);
 
-    let members: BTreeSet<Identity> = changes
+    let mut warnings = notes;
+    warnings.extend(findings.iter().map(|one| told(one, &definitions)));
+
+    let read: BTreeSet<Identity> = changes
         .iter()
         .filter(|(_, change)| change.worth_reading())
         .map(|(identity, _)| *identity)
-        .chain(affected.keys().copied())
+        .chain(reached.keys().copied())
         .collect();
 
-    let context = surrounding(definitions, &members);
-    /* Edges are routed between everything the page will draw, members and context alike:
-     * a module left out of the routing loses every dependency that ran through it. */
-    let shown: BTreeSet<Identity> = members.union(&context).copied().collect();
+    /* What each definition is written inside, as an identity rather than a name. Worked out
+     * once, here, while everything is still to hand. */
+    let parent_of: BTreeMap<Identity, Identity> = {
+        let by_name: BTreeMap<&Locator, Identity> = definitions
+            .iter()
+            .map(|def| (&def.sides.latest().locator, def.identity))
+            .collect();
+        definitions
+            .iter()
+            .filter_map(|def| {
+                let parent = def.sides.latest().parent.as_ref()?;
+                Some((def.identity, *by_name.get(parent)?))
+            })
+            .collect()
+    };
+
+    /* Everything worth reading, and everything it's written inside, all the way out. A box
+     * can't be drawn around something whose container isn't here, and a parent naming a
+     * definition nobody was given is the same dangling reference this shape exists to make
+     * unwriteable. Measured at two to five percent of the reading. */
+    let mut shown = read.clone();
+    let mut queue: VecDeque<Identity> = read.iter().copied().collect();
+    while let Some(one) = queue.pop_front() {
+        if let Some(&parent) = parent_of.get(&one)
+            && shown.insert(parent)
+        {
+            queue.push_back(parent);
+        }
+    }
+
     let edges = project(&shown, references);
+    let ordering = order(&read, &edges, &definitions, grouping);
+
+    let kept: BTreeMap<Identity, Definition> = definitions
+        .into_iter()
+        .filter(|def| shown.contains(&def.identity))
+        .map(|def| {
+            let identity = def.identity;
+            let role = def.sides.latest().role;
+            (
+                identity,
+                Definition {
+                    role,
+                    change: changes.get(&identity).cloned().unwrap_or(Change::Added),
+                    reached: reached.get(&identity).copied().filter(|&far| far > 0),
+                    parent: parent_of.get(&identity).copied(),
+                    group: Some(grouping.path_of(identity).to_vec())
+                        .filter(|path| !path.is_empty()),
+                    sides: def.sides,
+                },
+            )
+        })
+        .collect();
 
     Review {
-        changes,
-        affected,
-        ripples,
-        members,
-        context,
+        groups: settled(grouping, &kept, &edges),
+        grouping: (!grouping.name.is_empty()).then(|| grouping.name.clone()),
+        definitions: kept,
+        reading: ordering.steps,
+        cost: ordering.cost,
         edges,
-        diagnostics,
+        ripples,
+        warnings,
     }
+}
+
+/// One of dagger's own findings, worded for whoever has to act on it.
+///
+/// Every case is about some particular definition, and five copies of one sentence with
+/// nothing to tell them apart are no use to anybody — so the names are looked up here,
+/// where the definitions are still to hand.
+fn told(found: &Diagnostic, definitions: &[model::Definition]) -> Warning {
+    let named = |identity: Identity| match definitions
+        .iter()
+        .find(|def| def.identity == identity)
+        .map(|def| def.sides.latest())
+    {
+        Some(shows) => format!("{} ({})", written(&shows.locator), shows.file),
+        None => format!("definition {}", identity.0),
+    };
+
+    let (impact, message) = match found {
+        Diagnostic::Unattributed { file, lines, at } => (
+            Impact::Incomplete,
+            format!(
+                "{file}: {lines} changed line{} belong to no definition, around line {}",
+                if *lines == 1 { "" } else { "s" },
+                at.iter().map(u32::to_string).collect::<Vec<_>>().join(", ")
+            ),
+        ),
+        Diagnostic::UnboundInContract { definition, symbol } => (
+            Impact::Incomplete,
+            format!(
+                "{symbol} appears where callers of {} can see it, but nothing could say \
+                 what it refers to",
+                named(*definition)
+            ),
+        ),
+        Diagnostic::MentionFromNowhere { from } => (
+            Impact::Incomplete,
+            format!(
+                "a mention came from {}, which was never reported",
+                written(from)
+            ),
+        ),
+        Diagnostic::Tangled { definition, at } => (
+            Impact::Incomplete,
+            format!(
+                "{} was handed over with two of its pieces covering the same text, around \
+                 byte {at} — so a line of it is shown twice, and read as two different \
+                 kinds of change",
+                written(definition)
+            ),
+        ),
+        Diagnostic::TwoOfOneName { locator, times } => (
+            Impact::Incomplete,
+            format!(
+                "{times} definitions are called {}, so only one of them could be followed \
+                 from one side to the other",
+                written(locator)
+            ),
+        ),
+        Diagnostic::LopsidedContract { definition } => (
+            Impact::Degraded,
+            format!(
+                "{}: the compiler described one side of this and not the other, so the \
+                 signature as written was compared instead",
+                named(*definition)
+            ),
+        ),
+    };
+
+    Warning {
+        impact,
+        message,
+        about: found.about(),
+    }
+}
+
+/// A name as somebody would write it.
+fn written(locator: &Locator) -> String {
+    locator
+        .scope
+        .iter()
+        .chain(std::iter::once(&locator.name))
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("::")
 }
 
 /// A mention counts if it was there in either snapshot, so that a deleted definition
@@ -103,62 +308,102 @@ fn dependencies(references: &[Reference]) -> BTreeMap<Identity, Vec<Identity>> {
     out
 }
 
-/// Walk out from each member, stepping over anything the reader won't see, so two
-/// changed definitions joined by an untouched helper still look joined.
-/// The modules the members live in, where they aren't members already.
-///
-/// Every definition sits in a file, and a file is a module somebody wrote. Whether that
-/// module changed has nothing to do with whether it needs to be on the page.
-fn surrounding(definitions: &[Definition], members: &BTreeSet<Identity>) -> BTreeSet<Identity> {
-    let files: BTreeSet<&str> = definitions
-        .iter()
-        .filter(|def| members.contains(&def.identity))
-        .map(|def| def.sides.latest().file.as_str())
-        .collect();
-
-    definitions
-        .iter()
-        .filter(|def| def.sides.latest().kind == "module")
-        .filter(|def| !members.contains(&def.identity))
-        .filter(|def| files.contains(def.sides.latest().file.as_str()))
-        .map(|def| def.identity)
-        .collect()
-}
-
-fn project(members: &BTreeSet<Identity>, references: &[Reference]) -> Vec<Edge> {
+/// Walk out from each definition worth drawing, stepping over anything the reader won't
+/// see, so two changed definitions joined by an untouched helper still look joined.
+fn project(shown: &BTreeSet<Identity>, references: &[Reference]) -> Vec<Edge> {
     let dependencies = dependencies(references);
     let mut edges = Vec::new();
 
-    for from in members {
+    for from in shown {
         let mut seen = BTreeSet::from([*from]);
-        let mut queue: VecDeque<(Identity, Vec<Identity>)> = dependencies
+        let mut queue: VecDeque<Identity> = dependencies
             .get(from)
             .into_iter()
             .flatten()
-            .map(|to| (*to, Vec::new()))
+            .copied()
             .collect();
 
-        while let Some((node, via)) = queue.pop_front() {
+        while let Some(node) = queue.pop_front() {
             if !seen.insert(node) {
                 continue;
             }
-            if members.contains(&node) {
+            if shown.contains(&node) {
                 edges.push(Edge {
                     from: *from,
                     to: node,
-                    via,
                 });
                 continue;
             }
-            for next in dependencies.get(&node).into_iter().flatten() {
-                let mut via = via.clone();
-                via.push(node);
-                queue.push_back((*next, via));
-            }
+            queue.extend(dependencies.get(&node).into_iter().flatten().copied());
         }
     }
 
     edges
+}
+
+/// The groups the shown definitions are in, and how deep each sits among the others.
+fn settled(
+    grouping: &Grouping,
+    definitions: &BTreeMap<Identity, Definition>,
+    edges: &[Edge],
+) -> Vec<Group> {
+    let mut paths: BTreeSet<Vec<String>> = BTreeSet::new();
+    for one in definitions.values() {
+        if let Some(path) = &one.group {
+            paths.insert(path.clone());
+        }
+    }
+
+    let group_of =
+        |identity: &Identity| definitions.get(identity).and_then(|one| one.group.clone());
+    let mut between: BTreeMap<Vec<String>, BTreeSet<Vec<String>>> = paths
+        .iter()
+        .map(|path| (path.clone(), BTreeSet::new()))
+        .collect();
+    for edge in edges {
+        if let (Some(from), Some(to)) = (group_of(&edge.from), group_of(&edge.to))
+            && from != to
+        {
+            between.entry(from).or_default().insert(to);
+        }
+    }
+
+    let mut deep: BTreeMap<Vec<String>, u32> = BTreeMap::new();
+    for path in between.keys() {
+        depth(path, &between, &mut deep);
+    }
+
+    let _ = grouping;
+    paths
+        .into_iter()
+        .map(|path| {
+            let band = deep.get(&path).copied().unwrap_or(0);
+            Group { path, band }
+        })
+        .collect()
+}
+
+/// One more than the furthest thing it leans on. A circle is settled by whoever is asked
+/// first, which is enough: being in one means there's no right answer, only a readable one.
+fn depth(
+    group: &[String],
+    between: &BTreeMap<Vec<String>, BTreeSet<Vec<String>>>,
+    seen: &mut BTreeMap<Vec<String>, u32>,
+) -> u32 {
+    if let Some(&found) = seen.get(group) {
+        return found;
+    }
+    seen.insert(group.to_vec(), 0);
+    let found = between
+        .get(group)
+        .into_iter()
+        .flatten()
+        .filter(|other| other.as_slice() != group)
+        .map(|other| depth(other, between, seen) + 1)
+        .max()
+        .unwrap_or(0);
+    seen.insert(group.to_vec(), found);
+    found
 }
 
 #[cfg(test)]
@@ -167,8 +412,8 @@ mod tests {
     use crate::model::{Part, Sides};
     use crate::testing::{occurrence, reference};
 
-    fn edited(id: u32, name: &str) -> Definition {
-        Definition {
+    fn edited(id: u32, name: &str) -> model::Definition {
+        model::Definition {
             identity: Identity(id),
             sides: Sides::Kept {
                 before: occurrence(name, &[(Part::Body, "old")]),
@@ -177,8 +422,8 @@ mod tests {
         }
     }
 
-    fn untouched(id: u32, name: &str) -> Definition {
-        Definition {
+    fn untouched(id: u32, name: &str) -> model::Definition {
+        model::Definition {
             identity: Identity(id),
             sides: Sides::Kept {
                 before: occurrence(name, &[(Part::Body, "same")]),
@@ -187,79 +432,146 @@ mod tests {
         }
     }
 
+    fn reviewed(
+        definitions: Vec<model::Definition>,
+        references: &[Reference],
+        ripples: u32,
+    ) -> Review {
+        review(
+            definitions,
+            references,
+            ripples,
+            &Grouping::default(),
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    /// Everything handed over is either worth reading or holds something that is.
     #[test]
     fn only_definitions_worth_reading_get_in() {
-        let review = review(
-            &[edited(0, "lookupPrice"), untouched(1, "withRetry")],
+        let review = reviewed(
+            vec![edited(0, "lookupPrice"), untouched(1, "withRetry")],
             &[],
             1,
         );
 
-        assert_eq!(review.members, BTreeSet::from([Identity(0)]));
+        assert_eq!(
+            review.definitions.keys().copied().collect::<Vec<_>>(),
+            vec![Identity(0)]
+        );
+        assert_eq!(review.reading.len(), 1);
     }
 
     /// buildLineItems calls withRetry calls lookupPrice. The helper is untouched and
     /// generic, so the reader never sees it, but the two edits are still related.
     #[test]
     fn an_untouched_helper_is_stepped_over() {
-        let definitions = [
-            edited(0, "buildLineItems"),
-            untouched(1, "withRetry"),
-            edited(2, "lookupPrice"),
-        ];
-        let references = [reference(0, 1, Part::Body), reference(1, 2, Part::Body)];
-
-        let review = review(&definitions, &references, u32::MAX);
+        let review = reviewed(
+            vec![
+                edited(0, "buildLineItems"),
+                untouched(1, "withRetry"),
+                edited(2, "lookupPrice"),
+            ],
+            &[reference(0, 1, Part::Body), reference(1, 2, Part::Body)],
+            u32::MAX,
+        );
 
         assert_eq!(
             review.edges,
             vec![Edge {
                 from: Identity(0),
                 to: Identity(2),
-                via: vec![Identity(1)],
             }]
         );
     }
 
     #[test]
-    fn a_direct_mention_has_nothing_in_between() {
-        let definitions = [edited(0, "cartTotal"), edited(1, "lineTotal")];
-        let review = review(&definitions, &[reference(0, 1, Part::Body)], u32::MAX);
+    fn a_direct_mention_is_an_edge() {
+        let review = reviewed(
+            vec![edited(0, "cartTotal"), edited(1, "lineTotal")],
+            &[reference(0, 1, Part::Body)],
+            u32::MAX,
+        );
 
         assert_eq!(
             review.edges,
             vec![Edge {
                 from: Identity(0),
                 to: Identity(1),
-                via: Vec::new(),
             }]
         );
     }
 
     #[test]
-    fn a_chain_of_hidden_helpers_is_kept_in_order() {
-        let definitions = [
-            edited(0, "handleCheckout"),
-            untouched(1, "middle"),
-            untouched(2, "inner"),
-            edited(3, "lookupPrice"),
-        ];
-        let references = [
-            reference(0, 1, Part::Body),
-            reference(1, 2, Part::Body),
-            reference(2, 3, Part::Body),
-        ];
-
-        let review = review(&definitions, &references, u32::MAX);
-
-        assert_eq!(review.edges[0].via, vec![Identity(1), Identity(2)]);
-    }
-
-    #[test]
     fn a_dead_end_helper_produces_no_edge() {
-        let definitions = [edited(0, "cartTotal"), untouched(1, "log")];
-        let review = review(&definitions, &[reference(0, 1, Part::Body)], u32::MAX);
+        let review = reviewed(
+            vec![edited(0, "cartTotal"), untouched(1, "log")],
+            &[reference(0, 1, Part::Body)],
+            u32::MAX,
+        );
 
         assert!(review.edges.is_empty());
+    }
+
+    /// The invariants the shape exists to keep. Every identity named anywhere has to be a
+    /// definition that was handed over — three separate bugs have been exactly this, each
+    /// in a different map, each invisible until somebody went looking.
+    #[test]
+    fn nothing_names_a_definition_that_was_not_handed_over() {
+        let review = reviewed(
+            vec![
+                edited(0, "buildLineItems"),
+                untouched(1, "withRetry"),
+                edited(2, "lookupPrice"),
+            ],
+            &[reference(0, 1, Part::Body), reference(1, 2, Part::Body)],
+            u32::MAX,
+        );
+
+        let known = |identity: &Identity| review.definitions.contains_key(identity);
+        for edge in &review.edges {
+            assert!(
+                known(&edge.from) && known(&edge.to),
+                "edge {edge:?} dangles"
+            );
+        }
+        for step in &review.reading {
+            assert!(known(&step.definition), "a step names nobody");
+            assert!(step.on_faith.iter().all(known), "on_faith names nobody");
+        }
+        for (identity, one) in &review.definitions {
+            if let Some(parent) = one.parent {
+                assert!(known(&parent), "{identity:?} is inside nobody");
+                assert_eq!(
+                    review.definitions[&parent].role,
+                    Role::Container,
+                    "{identity:?} is inside something that holds nothing"
+                );
+            }
+            if let Some(path) = &one.group {
+                assert!(review.groups.iter().any(|group| &group.path == path));
+            }
+            assert_ne!(one.reached, Some(0), "reached counts hops, never nought");
+        }
+        for warning in &review.warnings {
+            assert!(warning.about.is_none_or(|about| known(&about)));
+            assert!(!warning.message.is_empty(), "a warning nobody can read");
+        }
+    }
+
+    /// Nothing is written inside itself, however the extractors describe it.
+    #[test]
+    fn containment_does_not_go_in_circles() {
+        let review = reviewed(vec![edited(0, "one"), edited(1, "two")], &[], 1);
+
+        for identity in review.definitions.keys() {
+            let mut seen = BTreeSet::from([*identity]);
+            let mut at = review.definitions[identity].parent;
+            while let Some(one) = at {
+                assert!(seen.insert(one), "{identity:?} is inside itself");
+                at = review.definitions[&one].parent;
+            }
+        }
     }
 }

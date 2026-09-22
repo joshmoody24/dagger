@@ -1,7 +1,8 @@
 import type {
   Box,
   Definition,
-  Diagnostic,
+  Mark,
+  RawDefinition,
   Edge,
   Identity,
   Laid,
@@ -11,7 +12,6 @@ import type {
   Line,
   Shown,
   Spot,
-  Worry,
 } from "./dagger.ts";
 
 /* Reads what dagger says about a change and works out where to draw it.
@@ -80,62 +80,60 @@ const MISC = "misc";
  * about the file on disk, not about the code. */
 const guessed = (path: string) => (path.split("/").at(-1) ?? path).replace(/\.[^.]+$/, "");
 
-/* ---------------- what dagger said, in the shapes a page wants ---------------- */
+/* ---------------- what dagger sent, in the shapes a page wants ---------------- */
 
+/* Nearly nothing, now.
+ *
+ * This used to gather one definition's facts from six places — a map for what changed,
+ * another for how far a change reached it, another for its group — and word every warning
+ * itself. All of that arrives already worked out and already said, so what's left is the
+ * page's own business: flattening a name for display, choosing the one word a node has room
+ * for, and pulling the two sides out of a shape built so "in neither" can't be written.
+ */
 export function digest(raw: Raw): Review {
   const definitions = new Map<Identity, Definition>();
-  for (const definition of raw.definitions) {
+  for (const [id, one] of Object.entries(raw.definitions)) {
     /* Which sides there are is the one thing the model won't let you get wrong: a
      * definition is added, removed, or kept with both — never neither. Asked this way
      * rather than by reaching for a field, the compiler holds that to it. */
-    const sides = definition.sides;
+    const sides = one.sides;
     const before = "kept" in sides ? sides.kept.before : "removed" in sides ? sides.removed : null;
     const after = "kept" in sides ? sides.kept.after : "added" in sides ? sides.added : null;
     const shown = (after || before)!;
 
-    definitions.set(definition.identity, {
-      id: definition.identity,
+    definitions.set(id, {
+      id,
       name: shown.locator.name,
       scope: shown.locator.scope,
       path: [...shown.locator.scope, shown.locator.name].join("::"),
       file: shown.file,
       kind: shown.kind,
+      role: one.role,
+      change: one.change,
       before,
       after,
-      mark: marking(raw.review, definition.identity),
-      away: raw.review.affected[definition.identity] ?? 0,
-      group: (raw.grouping.of || {})[definition.identity] || [],
+      mark: marking(one),
+      away: one.reached ?? 0,
+      parent: one.parent,
+      group: one.group ?? [],
     });
   }
 
   return {
     definitions,
-    steps: raw.ordering.steps.filter((step) => definitions.has(step.definition)),
-    edges: raw.review.edges.filter((e) => definitions.has(e.from) && definitions.has(e.to)),
-    changes: raw.review.changes,
-    /* What the change reached, and how far out each one sits. Kept apart so a reader can
-     * turn it down: a change to something everything leans on reaches hundreds of these,
-     * and the ones furthest out are the same news arriving again. */
-    affected: new Map(Object.entries(raw.review.affected).map(([id, away]) => [Number(id), away])),
-    ripples: raw.review.ripples,
-    cost: raw.ordering.cost,
-    grouping: raw.grouping.name,
-    bands: new Map(Object.entries(raw.grouping.bands ?? {})),
-    worries: [
-      ...raw.review.diagnostics.map((diagnostic) => told(diagnostic, definitions)),
-      /* An adapter's note is always about something it couldn't do, so whatever it was
-       * about isn't in the review. */
-      ...raw.notes.map((note) => ({
-        said: note.file ? `${note.file}: ${note.message}` : note.message,
-        hides: true,
-      })),
-    ],
+    steps: raw.reading,
+    edges: raw.edges,
+    ripples: raw.ripples,
+    cost: raw.cost,
+    grouping: raw.grouping ?? undefined,
+    bands: new Map(raw.groups.map((group) => [group.path.join("/"), group.band])),
+    warnings: raw.warnings,
   };
 }
 
 /* One word for what happened, which is all a node has room for. */
-function marking(review: Raw["review"], id: Identity) {
-  const change = review.changes[id];
+function marking(one: RawDefinition): Mark {
+  const change = one.change;
   if (change === "added") return "added";
   if (change === "removed") return "removed";
 
@@ -143,66 +141,17 @@ function marking(review: Raw["review"], id: Identity) {
   if (edits.contract) return "contract";
   if (edits.parts.includes("body") || edits.parts.includes("type")) return "body";
   if (edits.parts.includes("docs")) return "docs";
-  return review.affected[id] !== undefined ? "affected" : "still";
+  return one.reached !== null ? "affected" : "still";
 }
 
 /** Whether a change to this one means its callers have to change too. */
 export function broke(review: Review, id: Identity) {
-  const change = review.changes[id];
+  const change = review.definitions.get(id)?.change;
   if (change === "removed") return true;
-  if (change === "added") return false;
+  if (change === undefined || change === "added") return false;
   return Boolean(change.kept && change.kept.contract);
 }
 
-/* Dagger's diagnostics say what it had to work around. A reader deserves them in words
- * rather than as a shape of JSON. */
-function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): Worry {
-  const [[kind, what]] = Object.entries(diagnostic);
-  /* Every one of these is about a particular definition, and five copies of the same
-   * sentence with nothing to tell them apart is no use to anybody. */
-  const named = (id: Identity) => {
-    const definition = definitions.get(id);
-    return definition ? `${definition.path} (${definition.file})` : `definition ${id}`;
-  };
-
-  /* Whether the review might not be showing something that changed, which is a different
-   * kind of news from having worked something out a weaker way. Said together, the one
-   * that matters is lost among the ones that don't. */
-  switch (kind) {
-    case "unattributed":
-      return {
-        hides: true,
-        said: `${what.file}: ${what.lines} changed line${what.lines === 1 ? "" : "s"} belong to no definition, around line ${what.at.join(", ")}`,
-      };
-    case "unbound_in_contract":
-      return {
-        hides: true,
-        said: `${what.symbol} appears where callers of ${named(what.definition)} can see it, but nothing could say what it refers to`,
-      };
-    case "mention_from_nowhere":
-      return {
-        hides: true,
-        said: `a mention of ${named(what.to)} came from ${what.from.name}, which was never reported`,
-      };
-    case "tangled":
-      return {
-        hides: true,
-        said: `${[...what.definition.scope, what.definition.name].join("::")} was handed over with two of its pieces covering the same text, around byte ${what.at} — so a line of it is shown twice, and read as two different kinds of change`,
-      };
-    case "two_of_one_name":
-      return {
-        hides: true,
-        said: `${what.times} definitions are called ${[...what.locator.scope, what.locator.name].join("::")}, so only one of them could be followed from one side to the other`,
-      };
-    case "lopsided_contract":
-      return {
-        hides: false,
-        said: `${named(what.definition)}: the compiler described one side of this and not the other, so the signature as written was compared instead`,
-      };
-    default:
-      return { hides: true, said: `${kind}: ${JSON.stringify(what)}` };
-  }
-}
 
 /* ---------------- laying it out ---------------- */
 
@@ -217,11 +166,30 @@ function told(diagnostic: Diagnostic, definitions: Map<Identity, Definition>): W
  * box that stands for the box.
  */
 export function layout(review: Review): Laid {
-  const nodes = [...review.definitions.values()].filter((d) => d.kind !== "module");
-  const modules = new Map<string, Definition>();
-  for (const definition of review.definitions.values()) {
-    if (definition.kind === "module") modules.set(definition.file, definition);
-  }
+  /* A container is drawn as the box around what it holds, so it never takes a node of its
+   * own. Said by whoever read the file — an impl block is a container in Rust and nothing
+   * downstream could have known that. */
+  const all = [...review.definitions.values()];
+  const nodes = all.filter((one) => one.role !== "container");
+
+  /* The containers a file holds outermost: the ones whose own container is somewhere else,
+   * or nowhere. Usually one — a file is a module and everything in it is inside that — but
+   * a language where a file is just a place to put things can have several, and each is a
+   * box of its own. Keeping only one of them drew the last and lost the rest, along with
+   * every box inside them. */
+  const held = new Map<Identity, Definition>(all.map((one) => [one.id, one]));
+  const outermost = (one: Definition): Definition => {
+    const up = one.parent === null ? undefined : held.get(one.parent);
+    return up && up.file === one.file ? outermost(up) : one;
+  };
+  const roots = collect(
+    all.filter((one) => one.role === "container" && outermost(one) === one),
+    (one) => one.file,
+  );
+  /* Named for what the page calls a file's box, which is a module where there is one. */
+  const modules = new Map<string, Definition>(
+    [...roots].flatMap(([file, held]) => (held.length === 1 ? [[file, held[0]]] : [])),
+  );
 
   const leansOn = new Map<Identity, Identity[]>(nodes.map((n) => [n.id, []]));
   for (const edge of review.edges) {
@@ -263,16 +231,7 @@ export function layout(review: Review): Laid {
           stacked(a) - stacked(b) ||
           soonest(byPlace.get(a) ?? []) - soonest(byPlace.get(b) ?? []),
       )
-      .map((path) => {
-        const module = modules.get(path) || null;
-        return sized({
-          key: path,
-          module,
-          label: module ? module.name : guessed(path),
-          rows: layer(byPlace.get(path) ?? [], leansOn, reading),
-          lanes: [],
-        });
-      });
+      .map((path) => nested(path, modules.get(path) || null));
 
     /* Boxes that hold each other up stack; boxes with nothing between them sit side by
      * side. Stacking those anyway made a group a single tall column with the page empty
@@ -288,6 +247,56 @@ export function layout(review: Review): Laid {
       lanes: lanes.filter(Boolean),
     });
   });
+
+  /* A file's box, and inside it a box for every container it holds.
+   *
+   * What sits in what comes from the definitions themselves rather than from the file they
+   * share, so an impl block is the box around its methods instead of a node whose diff is
+   * an opening line and a closing brace with everything between it belonging to somebody
+   * else. */
+  function nested(path: string, module: Definition | null): Box {
+    /* One outermost container is the file's box — a module drawn around its own file,
+     * which is the ordinary case and needs no wrapper. Several, or none, and the file is
+     * the box and they sit inside it. */
+    const several = (roots.get(path) ?? []).length > 1;
+    const here = byPlace.get(path) ?? [];
+    const under = (of: Identity | null) =>
+      all.filter((one) => one.file === path && (one.parent ?? null) === of);
+
+    const box = (one: Definition | null, key: string, label: string): Box => {
+      const children = one ? under(one.id) : [];
+      const boxes = children
+        .filter((child) => child.role === "container")
+        .map((child) => box(child, `${path}#${child.id}`, child.name));
+      /* Whatever this holds directly. The boxes inside were built first, so by the time
+       * the file's own box asks, everything they claimed is spoken for — and whatever is
+       * left had a container the page never drew, which shouldn't lose it its place. */
+      const shown = here.filter((node) => (one ? node.parent === one.id : true));
+      for (const node of shown) placed.add(node.id);
+      const left = one === module ? here.filter((node) => !placed.has(node.id)) : [];
+
+      return sized({
+        key,
+        module: one,
+        label,
+        rows: layer([...shown, ...left], leansOn, reading),
+        lanes: boxes.length ? [boxes] : [],
+      });
+    };
+
+    const placed = new Set<Identity>();
+    if (!several) return box(module, path, module ? module.name : guessed(path));
+
+    const inside = (roots.get(path) ?? []).map((one) => box(one, `${path}#${one.id}`, one.name));
+    const loose = here.filter((node) => !placed.has(node.id));
+    return sized({
+      key: path,
+      module: null,
+      label: guessed(path),
+      rows: layer(loose, leansOn, reading),
+      lanes: [inside],
+    });
+  }
 
   const at = new Map<Identity, Spot>();
   let y = MARGIN;

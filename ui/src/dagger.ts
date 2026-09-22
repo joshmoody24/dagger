@@ -5,27 +5,28 @@
  * disagreeing copy of the model.
  */
 
-import type * as said from "./types.generated.ts";
+import type * as wire from "./types.generated.ts";
 
-/* What dagger says is written from the types that say it, in types.generated.ts, and named here so
- * the page has one place to look. What the page makes of it is further down and written by
- * hand, because nothing in Rust knows about a box on a screen. */
-export type Identity = said.Identity;
-export type Span = said.Span;
-export type Piece = said.Piece;
-export type Locator = said.Locator;
-export type Occurrence = said.Occurrence;
-export type Sides = said.Sides;
-export type Change = said.Change;
-export type Edits = said.Edits;
-export type Edge = said.Edge;
-export type Cost = said.Cost;
-export type Step = said.Step;
-export type Diagnostic = said.Diagnostic;
-export type Note = said.Note;
+/* What dagger says is written from the types that say it, in types.generated.ts, and named
+ * here so the page has one place to look. What the page makes of it is further down and
+ * written by hand, because nothing in Rust knows about a box on a screen. */
+export type Identity = wire.Identity;
+export type Span = wire.Span;
+export type Piece = wire.Piece;
+export type Locator = wire.Locator;
+export type Occurrence = wire.Occurrence;
+export type Sides = wire.Sides;
+export type Change = wire.Change;
+export type Edits = wire.Edits;
+export type Edge = wire.Edge;
+export type Cost = wire.Cost;
+export type Step = wire.Step;
+export type Role = wire.Role;
+export type Group = wire.Group;
+export type Warning = wire.Warning;
 
-/** One definition as it arrives: an identity, and what it was on each side. */
-export type RawDefinition = said.Definition;
+/** One definition as it arrives, with everything dagger knows about it. */
+export type RawDefinition = wire.Definition;
 
 /* Everything one reading of a repository comes to.
  *
@@ -33,13 +34,17 @@ export type RawDefinition = said.Definition;
  * the outermost shape — the one every other shape arrives inside — as the one thing nothing
  * checked. A renamed field doesn't fail in TypeScript: the declaration is satisfied and the
  * value turns up undefined. */
-export type Raw = said.Said;
+export type Raw = wire.Review;
 
 /* ---------------- what the page makes of it ---------------- */
 
 export type Mark = "added" | "removed" | "contract" | "body" | "docs" | "affected" | "still";
 
-/** One definition, in the shape a page wants rather than the shape it arrived in. */
+/* One definition, in the shape a page wants rather than the shape it arrived in.
+ *
+ * Nearly all of this now arrives already worked out, and what's left is the page's own
+ * business: a name flattened for display, a one-word mark to draw, the two sides pulled out
+ * of the shape that makes "in neither" unrepresentable. */
 export interface Definition {
   id: Identity;
   name: string;
@@ -47,35 +52,30 @@ export interface Definition {
   path: string;
   file: string;
   kind: string;
+  role: Role;
+  /** What happened to it. */
+  change: Change;
   before: Occurrence | null;
   after: Occurrence | null;
   mark: Mark;
-  /** How far out the change reached it, or nought for something that changed itself. */
+  /** How far out a change reached it, or nought for something no change reached. */
   away: number;
+  /** What it's written inside, when that's on the page too. */
+  parent: Identity | null;
   group: string[];
-}
-
-/* Something dagger had to work around, and whether it might have cost the reader a change.
- * Both go on the page; only one of them is a warning. */
-export interface Worry {
-  said: string;
-  hides: boolean;
 }
 
 export interface Review {
   definitions: Map<Identity, Definition>;
   steps: Step[];
   edges: Edge[];
-  changes: Record<Identity, Change>;
-  /** What the change reached, and how many hops out each one sits. */
-  affected: Map<Identity, number>;
   /** How far this reading followed a change, which is as far as the page can offer. */
   ripples: number;
   cost: Cost;
-  grouping?: string;
+  grouping?: string | undefined;
   /** How deep each group sits among the groups, worked out by dagger rather than here. */
   bands: Map<string, number>;
-  worries: Worry[];
+  warnings: Warning[];
 }
 
 /* One line as the page shows it: what it says, and where it is in the file. A gap between

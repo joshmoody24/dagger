@@ -16,7 +16,7 @@ mod symbols;
 
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
 use dagger_core::prose::{line_end, line_start, preamble};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
 use dagger_lsp_client::{self as lsp, Lines, Server};
@@ -672,6 +672,14 @@ fn definitions(
                 Occurrence {
                     contract: contracts.get(&locator).cloned(),
                     locator,
+                    role: match symbols::holds(symbol.kind) {
+                        true => Role::Container,
+                        false => Role::Item,
+                    },
+                    /* Whatever the server said held it, and failing that the file's own
+                     * module — which is what holds everything a file defines at the top
+                     * level, the same way a class holds its methods. */
+                    parent: symbol.parent.clone().or_else(|| module_of(file)),
                     kind: symbol.kind.to_string(),
                     file: file.path.clone(),
                     parts,
@@ -698,22 +706,30 @@ fn module(file: &Opened) -> Option<Occurrence> {
         return None;
     }
 
-    let mut path: Vec<String> = file
+    Some(Occurrence {
+        locator: module_of(file)?,
+        role: Role::Container,
+        // A file is the outermost thing there is here. Whatever holds the file is a
+        // question about the project, which a document symbol request never asked.
+        parent: None,
+        kind: "module".to_string(),
+        file: file.path.clone(),
+        parts: BTreeMap::from([(Part::Body, pieces(file, &leftovers))]),
+        contract: None,
+    })
+}
+
+/// What a file's own module is called: its path without the extension.
+fn module_of(file: &Opened) -> Option<Locator> {
+    let mut scope: Vec<String> = file
         .path
         .rsplit_once('.')
         .map_or(file.path.as_str(), |(stem, _)| stem)
         .split('/')
         .map(str::to_string)
         .collect();
-    let name = path.pop()?;
-
-    Some(Occurrence {
-        locator: Locator { scope: path, name },
-        kind: "module".to_string(),
-        file: file.path.clone(),
-        parts: BTreeMap::from([(Part::Body, pieces(file, &leftovers))]),
-        contract: None,
-    })
+    let name = scope.pop()?;
+    Some(Locator { scope, name })
 }
 
 /// The lines each definition sits on, which is more than the span a server reports.
@@ -774,7 +790,7 @@ fn pieces(file: &Opened, ranges: &[Range<usize>]) -> Vec<Piece> {
                 end: range.end as u32,
             },
             line: file.lines.position(range.start).0 + 1,
-            file: None,
+            file: file.path.clone(),
         })
         .collect()
 }

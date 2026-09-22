@@ -12,9 +12,9 @@ use crate::report;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use dagger_core::model::{Definition, Identity, Occurrence, Sides};
-use dagger_core::order::{Ordering, Step};
-use dagger_core::review::Review;
+use dagger_core::model::{Identity, Occurrence, Sides};
+use dagger_core::order::Step;
+use dagger_core::review::{Definition, Review};
 use std::collections::BTreeMap;
 use std::io::Write;
 
@@ -24,26 +24,23 @@ enum Move {
     Quit,
 }
 
-pub fn walk(review: &Review, ordering: &Ordering, definitions: &[Definition]) -> Result<()> {
+pub fn walk(review: &Review) -> Result<()> {
     let paint = Paint::new(true);
-    let by_identity: BTreeMap<Identity, &Definition> = definitions
+    let names: BTreeMap<Identity, String> = review
+        .definitions
         .iter()
-        .map(|definition| (definition.identity, definition))
-        .collect();
-    let names: BTreeMap<Identity, String> = definitions
-        .iter()
-        .map(|definition| (definition.identity, report::name(definition)))
+        .map(|(identity, definition)| (*identity, report::name(definition)))
         .collect();
 
     let mut place = 0usize;
-    while place < ordering.steps.len() {
-        let step = &ordering.steps[place];
-        let Some(definition) = by_identity.get(&step.definition) else {
+    while place < review.reading.len() {
+        let step = &review.reading[place];
+        let Some(definition) = review.definitions.get(&step.definition) else {
             place += 1;
             continue;
         };
 
-        show(review, ordering, step, definition, place, &names, &paint);
+        show(review, step, definition, place, &names, &paint);
 
         match wait()? {
             Move::Next => place += 1,
@@ -58,7 +55,6 @@ pub fn walk(review: &Review, ordering: &Ordering, definitions: &[Definition]) ->
 
 fn show(
     review: &Review,
-    ordering: &Ordering,
     step: &Step,
     definition: &Definition,
     place: usize,
@@ -71,14 +67,14 @@ fn show(
         .cloned()
         .unwrap_or_else(|| "?".to_string());
     let mark = review
-        .changes
+        .definitions
         .get(&identity)
-        .map(report::glyph)
+        .map(|one| report::glyph(&one.change))
         .unwrap_or('=');
 
     println!(
         "\n{} {mark} {}  {}",
-        paint.wrap(DIM, &format!("{}/{}", place + 1, ordering.steps.len())),
+        paint.wrap(DIM, &format!("{}/{}", place + 1, review.reading.len())),
         paint.wrap(BOLD, &name),
         paint.wrap(DIM, &definition.sides.latest().file),
     );
@@ -147,9 +143,9 @@ fn culprits(review: &Review, identity: Identity) -> Vec<Identity> {
         .into_iter()
         .filter(|leaned| {
             review
-                .changes
+                .definitions
                 .get(leaned)
-                .is_some_and(|change| change.breaks_callers())
+                .is_some_and(|one| one.change.breaks_callers())
         })
         .collect()
 }

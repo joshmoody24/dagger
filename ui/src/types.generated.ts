@@ -5,7 +5,7 @@
  * Rust knows about them.
  */
 
-export type Identity = number;
+export type Identity = string;
 
 export type Part = "type" | "body" | "docs";
 
@@ -22,21 +22,37 @@ export type Piece = { text: string, span: Span,
  */
 line: number, 
 /**
- * Set when this piece lives somewhere other than the definition's own file, the
- * way a C declaration sits in a header away from its body.
+ * Which file this stretch is in.
+ *
+ * Always said, even when it's the definition's own. It used to be set only when it
+ * differed, which made one place spell itself two ways — and everything comparing two
+ * pieces had to know that, or quietly decide that a piece saying nothing and a piece
+ * naming its own file were in different files. Two bugs came of it: an overlap that
+ * went unreported, and a part that read as having moved when it hadn't.
  */
-file: string | null, };
+file: string, };
 
 export type Locator = { scope: Array<string>, name: string, };
 
+export type Role = "item" | "container";
+
 export type Occurrence = { locator: Locator, 
 /**
- * What the extractor calls this, like "function" or "test".
+ * Whether this holds other definitions.
+ */
+role: Role, 
+/**
+ * What it's written inside, in the language's own structure: a method's impl, an
+ * impl's module, a module's module. `None` at the root.
  *
- * Display metadata, with one exception that ought not to be one: "module" is read as
- * meaning a container — something drawn as a box around others rather than read on its
- * own. That's a convention held in a string across a protocol boundary, and it belongs
- * in the model instead.
+ * Said by whoever parsed the file, because only they know. Worked out afterwards from
+ * the scope and the kind, it comes out wrong in the ordinary cases — a method's scope
+ * names its type, not the impl block it sits in — and it costs fifty lines to be wrong
+ * in.
+ */
+parent: Locator | null, 
+/**
+ * What the extractor calls this, like "function" or "test". Display only.
  */
 kind: string, 
 /**
@@ -62,7 +78,57 @@ contract: string | null, };
 
 export type Sides = { "added": Occurrence } | { "removed": Occurrence } | { "kept": { before: Occurrence, after: Occurrence, } };
 
-export type Definition = { identity: Identity, sides: Sides, };
+export type Definition = { 
+/**
+ * Whether it holds others. Said by whoever read the file.
+ */
+role: Role, 
+/**
+ * What it was on each side.
+ */
+sides: Sides, 
+/**
+ * What happened to it.
+ */
+change: Change, 
+/**
+ * How many hops away the nearest change that reached it is. Never nought: whether it
+ * changed on its own account is what `change` is for, and a definition can be both.
+ */
+reached: number | null, 
+/**
+ * What it's written inside. Always present in this review when it isn't `None`.
+ */
+parent: Identity | null, 
+/**
+ * The group its file belongs to, matching one of the paths in `groups`.
+ */
+group: Array<string> | null, };
+
+export type Group = { 
+/**
+ * Outermost first. Written as it is rather than joined, so nothing has to agree on a
+ * separator that a path component might contain.
+ */
+path: Array<string>, 
+/**
+ * Nought for a group that leans on no other. The page draws its rows by this and the
+ * reading order follows it, which is what keeps a reading running down the page.
+ */
+band: number, };
+
+export type Impact = "incomplete" | "degraded";
+
+export type Warning = { impact: Impact, 
+/**
+ * Worded here rather than on the page, so there's one wording rather than one per
+ * reader, and so the names in it can be looked up while they're still to hand.
+ */
+message: string, 
+/**
+ * What it's about, when it's about one definition. For pointing somebody at it.
+ */
+about: Identity | null, };
 
 export type Edits = { 
 /**
@@ -81,12 +147,7 @@ parts: Array<Part>, };
 
 export type Change = "added" | "removed" | { "kept": Edits };
 
-export type Edge = { from: Identity, to: Identity, 
-/**
- * Definitions the chain passed through on the way, in order. Empty when the two
- * mention each other directly.
- */
-via: Array<Identity>, };
+export type Edge = { from: Identity, to: Identity, };
 
 export type Diagnostic = { "lopsided_contract": { definition: Identity, } } | { "unbound_in_contract": { definition: Identity, symbol: string, } } | { "mention_from_nowhere": { from: Locator, } } | { "tangled": { definition: Locator, 
 /**
@@ -98,38 +159,20 @@ at: number, } } | { "two_of_one_name": { locator: Locator, times: number, } } | 
  */
 at: Array<number>, } };
 
-export type Review = { changes: { [key in Identity]: Change }, 
+export type Review = { definitions: { [key in Identity]: Definition }, 
 /**
- * What a change reached by following what uses what, and how many hops away each one
- * sits. One means it uses a changed definition itself; two means it uses something
- * that does, and so on outward.
- *
- * Something that changed can be reached as well, and is worth saying so: a definition
- * that broke on its own account and also stands downstream of another break is a
- * different thing to read than one that merely broke.
+ * What to read, in order. Whatever a step names is worth reading; everything else in
+ * `definitions` is here to be drawn around it.
  */
-affected: { [key in Identity]: number }, 
+reading: Array<Step>, edges: Array<Edge>, groups: Array<Group>, 
 /**
- * How far this reading followed a change outward. What the page offers to show is
- * bounded by what was actually looked for, so it's said here rather than guessed at
- * from the deepest thing that happens to have turned up.
+ * What a reader calls the grouping: "package", "crate".
  */
-ripples: number, 
+grouping: string | null, 
 /**
- * Worth reading: what changed, and what a change reached.
+ * How far this reading was told to follow a change outward.
  */
-members: Array<Identity>, 
-/**
- * Not worth reading, but the reading doesn't make sense without it on the page.
- *
- * A module is where its definitions live, and a page draws it as the box around them.
- * Left out when nothing about the module itself changed, that box stands for nothing —
- * it can't be pointed at, and an edge that ends at it has nowhere to land. Putting it
- * among the members instead would mean asking somebody to read a file's imports
- * because something else in the file changed, which is a waste of the one thing this
- * tool is trying to save.
- */
-context: Array<Identity>, edges: Array<Edge>, diagnostics: Array<Diagnostic>, };
+ripples: number, cost: Cost, warnings: Array<Warning>, };
 
 export type Cost = { 
 /**
@@ -161,34 +204,9 @@ export type Ordering = { steps: Array<Step>,
  */
 cost: Cost, };
 
-export type Grouping = { 
-/**
- * What a reader would call this way of grouping: "package", "owner", "layer".
- */
-name: string, of: { [key in Identity]: Array<string> }, 
-/**
- * How deep each group sits among the groups: nought for one that leans on no other,
- * one more than the furthest it leans on otherwise. Keyed the way a group is written
- * on a page, outermost first, joined by slashes.
- *
- * Worked out here so it's worked out once. The reading follows it — what leans on no
- * other group is read before what leans on it — and the page draws its rows of boxes
- * by it, and those two being the same number is the whole reason a reading runs down
- * a page rather than around it. Two of them would agree until they didn't, and the
- * symptom would be an order that feels random.
- */
-bands: { [key in string]: number }, };
-
 export type Note = { message: string, 
 /**
  * The file it's about, when it's about one.
  */
 file: string | null, };
-
-export type Said = { 
-/**
- * Everything else talks in identities. Without these there's nothing to turn one back
- * into a name, a file, or the text a reader came to see.
- */
-definitions: Array<Definition>, review: Review, ordering: Ordering, grouping: Grouping, notes: Array<Note>, };
 

@@ -29,5 +29,5 @@ mv "$written" "$fixture"
 python3 - "$fixture" <<'PY'
 import json, sys
 review = json.load(open(sys.argv[1]))
-print(f'{sys.argv[1]}: {len(review["definitions"])} definitions, {len(review["ordering"]["steps"])} steps')
+print(f'{sys.argv[1]}: {len(review["definitions"])} definitions, {len(review["reading"])} steps')
 PY

@@ -73,8 +73,8 @@ export function App(props: { raw: Raw }) {
     onCleanup(() => room.removeEventListener("change", settle));
   });
 
-  const hiding = () => review().worries.filter((worry) => worry.hides);
-  const weaker = () => review().worries.filter((worry) => !worry.hides);
+  const hiding = () => review().warnings.filter((one) => one.impact === "incomplete");
+  const weaker = () => review().warnings.filter((one) => one.impact === "degraded");
   const said = () =>
     hiding().length
       ? `${hiding().length} this review might not be showing`
@@ -205,7 +205,7 @@ export function App(props: { raw: Raw }) {
           {/* Only there when there's something to say, and only a warning when something
             * might be missing. A review worked out a weaker way is worth knowing about and
             * isn't worth alarm — told as alarm, it teaches you to ignore the alarm. */}
-          <Show when={review().worries.length}>
+          <Show when={review().warnings.length}>
             <button
               class={`worry${hiding().length ? " bad" : ""}`}
               onClick={() => { setCostOpen(false); setWorriesOpen((was) => !was); }}
@@ -233,7 +233,7 @@ export function App(props: { raw: Raw }) {
           {/* How far out what the change reached is shown. The number is the point — a
             * reader turning it down wants to know what they've turned it down to — so it
             * sits beside the mark rather than hiding in a tooltip. */}
-          <Show when={whole().ripples > 0 && whole().affected.size}>
+          <Show when={whole().ripples > 0 && [...whole().definitions.values()].some((one) => one.away > 0)}>
             <button
               class={`worry steps${ripples() ? " on" : ""}`}
               onClick={further}
@@ -300,7 +300,7 @@ export function App(props: { raw: Raw }) {
       >
         <Show when={hiding().length}>
           <ul>
-            <For each={hiding()}>{(worry) => <li>{worry.said}</li>}</For>
+            <For each={hiding()}>{(one) => <li>{one.message}</li>}</For>
           </ul>
         </Show>
         <Show when={weaker().length}>
@@ -308,7 +308,7 @@ export function App(props: { raw: Raw }) {
             <h3>Worked out a weaker way</h3>
           </Show>
           <ul>
-            <For each={weaker()}>{(worry) => <li>{worry.said}</li>}</For>
+            <For each={weaker()}>{(one) => <li>{one.message}</li>}</For>
           </ul>
         </Show>
       </Panel>

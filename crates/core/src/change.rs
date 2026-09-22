@@ -177,7 +177,7 @@ mod tests {
     fn a_part_can_move_on_its_own() {
         let before = occurrence("zero", &[(Part::Type, "sig")]);
         let mut after = occurrence("zero", &[(Part::Type, "sig")]);
-        after.parts.get_mut(&Part::Type).unwrap()[0].file = Some("money.h".to_string());
+        after.parts.get_mut(&Part::Type).unwrap()[0].file = "money.h".to_string();
         let edits = edits(Sides::Kept { before, after });
 
         assert!(edits.moved);
@@ -212,7 +212,7 @@ mod tests {
         let split = || {
             let mut occurrence = occurrence("helper", &[(Part::Type, "int helper(void);")]);
             let pieces = occurrence.parts.get_mut(&Part::Type).unwrap();
-            pieces[0].file = Some("money.h".to_string());
+            pieces[0].file = "money.h".to_string();
             pieces.push(piece("int helper(void)"));
             occurrence
         };

@@ -4,7 +4,7 @@
 //! it's a lockfile, a pile of YAML, or a language nobody has written an adapter for.
 
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, Piece, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -40,6 +40,10 @@ fn occurrence(dir: &Path, file: &str) -> Option<Occurrence> {
     };
     Some(Occurrence {
         locator: Locator { scope, name },
+        // A whole file read as one definition holds nothing and sits inside nothing: there
+        // is no structure here to report, which is what falling back means.
+        role: Role::Item,
+        parent: None,
         kind: "file".to_string(),
         file: file.to_string(),
         parts: BTreeMap::from([(
@@ -48,7 +52,7 @@ fn occurrence(dir: &Path, file: &str) -> Option<Occurrence> {
                 text,
                 span,
                 line: 1,
-                file: None,
+                file: file.to_string(),
             }],
         )]),
         contract: None,

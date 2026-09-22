@@ -17,6 +17,13 @@ pub struct Found {
     /// Each part as the stretches of source it covers. Several stretches, because a
     /// module's imports sit wherever the language allows them, which in Rust is anywhere.
     pub parts: Parts,
+    /// Everything this is written across, its contents included.
+    ///
+    /// Wider than the parts, and that's the point: a module's parts are its prose and its
+    /// imports, but a module is written across the whole file. What sits inside what can be
+    /// read straight off these, since Rust nests, and it's the one question a syntax tree
+    /// can answer for nothing that nobody downstream can answer at all.
+    pub covers: Range<usize>,
 }
 
 pub type Parts = BTreeMap<Part, Vec<Range<usize>>>;
@@ -123,6 +130,10 @@ fn merged(found: Vec<Found>) -> Vec<Found> {
                 for ranges in kept.parts.values_mut() {
                     ranges.sort_by_key(|range| range.start);
                 }
+                // Two blocks becoming one definition are written across both, and whatever
+                // sits between them now sits inside it.
+                kept.covers =
+                    kept.covers.start.min(one.covers.start)..kept.covers.end.max(one.covers.end);
             }
             None => out.push(one),
         }
@@ -146,6 +157,7 @@ pub fn module(
     items: &[Item],
     path: &[String],
     extent: Range<usize>,
+    braced: bool,
 ) -> Option<Found> {
     let (name, scope) = path.split_last()?;
     let (contract, workings) = imports(items);
@@ -162,6 +174,19 @@ pub fn module(
         _ => told,
     };
 
+    /* A module written out in braces closes with one, the way an impl block does, and
+     * that brace is the module's own. Left unclaimed it belongs to nobody, which is a
+     * changed line the review can't account for — and the only thing on its line, so
+     * nothing else covers it either. A file has no brace to claim. */
+    let contract = match braced {
+        true => {
+            let mut ranges = contract;
+            ranges.push(extent.end.saturating_sub(1)..extent.end);
+            ranges
+        }
+        false => contract,
+    };
+
     Some(Found {
         scope: scope.to_vec(),
         name: name.clone(),
@@ -174,6 +199,9 @@ pub fn module(
             (Part::Body, workings),
             (Part::Docs, told),
         ]),
+        // A module's parts are its prose and its imports; a module is written across
+        // everything it holds, which is what says those things are inside it.
+        covers: extent,
     })
 }
 
@@ -253,6 +281,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
                     (Part::Body, Vec::new()),
                     (Part::Docs, docs(&item.attrs)),
                 ]),
+                covers: range(item.span()),
             }];
             found.extend(item.items.iter().filter_map(|member| match member {
                 TraitItem::Fn(function) => Some(callable(
@@ -290,6 +319,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
                         (Part::Body, one(range(constant.expr.span()))),
                         (Part::Docs, docs(&constant.attrs)),
                     ]),
+                    covers: range(constant.span()),
                 }),
                 _ => None,
             }));
@@ -301,7 +331,7 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
         Item::Mod(item) => match &item.content {
             Some((_, items)) => {
                 let path = nest(scope, &item.ident.to_string());
-                let mut found = module(&item.attrs, items, &path, range(item.span()))
+                let mut found = module(&item.attrs, items, &path, range(item.span()), true)
                     .into_iter()
                     .collect::<Vec<_>>();
                 found.extend(find(items, &path));
@@ -338,6 +368,7 @@ fn implementation(block: &syn::ItemImpl, scope: &[String]) -> Found {
         name: format!("impl {}", implementing(block)),
         name_at: range(block.self_ty.span()),
         kind: "impl",
+        covers: full.clone(),
         parts: parts([
             (
                 Part::Type,
@@ -398,6 +429,7 @@ fn callable(
         name: signature.ident.to_string(),
         name_at: range(signature.ident.span()),
         kind,
+        covers: outer.clone(),
         parts: parts([
             (Part::Type, declared(&outer, &prose, until)),
             (Part::Body, workings.map(one).unwrap_or_default()),
@@ -422,6 +454,7 @@ fn whole(
         name: ident.to_string(),
         name_at: range(ident.span()),
         kind,
+        covers: full.clone(),
         parts: parts([
             (Part::Type, declared(&full, &prose, full.end)),
             (Part::Body, Vec::new()),
@@ -478,9 +511,10 @@ mod tests {
     fn read(source: &str) -> Vec<Found> {
         let file = syn::parse_file(source).expect("the source should parse");
         let scope = vec!["thing".to_string()];
-        let mut found: Vec<Found> = module(&file.attrs, &file.items, &scope, 0..source.len())
-            .into_iter()
-            .collect();
+        let mut found: Vec<Found> =
+            module(&file.attrs, &file.items, &scope, 0..source.len(), false)
+                .into_iter()
+                .collect();
         found.extend(find(&file.items, &scope));
         found
     }
