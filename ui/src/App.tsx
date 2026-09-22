@@ -5,6 +5,7 @@ import { Toolbar } from "./Toolbar.tsx";
 import { CostPanel, type Opened, WarningsPanel } from "./Panels.tsx";
 import type { Identity, Raw } from "./dagger.ts";
 import { digest } from "./digest.ts";
+import { matches } from "./graph/scene.ts";
 import { useReviewKeys } from "./keys.ts";
 import { layout } from "./layout.ts";
 import { createMediaQuery, WIDE } from "./media.ts";
@@ -103,6 +104,17 @@ export function App(props: { raw: Raw }) {
     open();
   };
 
+  const [query, setQuery] = createSignal("");
+  const matched = createMemo(() =>
+    [...review().definitions.values()].filter((one) => matches(one, query())),
+  );
+  const find = () => {
+    const hits = new Set(matched().map((one) => one.id));
+    const first = steps().find((step) => hits.has(step.definition));
+    if (first) goTo(first.definition);
+  };
+  let search: HTMLInputElement | undefined;
+
   useReviewKeys({
     readNext: () => readAnd(1),
     readBack: () => readAnd(-1),
@@ -117,6 +129,7 @@ export function App(props: { raw: Raw }) {
     theme: () => void wear(another(wearing())),
     first: () => setIndex(0),
     last: () => setIndex(steps().length - 1),
+    search: () => search?.focus(),
     /* An open panel closes itself on Escape; the sheet only closes when there's none. */
     escape: () => panel() === null && shut(),
   });
@@ -136,6 +149,12 @@ export function App(props: { raw: Raw }) {
         }
         ripples={ripples()}
         furthest={whole().ripples}
+        query={query()}
+        matched={matched().length}
+        of={review().definitions.size}
+        search={(input) => (search = input)}
+        onQuery={setQuery}
+        onFind={find}
         onWorries={() => toggle("worries")}
         onCost={() => toggle("cost")}
         onShowNext={() => setShowNext((was) => !was)}
@@ -150,6 +169,7 @@ export function App(props: { raw: Raw }) {
             here={here()}
             next={showNext() ? next() : null}
             read={read()}
+            query={query()}
             onOpen={goTo}
           />
         </div>

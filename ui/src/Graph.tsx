@@ -22,6 +22,7 @@ interface GraphProps {
   here: Identity | null;
   next: Identity | null;
   read: Set<Identity>;
+  query: string;
   onOpen: (id: Identity) => void;
 }
 
@@ -57,6 +58,7 @@ export function Graph(props: GraphProps) {
       read: props.read,
       over: over(),
       touching: touching(),
+      query: props.query,
     }),
   );
 

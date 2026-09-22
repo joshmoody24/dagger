@@ -1,4 +1,12 @@
-import type { Box, Edge, Identity, Laid, Review, Spot } from "../dagger.ts";
+import type {
+  Box,
+  Definition,
+  Edge,
+  Identity,
+  Laid,
+  Review,
+  Spot,
+} from "../dagger.ts";
 import { MARK, TINT } from "../digest.ts";
 import { FONT, RADIUS, shorten } from "../layout.ts";
 
@@ -16,7 +24,17 @@ export interface Input {
   over: string | null;
   /** The hovered node, if any. */
   touching: Identity | null;
+  /** The toolbar filter; empty means nothing is filtered. */
+  query: string;
 }
+
+/* Case-insensitive substring on any of the names a reader might have in mind. */
+export const matches = (definition: Definition, query: string) => {
+  const want = query.toLowerCase();
+  return [definition.name, definition.path, definition.file].some((it) =>
+    it.toLowerCase().includes(want),
+  );
+};
 
 export interface SceneBox {
   key: string;
@@ -78,7 +96,10 @@ export const BOX_TEXT_Y = 16;
 const CHAR = FONT * 0.6;
 
 export function scene(input: Input): Scene {
-  const near = neighbours(input.review, input.here);
+  /* A filter is the only thing that dims while one is typed. */
+  const near = input.query
+    ? new Set<Identity>()
+    : neighbours(input.review, input.here);
   return {
     boxes: input.laid.boxes.flatMap((box) => placed(box, 0, input.over)),
     edges: input.review.edges.flatMap((edge, index) =>
@@ -123,7 +144,9 @@ function node(
   if (!definition) return [];
   const here = id === input.here;
   const soon = id === input.next;
-  const dim = near.size > 0 && !near.has(id) && !here && !soon;
+  const dim = input.query
+    ? !matches(definition, input.query)
+    : near.size > 0 && !near.has(id) && !here && !soon;
   const mark = MARK[definition.mark];
   const states = {
     here,

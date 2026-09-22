@@ -20,6 +20,14 @@ interface ToolbarProps {
   rippled: boolean;
   ripples: number;
   furthest: number;
+  query: string;
+  /** How many definitions the query matches, out of how many there are. */
+  matched: number;
+  of: number;
+  /** Hands back the input so `/` can focus it from anywhere. */
+  search: (input: HTMLInputElement) => void;
+  onQuery: (query: string) => void;
+  onFind: () => void;
   onWorries: () => void;
   onCost: () => void;
   onShowNext: () => void;
@@ -41,6 +49,29 @@ export function Toolbar(props: ToolbarProps) {
         <span class="prog">
           {props.at + 1}/{props.total}
         </span>
+        <label class="find">
+          <input
+            ref={props.search}
+            type="search"
+            placeholder="filter"
+            aria-label="Filter definitions"
+            value={props.query}
+            onInput={(event) => props.onQuery(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") props.onFind();
+              else if (event.key === "Escape") {
+                props.onQuery("");
+                event.currentTarget.blur();
+              } else return;
+              event.preventDefault();
+            }}
+          />
+          <Show when={props.query}>
+            <span class="found">
+              {props.matched} of {props.of}
+            </span>
+          </Show>
+        </label>
         {/* Warning icon only for "incomplete"; "degraded" is info so alarms stay meaningful. */}
         <Show when={props.hiding.length + props.weaker.length}>
           <button

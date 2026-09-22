@@ -42,6 +42,7 @@ export interface ReviewActions {
   theme: () => void;
   first: () => void;
   last: () => void;
+  search: () => void;
   /** Returns false when something else (an open dialog) owns Escape. */
   escape: () => boolean | void;
 }
@@ -63,6 +64,7 @@ const KEYS: Record<string, keyof ReviewActions> = {
   t: "theme",
   g: "first",
   G: "last",
+  "/": "search",
   Escape: "escape",
 };
 

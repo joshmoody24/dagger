@@ -5,7 +5,7 @@ import fs from "node:fs";
 import test from "node:test";
 import type { Box, Raw } from "../src/dagger.ts";
 import { digest } from "../src/digest.ts";
-import { scene, type Input } from "../src/graph/scene.ts";
+import { matches, scene, type Input } from "../src/graph/scene.ts";
 import { layout } from "../src/layout.ts";
 
 const raw: Raw = JSON.parse(
@@ -24,6 +24,7 @@ const input = (over: Partial<Input> = {}): Input => ({
   read: new Set(),
   over: null,
   touching: null,
+  query: "",
   ...over,
 });
 
@@ -86,6 +87,31 @@ test("nodes away from the current one are dim, and none are without one", () => 
   }
   for (const node of scene(input({ here: null, next: null })).nodes)
     assert.ok(!node.classes.includes("dim"), node.id);
+});
+
+test("a query dims what doesn't match and nothing that does", () => {
+  const query = review.definitions.get(next)!.name.slice(0, 3).toUpperCase();
+  const nodes = scene(input({ query })).nodes;
+  const hits = nodes.filter((node) =>
+    matches(review.definitions.get(node.id)!, query),
+  );
+  assert.ok(hits.length > 0 && hits.length < nodes.length);
+  for (const node of nodes) {
+    const hit = matches(review.definitions.get(node.id)!, query);
+    assert.equal(node.classes.includes("dim"), !hit, node.id);
+  }
+});
+
+test("an empty query changes nothing: neighbours still dim, and the current never does", () => {
+  const nodes = scene(input({ query: "" })).nodes;
+  const dim = (id: string) =>
+    nodes.find((node) => node.id === id)!.classes.includes("dim");
+  assert.ok(!dim(here));
+  assert.ok(nodes.some((node) => dim(node.id)));
+  assert.equal(
+    nodes.filter((node) => dim(node.id)).length,
+    scene(input()).nodes.filter((node) => node.classes.includes("dim")).length,
+  );
 });
 
 test("the arrow ahead points at the next step, or nowhere", () => {

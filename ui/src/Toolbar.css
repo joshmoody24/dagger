@@ -27,6 +27,29 @@ header {
   flex: 1;
   min-width: 0;
 }
+.find {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 12.5px/1.6 var(--mono);
+  color: var(--muted);
+}
+.find input {
+  width: 9em;
+  padding: 3px 8px;
+  border: 1px solid var(--raised);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.find input:focus {
+  outline: none;
+  border-color: var(--lean);
+}
+.found {
+  white-space: nowrap;
+}
 
 /* Quiet by default; only styled as a warning when something might actually be missing. */
 .tool {
