@@ -3,7 +3,9 @@ import { ChartColumn, Info, TriangleAlert, Waves } from "lucide-solid";
 import { Graph } from "./Graph.tsx";
 import { Reading } from "./Reading.tsx";
 import type { Box, Identity, Raw } from "./dagger.ts";
-import { digest, layout, namesIn } from "./review.ts";
+import { digest } from "./digest.ts";
+import { layout } from "./layout.ts";
+import { namesIn } from "./text.ts";
 import { next as another, wear, wearing } from "./theme.ts";
 
 /* How fast j and k scroll, in pixels a second. About sixty lines, which crosses a long

@@ -2,7 +2,8 @@ import { createEffect, createSignal, For, onCleanup, onMount, Show, untrack } fr
 import { select } from "d3-selection";
 import { zoom as zooming, zoomIdentity, zoomTransform } from "d3-zoom";
 import type { Box, Edge, Identity, Laid, Review, Spot } from "./dagger.ts";
-import { MARK, NODE_H, RADIUS, TINT, shorten } from "./review.ts";
+import { MARK, TINT } from "./digest.ts";
+import { NODE_H, RADIUS, shorten } from "./layout.ts";
 import { wearing } from "./theme.ts";
 
 /* Breathing room around the whole drawing when it's sat in the window. */

@@ -1,7 +1,10 @@
 import { createEffect, createMemo, For, Show } from "solid-js";
 import type { Box, Definition as Def, Identity, Review, Shown, Step } from "./dagger.ts";
 import type { Painted } from "./colouring.ts";
-import { MARK, TINT, broke, compare, focused, inside, stitch } from "./review.ts";
+import { MARK, TINT, broke } from "./digest.ts";
+import { compare, focused } from "./diff.ts";
+import { inside } from "./layout.ts";
+import { stitch } from "./text.ts";
 import { colouring, painted, readied, speaks } from "./colouring.ts";
 import { dressing, wearing } from "./theme.ts";
 

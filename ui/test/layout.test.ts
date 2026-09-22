@@ -7,9 +7,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import type { Box, Edge, Identity, Line, Raw } from "../src/dagger.ts";
-import { NODE_H, digest, layout, shorten, stitch, widthOf } from "../src/review.ts";
+import { digest } from "../src/digest.ts";
+import { compare, focused } from "../src/diff.ts";
+import { NODE_H, layout, shorten, widthOf } from "../src/layout.ts";
 import { phases, standing } from "../src/progress.ts";
-import { compare, focused } from "../src/review.ts";
+import { stitch } from "../src/text.ts";
 
 const raw: Raw = JSON.parse(fs.readFileSync(new URL("./review.json", import.meta.url), "utf8"));
 const review = digest(raw);
