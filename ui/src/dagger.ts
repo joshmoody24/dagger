@@ -38,7 +38,8 @@ export type Raw = wire.Review;
 
 /* ---------------- what the page makes of it ---------------- */
 
-export type Mark = "added" | "removed" | "contract" | "body" | "docs" | "affected" | "still";
+export type Mark =
+  "added" | "removed" | "contract" | "body" | "docs" | "affected" | "still";
 
 /* One definition, in the shape a page wants rather than the shape it arrived in.
  *

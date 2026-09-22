@@ -35,7 +35,9 @@ export function phases(said: string[]): Phase[] {
   const pair = said
     .map((line) => line.match(/^comparing (\S+) to (\S+)/))
     .find(Boolean);
-  const [before, after] = pair ? [pair[1], pair[2]] : ["the first snapshot", "the second"];
+  const [before, after] = pair
+    ? [pair[1], pair[2]]
+    : ["the first snapshot", "the second"];
 
   const found: Phase[] = [
     { said: "laying out both snapshots", done: false, going: true },
@@ -75,7 +77,9 @@ export function phases(said: string[]): Phase[] {
 
     phase.detail = rest;
     const through = rest.match(/(\d+) of (\d+)/);
-    phase.through = through ? [Number(through[1]), Number(through[2])] : undefined;
+    phase.through = through
+      ? [Number(through[1]), Number(through[2])]
+      : undefined;
   }
 
   return found;

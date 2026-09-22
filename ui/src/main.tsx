@@ -40,9 +40,14 @@ async function load() {
     return await streamed(said);
   }
 
-  const off = await tauri.event.listen("dagger://said", (sent) => setSaid((was) => [...was, sent.payload]));
+  const off = await tauri.event.listen("dagger://said", (sent) =>
+    setSaid((was) => [...was, sent.payload]),
+  );
   try {
-    const said = await tauri.core.invoke("review", await tauri.core.invoke("opened"));
+    const said = await tauri.core.invoke(
+      "review",
+      await tauri.core.invoke("opened"),
+    );
     return JSON.parse(said);
   } finally {
     off();

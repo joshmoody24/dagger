@@ -20,11 +20,17 @@ export default ts.config(
   solid,
   {
     languageOptions: {
-      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     rules: {
       /* An underscore says the argument is there for its position, not its value. */
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_" },
+      ],
 
       /* A promise nobody waits for fails silently. `void` says the throw is accounted for;
        * leaving it off means it isn't. */

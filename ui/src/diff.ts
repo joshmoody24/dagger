@@ -28,7 +28,8 @@ export function compare(before: Line[] | null, after: Line[] | null): Shown[] {
  */
 function diffing(a: Line[], b: Line[]): Shown[] {
   let head = 0;
-  while (head < a.length && head < b.length && a[head].text === b[head].text) head++;
+  while (head < a.length && head < b.length && a[head].text === b[head].text)
+    head++;
 
   let tail = 0;
   while (
@@ -39,11 +40,19 @@ function diffing(a: Line[], b: Line[]): Shown[] {
     tail++;
   }
 
-  const kept = (lines: Line[]): Shown[] => lines.map((line) => ({ mark: " " as const, line }));
-  const [x, y] = [a.slice(head, a.length - tail), b.slice(head, b.length - tail)];
+  const kept = (lines: Line[]): Shown[] =>
+    lines.map((line) => ({ mark: " " as const, line }));
+  const [x, y] = [
+    a.slice(head, a.length - tail),
+    b.slice(head, b.length - tail),
+  ];
   const middle = x.length * y.length <= EXACT ? exactly(x, y) : split(x, y);
 
-  return [...kept(b.slice(0, head)), ...middle, ...kept(b.slice(b.length - tail))];
+  return [
+    ...kept(b.slice(0, head)),
+    ...middle,
+    ...kept(b.slice(b.length - tail)),
+  ];
 }
 
 /* Split around the lines that can only be themselves, and work on what's between them.
@@ -55,7 +64,8 @@ function diffing(a: Line[], b: Line[]): Shown[] {
 function split(a: Line[], b: Line[]): Shown[] {
   const counted = (lines: Line[]) => {
     const seen = new Map<string, number>();
-    for (const line of lines) seen.set(line.text, (seen.get(line.text) ?? 0) + 1);
+    for (const line of lines)
+      seen.set(line.text, (seen.get(line.text) ?? 0) + 1);
     return seen;
   };
   const [inA, inB] = [counted(a), counted(b)];
@@ -68,12 +78,12 @@ function split(a: Line[], b: Line[]): Shown[] {
   const pairs: [number, number][] = [];
   a.forEach((line, at) => {
     const there = whereB.get(line.text);
-    if (inA.get(line.text) === 1 && there !== undefined) pairs.push([at, there]);
+    if (inA.get(line.text) === 1 && there !== undefined)
+      pairs.push([at, there]);
   });
 
   const anchors = rising(pairs);
   if (!anchors.length) return exactly(a, b);
-
 
   const shown: Shown[] = [];
   let [i, j] = [0, 0];
@@ -153,7 +163,9 @@ function rising(pairs: [number, number][]): [number, number][] {
 function exactly(a: Line[], b: Line[]): Shown[] {
   if (a.length * b.length > EXACT) return abreast(a, b);
 
-  const same = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  const same = Array.from({ length: a.length + 1 }, () =>
+    new Array<number>(b.length + 1).fill(0),
+  );
 
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {
@@ -200,7 +212,10 @@ export function focused(lines: Shown[], reach = REACH): Shown[] {
 
   const near = new Set<number>();
   for (const at of anchors) {
-    const [from, to] = [Math.max(0, at - reach), Math.min(lines.length - 1, at + reach)];
+    const [from, to] = [
+      Math.max(0, at - reach),
+      Math.min(lines.length - 1, at + reach),
+    ];
     for (let line = from; line <= to; line++) near.add(line);
   }
   if (near.size === lines.length) return lines;

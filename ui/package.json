@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "node --test test/*.test.ts && tsc --noEmit && eslint .",
-    "lint": "eslint ."
+    "check": "node --test test/*.test.ts && tsc --noEmit && eslint . && prettier --check .",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@shikijs/themes": "^4.4.3",
@@ -25,6 +27,7 @@
     "@types/node": "^26.6.2",
     "eslint": "^10.11.0",
     "eslint-plugin-solid": "^0.18.0",
+    "prettier": "^3.9.8",
     "typescript-eslint": "^8.70.1",
     "vite": "^7.1.0",
     "vite-plugin-solid": "^2.11.0"

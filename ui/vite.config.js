@@ -27,7 +27,9 @@ function live() {
           ? asked.getAll("read")
           : (process.env.DAGGER_READ || "").split("\n").filter(Boolean);
 
-        const dagger = spawn("target/debug/dagger", ["--json", ...reading], { cwd: ".." });
+        const dagger = spawn("target/debug/dagger", ["--json", ...reading], {
+          cwd: "..",
+        });
 
         /* Sent as it happens rather than all at once at the end. Dagger says what it's
          * doing on the way — which snapshot, which extractor, how far through — and a
@@ -48,11 +50,14 @@ function live() {
           left += chunk;
           const lines = left.split("\n");
           left = lines.pop() ?? "";
-          for (const note of lines) response.write(`${JSON.stringify({ note })}\n`);
+          for (const note of lines)
+            response.write(`${JSON.stringify({ note })}\n`);
         });
 
         dagger.on("error", (error) => {
-          response.write(`${JSON.stringify({ wrong: `couldn't run dagger: ${error.message}` })}\n`);
+          response.write(
+            `${JSON.stringify({ wrong: `couldn't run dagger: ${error.message}` })}\n`,
+          );
           response.end();
         });
         dagger.on("close", (code) => {

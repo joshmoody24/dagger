@@ -32,15 +32,29 @@ const GRAMMARS: Record<string, () => Promise<unknown>> = {
 };
 
 const SPEAKS: Record<string, string> = {
-  ts: "typescript", mts: "typescript", cts: "typescript",
-  tsx: "tsx", js: "javascript", mjs: "javascript", cjs: "javascript", jsx: "jsx",
-  rs: "rust", py: "python", go: "go",
-  c: "c", h: "c", cc: "cpp", cpp: "cpp", hpp: "cpp",
-  json: "json", css: "css",
+  ts: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  tsx: "tsx",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "jsx",
+  rs: "rust",
+  py: "python",
+  go: "go",
+  c: "c",
+  h: "c",
+  cc: "cpp",
+  cpp: "cpp",
+  hpp: "cpp",
+  json: "json",
+  css: "css",
 };
 
 /** Which grammar a file is written in, as far as this knows any. */
-export const speaks = (file: string) => SPEAKS[file.split(".").pop() ?? ""] ?? null;
+export const speaks = (file: string) =>
+  SPEAKS[file.split(".").pop() ?? ""] ?? null;
 
 export interface Painted {
   text: string;
@@ -56,7 +70,11 @@ const [settled, setSettled] = createSignal(0);
 export const colouring = settled;
 
 /** Gets ready to colour this language in this theme, if it isn't already. */
-export async function readied(language: string | null, theme: any, name: string) {
+export async function readied(
+  language: string | null,
+  theme: any,
+  name: string,
+) {
   if (!language || !GRAMMARS[language]) return;
 
   const asked = `${name}:${language}`;
@@ -86,13 +104,20 @@ export async function readied(language: string | null, theme: any, name: string)
 }
 
 /** Lines of code, each split into the pieces a theme paints differently. */
-export function painted(lines: string[], language: string | null, theme: string): Painted[][] {
+export function painted(
+  lines: string[],
+  language: string | null,
+  theme: string,
+): Painted[][] {
   const plain = () => lines.map((line) => [{ text: line }]);
   if (!ready || !language) return plain();
   if (!ready.getLoadedLanguages().includes(language)) return plain();
   if (!ready.getLoadedThemes().includes(theme)) return plain();
 
-  const { tokens } = ready.codeToTokens(lines.join("\n"), { lang: language, theme });
+  const { tokens } = ready.codeToTokens(lines.join("\n"), {
+    lang: language,
+    theme,
+  });
   return lines.map((line, at) =>
     (tokens[at] ?? [{ content: line }]).map((token) => ({
       text: token.content,

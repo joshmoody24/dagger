@@ -19,7 +19,8 @@ import { createSignal } from "solid-js";
  * the eye: measured across every dark theme available, the near-black ones run 13 to 18
  * times the contrast of their own background, and the grey ones around 8. */
 const WEARING: Record<string, () => Promise<{ default: Theme }>> = {
-  "github-dark-high-contrast": () => import("@shikijs/themes/github-dark-high-contrast"),
+  "github-dark-high-contrast": () =>
+    import("@shikijs/themes/github-dark-high-contrast"),
   vesper: () => import("@shikijs/themes/vesper"),
   "github-dark-default": () => import("@shikijs/themes/github-dark-default"),
   "vitesse-black": () => import("@shikijs/themes/vitesse-black"),
@@ -34,7 +35,10 @@ const WEARING: Record<string, () => Promise<{ default: Theme }>> = {
 interface Theme {
   type?: string;
   colors?: Record<string, string>;
-  tokenColors?: { scope?: string | string[]; settings?: { foreground?: string } }[];
+  tokenColors?: {
+    scope?: string | string[];
+    settings?: { foreground?: string };
+  }[];
 }
 
 export const themes = Object.keys(WEARING);
@@ -56,29 +60,73 @@ export async function wear(name: string, root = document.documentElement) {
 }
 
 /** The next one along, so a key can walk the list. */
-export const next = (name: string) => themes[(themes.indexOf(name) + 1) % themes.length];
+export const next = (name: string) =>
+  themes[(themes.indexOf(name) + 1) % themes.length];
 
 /* Themes don't all set every key, so each colour says what it would rather have first, and
  * what it will settle for. */
 const ROLES: Record<string, string[]> = {
-  paper: ["sideBar.background", "editorGroupHeader.tabsBackground", "editor.background"],
+  paper: [
+    "sideBar.background",
+    "editorGroupHeader.tabsBackground",
+    "editor.background",
+  ],
   surface: ["editor.background", "sideBar.background"],
-  raised: ["list.activeSelectionBackground", "editor.lineHighlightBackground", "editor.background"],
+  raised: [
+    "list.activeSelectionBackground",
+    "editor.lineHighlightBackground",
+    "editor.background",
+  ],
   ink: ["editor.foreground", "foreground"],
   muted: ["editor.foreground", "peekViewResult.lineForeground", "foreground"],
   /* Decoration only — an edge, a guide. Never text: this is the colour an editor uses for
    * line numbers, which it means you not to notice. */
-  faint: ["editorLineNumber.foreground", "editorIndentGuide.activeBackground1", "editorIndentGuide.background1"],
-  rule: ["editorBracketMatch.border", "panelTitle.inactiveForeground", "diffEditor.diagonalFill", "editorGroup.border"],
-  lean: ["terminal.ansiBlue", "textLink.foreground", "editorLink.activeForeground"],
+  faint: [
+    "editorLineNumber.foreground",
+    "editorIndentGuide.activeBackground1",
+    "editorIndentGuide.background1",
+  ],
+  rule: [
+    "editorBracketMatch.border",
+    "panelTitle.inactiveForeground",
+    "diffEditor.diagonalFill",
+    "editorGroup.border",
+  ],
+  lean: [
+    "terminal.ansiBlue",
+    "textLink.foreground",
+    "editorLink.activeForeground",
+  ],
   /* Kept apart from lean on purpose: one says where you are, the other where you're going,
    * and they're side by side on screen. */
-  path: ["terminal.ansiMagenta", "textLink.activeForeground", "terminal.ansiCyan"],
-  add: ["terminal.ansiGreen", "gitDecoration.addedResourceForeground", "editorGutter.addedBackground"],
-  del: ["terminal.ansiRed", "gitDecoration.deletedResourceForeground", "editorGutter.deletedBackground"],
-  chg: ["terminal.ansiYellow", "gitDecoration.modifiedResourceForeground", "editorGutter.modifiedBackground"],
-  addbg: ["diffEditor.insertedLineBackground", "diffEditor.insertedTextBackground"],
-  delbg: ["diffEditor.removedLineBackground", "diffEditor.removedTextBackground"],
+  path: [
+    "terminal.ansiMagenta",
+    "textLink.activeForeground",
+    "terminal.ansiCyan",
+  ],
+  add: [
+    "terminal.ansiGreen",
+    "gitDecoration.addedResourceForeground",
+    "editorGutter.addedBackground",
+  ],
+  del: [
+    "terminal.ansiRed",
+    "gitDecoration.deletedResourceForeground",
+    "editorGutter.deletedBackground",
+  ],
+  chg: [
+    "terminal.ansiYellow",
+    "gitDecoration.modifiedResourceForeground",
+    "editorGutter.modifiedBackground",
+  ],
+  addbg: [
+    "diffEditor.insertedLineBackground",
+    "diffEditor.insertedTextBackground",
+  ],
+  delbg: [
+    "diffEditor.removedLineBackground",
+    "diffEditor.removedTextBackground",
+  ],
 };
 
 /* When a theme says nothing at all about a role, something still has to be there: a colour

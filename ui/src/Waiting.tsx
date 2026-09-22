@@ -27,7 +27,11 @@ export function Waiting(props: { said: string[] }) {
               </Show>
               <Show when={standing(shape(), at()) === "at" && phase.through}>
                 <span class="through">
-                  <i style={{ width: `${(phase.through![0] / Math.max(phase.through![1], 1)) * 100}%` }} />
+                  <i
+                    style={{
+                      width: `${(phase.through![0] / Math.max(phase.through![1], 1)) * 100}%`,
+                    }}
+                  />
                 </span>
               </Show>
             </li>

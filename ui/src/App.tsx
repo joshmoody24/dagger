@@ -1,4 +1,13 @@
-import { createEffect, createMemo, createSignal, For, type JSXElement, onCleanup, onMount, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type JSXElement,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
 import { ChartColumn, Info, TriangleAlert, Waves } from "lucide-solid";
 import { Graph } from "./Graph.tsx";
 import { Reading } from "./Reading.tsx";
@@ -22,7 +31,8 @@ export function App(props: { raw: Raw }) {
    * further than the reading went — whoever ran dagger said how far to follow with
    * --ripples, and a page offering more than that would be offering to show nothing. */
   const [ripples, setRipples] = createSignal(0);
-  const further = () => setRipples((was) => (was >= whole().ripples ? 0 : was + 1));
+  const further = () =>
+    setRipples((was) => (was >= whole().ripples ? 0 : was + 1));
 
   const review = createMemo(() => {
     const all = whole();
@@ -46,14 +56,19 @@ export function App(props: { raw: Raw }) {
         .map((one) => one.file),
     );
     for (const one of all.definitions.values()) {
-      if (one.kind === "module" && one.mark === "still" && !holds.has(one.file)) gone.add(one.id);
+      if (one.kind === "module" && one.mark === "still" && !holds.has(one.file))
+        gone.add(one.id);
     }
 
     return {
       ...all,
-      definitions: new Map([...all.definitions].filter(([id]) => !gone.has(id))),
+      definitions: new Map(
+        [...all.definitions].filter(([id]) => !gone.has(id)),
+      ),
       steps: all.steps.filter((step) => !gone.has(step.definition)),
-      edges: all.edges.filter((edge) => !gone.has(edge.from) && !gone.has(edge.to)),
+      edges: all.edges.filter(
+        (edge) => !gone.has(edge.from) && !gone.has(edge.to),
+      ),
     };
   });
 
@@ -119,8 +134,10 @@ export function App(props: { raw: Raw }) {
     onCleanup(() => room.removeEventListener("change", settle));
   });
 
-  const hiding = () => review().warnings.filter((one) => one.impact === "incomplete");
-  const weaker = () => review().warnings.filter((one) => one.impact === "degraded");
+  const hiding = () =>
+    review().warnings.filter((one) => one.impact === "incomplete");
+  const weaker = () =>
+    review().warnings.filter((one) => one.impact === "degraded");
   const said = () =>
     hiding().length
       ? `${hiding().length} this review might not be showing`
@@ -144,7 +161,9 @@ export function App(props: { raw: Raw }) {
 
   /* Putting the ripples away can leave the reading past its end. */
   const steps = () => review().steps;
-  createEffect(() => setAt((was) => Math.min(was, Math.max(steps().length - 1, 0))));
+  createEffect(() =>
+    setAt((was) => Math.min(was, Math.max(steps().length - 1, 0))),
+  );
 
   /* What's being looked at, which isn't always a step.
    *
@@ -157,7 +176,8 @@ export function App(props: { raw: Raw }) {
   /* A box that stands for no definition — a folder full of them — can still be looked at,
    * and looking at it shows the box rather than something inside it. */
   const [box, setBox] = createSignal<string | null>(null);
-  const here = () => (box() ? null : aside() ?? steps()[at()]?.definition ?? null);
+  const here = () =>
+    box() ? null : (aside() ?? steps()[at()]?.definition ?? null);
   const next = () => steps()[at() + 1]?.definition ?? null;
   const stepping = () => aside() === null;
 
@@ -207,8 +227,14 @@ export function App(props: { raw: Raw }) {
      *
      * Sideways, because that's what moving between definitions is. Up and down belong to
      * the thing you're reading. */
-    l: () => { markRead(); step(1); },
-    h: () => { markRead(); step(-1); },
+    l: () => {
+      markRead();
+      step(1);
+    },
+    h: () => {
+      markRead();
+      step(-1);
+    },
     /* Through the one in front of you, which is where up and down mean what they say.
      * A few lines at a time: one is too slow to hold, a screenful loses your place. */
     j: () => scroll(1),
@@ -219,7 +245,10 @@ export function App(props: { raw: Raw }) {
     ArrowDown: () => step(1),
     ArrowUp: () => step(-1),
     " ": () => step(1),
-    m: () => { toggleRead(); open(); },
+    m: () => {
+      toggleRead();
+      open();
+    },
     /* Away, and nothing left behind to say so. A strip down the side saying "there's a
      * thing here" is the thing, taking up room. */
     d: () => (showing() ? shut() : open()),
@@ -273,14 +302,19 @@ export function App(props: { raw: Raw }) {
     <>
       <header>
         <div class="t">
-          <span class="prog">{at() + 1}/{steps().length}</span>
+          <span class="prog">
+            {at() + 1}/{steps().length}
+          </span>
           {/* Only there when there's something to say, and only a warning when something
-            * might be missing. A review worked out a weaker way is worth knowing about and
-            * isn't worth alarm — told as alarm, it teaches you to ignore the alarm. */}
+           * might be missing. A review worked out a weaker way is worth knowing about and
+           * isn't worth alarm — told as alarm, it teaches you to ignore the alarm. */}
           <Show when={review().warnings.length}>
             <button
               class={`worry${hiding().length ? " bad" : ""}`}
-              onClick={() => { setCostOpen(false); setWorriesOpen((was) => !was); }}
+              onClick={() => {
+                setCostOpen(false);
+                setWorriesOpen((was) => !was);
+              }}
               title={said()}
               aria-label={said()}
             >
@@ -291,11 +325,14 @@ export function App(props: { raw: Raw }) {
           </Show>
 
           {/* What the reading cost, kept behind the same corner as everything else that's
-            * worth a look but isn't worth a line of the page. It doesn't change while you
-            * read, so it doesn't need to sit there while you do. */}
+           * worth a look but isn't worth a line of the page. It doesn't change while you
+           * read, so it doesn't need to sit there while you do. */}
           <button
             class="worry"
-            onClick={() => { setWorriesOpen(false); setCostOpen((was) => !was); }}
+            onClick={() => {
+              setWorriesOpen(false);
+              setCostOpen((was) => !was);
+            }}
             title="Cognitive load metrics"
             aria-label="Cognitive load metrics"
           >
@@ -303,9 +340,14 @@ export function App(props: { raw: Raw }) {
           </button>
 
           {/* How far out what the change reached is shown. The number is the point — a
-            * reader turning it down wants to know what they've turned it down to — so it
-            * sits beside the mark rather than hiding in a tooltip. */}
-          <Show when={whole().ripples > 0 && [...whole().definitions.values()].some((one) => one.away > 0)}>
+           * reader turning it down wants to know what they've turned it down to — so it
+           * sits beside the mark rather than hiding in a tooltip. */}
+          <Show
+            when={
+              whole().ripples > 0 &&
+              [...whole().definitions.values()].some((one) => one.away > 0)
+            }
+          >
             <button
               class={`worry steps${ripples() ? " on" : ""}`}
               onClick={further}
@@ -335,11 +377,18 @@ export function App(props: { raw: Raw }) {
         <Reading
           review={review()}
           here={here()}
-          box={laid().boxes.flatMap(spread).find((one) => one.key === box()) ?? null}
+          box={
+            laid()
+              .boxes.flatMap(spread)
+              .find((one) => one.key === box()) ?? null
+          }
           step={stepping() ? steps()[at()] : undefined}
           at={at()}
           onStep={step}
-          onRead={(by: number) => { markRead(); step(by); }}
+          onRead={(by: number) => {
+            markRead();
+            step(by);
+          }}
           onOpen={goTo}
           names={names()}
           read={here() !== null && read().has(here()!)}
@@ -355,13 +404,19 @@ export function App(props: { raw: Raw }) {
       </main>
 
       {/* A dialog rather than a floating box: the browser puts it above everything, traps
-        * the keyboard inside it, closes it on Escape and dims what's behind — all of which
-        * would otherwise be ours to get wrong. */}
-      <Panel open={costOpen()} onClose={() => setCostOpen(false)} title="Cognitive load metrics">
+       * the keyboard inside it, closes it on Escape and dims what's behind — all of which
+       * would otherwise be ours to get wrong. */}
+      <Panel
+        open={costOpen()}
+        onClose={() => setCostOpen(false)}
+        title="Cognitive load metrics"
+      >
         <ul>
           <li>{review().cost.peak_open} definitions in mind at once</li>
           <li>{review().cost.taken_on_faith} definitions out of order</li>
-          <li>{review().cost.jumps} {review().grouping || "module"} jumps</li>
+          <li>
+            {review().cost.jumps} {review().grouping || "module"} jumps
+          </li>
           <li>{review().steps.length} definitions to read</li>
         </ul>
       </Panel>
@@ -369,7 +424,11 @@ export function App(props: { raw: Raw }) {
       <Panel
         open={worriesOpen()}
         onClose={() => setWorriesOpen(false)}
-        title={hiding().length ? "This review might not be showing" : "Worked out a weaker way"}
+        title={
+          hiding().length
+            ? "This review might not be showing"
+            : "Worked out a weaker way"
+        }
       >
         <Show when={hiding().length}>
           <ul>
@@ -385,14 +444,18 @@ export function App(props: { raw: Raw }) {
           </ul>
         </Show>
       </Panel>
-
     </>
   );
 }
 
 /* Anything the page wants to say beside itself. Native, so Escape and the click outside are
  * the browser's job rather than ours to reimplement badly. */
-function Panel(props: { open: boolean; onClose: () => void; title: string; children: JSXElement }) {
+function Panel(props: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: JSXElement;
+}) {
   let box: HTMLDialogElement | undefined;
 
   createEffect(() => {

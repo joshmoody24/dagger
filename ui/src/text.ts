@@ -51,13 +51,19 @@ function trimmed(lines: Line[]) {
  * without the indentation every line beneath it still carries. Taking that much off the
  * rest lines them up the way the file has them. */
 function straighten(lines: Line[]) {
-  const under = lines.slice(1).filter((line) => line.text.trim() && line.at !== null);
+  const under = lines
+    .slice(1)
+    .filter((line) => line.text.trim() && line.at !== null);
   if (!under.length) return lines;
 
-  const spare = Math.min(...under.map((line) => line.text.match(/^ */)![0].length));
+  const spare = Math.min(
+    ...under.map((line) => line.text.match(/^ */)![0].length),
+  );
   if (!spare) return lines;
 
-  return lines.map((line, at) => (at ? { ...line, text: line.text.slice(spare) } : line));
+  return lines.map((line, at) =>
+    at ? { ...line, text: line.text.slice(spare) } : line,
+  );
 }
 
 /* Names in this review that can be pointed at without ambiguity.

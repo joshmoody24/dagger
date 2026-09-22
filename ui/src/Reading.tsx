@@ -1,5 +1,12 @@
 import { createEffect, createMemo, For, Show } from "solid-js";
-import type { Box, Definition as Def, Identity, Review, Shown, Step } from "./dagger.ts";
+import type {
+  Box,
+  Definition as Def,
+  Identity,
+  Review,
+  Shown,
+  Step,
+} from "./dagger.ts";
 import type { Painted } from "./colouring.ts";
 import { MARK, TINT, broke } from "./digest.ts";
 import { compare, focused } from "./diff.ts";
@@ -35,7 +42,8 @@ interface ReadingProps {
 
 /* The definition in front of the reader: what it is, why it's here, and how it changed. */
 export function Reading(props: ReadingProps) {
-  const definition = () => (props.here === null ? undefined : props.review.definitions.get(props.here));
+  const definition = () =>
+    props.here === null ? undefined : props.review.definitions.get(props.here);
   const leans = () =>
     props.review.edges
       .filter((edge) => edge.from === definition()?.id)
@@ -52,7 +60,8 @@ export function Reading(props: ReadingProps) {
     const edge = event.currentTarget as HTMLElement;
     edge.setPointerCapture(event.pointerId);
 
-    const move = (moved: PointerEvent) => props.onWiden(window.innerWidth - moved.clientX);
+    const move = (moved: PointerEvent) =>
+      props.onWiden(window.innerWidth - moved.clientX);
     const done = () => {
       edge.removeEventListener("pointermove", move);
       edge.removeEventListener("pointerup", done);
@@ -88,22 +97,38 @@ export function Reading(props: ReadingProps) {
     <Show when={definition() || props.box}>
       <aside
         class={`sheet ${props.sheet}`}
-        style={props.sheet === "beside" && props.width ? { width: `${props.width}px` } : undefined}
+        style={
+          props.sheet === "beside" && props.width
+            ? { width: `${props.width}px` }
+            : undefined
+        }
       >
         {/* Drag the edge to give the code more room. Only where it's a column — a drawer
-          * covers the width already. */}
+         * covers the width already. */}
         <Show when={props.sheet === "beside"}>
           <div class="wider" onPointerDown={widen} />
         </Show>
         <div class="sh">
           <Show when={definition()}>
-            {(one) => <b class={`ch ${TINT[one().mark]}`}>{MARK[one().mark]}</b>}
+            {(one) => (
+              <b class={`ch ${TINT[one().mark]}`}>{MARK[one().mark]}</b>
+            )}
           </Show>
           <h2>{definition()?.path ?? props.box?.label ?? ""}</h2>
-          <button class="ib grip" onClick={() => props.onExpand()} aria-label={props.sheet === "full" ? "Shrink" : "Expand"}>
+          <button
+            class="ib grip"
+            onClick={() => props.onExpand()}
+            aria-label={props.sheet === "full" ? "Shrink" : "Expand"}
+          >
             {props.sheet === "full" ? "⌄" : "⌃"}
           </button>
-          <button class="ib grip" onClick={() => props.onClose()} aria-label="Close">×</button>
+          <button
+            class="ib grip"
+            onClick={() => props.onClose()}
+            aria-label="Close"
+          >
+            ×
+          </button>
         </div>
 
         <div
@@ -142,15 +167,14 @@ export function Reading(props: ReadingProps) {
           </Show>
         </div>
 
-
         {/* Everything you can press sits together on the right, each wearing the key that
-          * does the same job — a hint is worth more on the thing it applies to than in a
-          * list somewhere else.
-          *
-          * Back and next are the same move in two directions, so they're said the same way
-          * and coloured the same: both mark as viewed, because both mean you're finished
-          * with what you're looking at. Moving without saying so is a quieter thing and
-          * looks it. */}
+         * does the same job — a hint is worth more on the thing it applies to than in a
+         * list somewhere else.
+         *
+         * Back and next are the same move in two directions, so they're said the same way
+         * and coloured the same: both mark as viewed, because both mean you're finished
+         * with what you're looking at. Moving without saying so is a quieter thing and
+         * looks it. */}
         <div class="nav">
           <div class="pair">
             <button
@@ -174,9 +198,14 @@ export function Reading(props: ReadingProps) {
             <button
               class={`pos${props.read ? " done" : ""}`}
               onClick={() => props.onToggle()}
-              aria-label={props.read ? "Viewed. Press to unmark" : "Not viewed yet"}
+              aria-label={
+                props.read ? "Viewed. Press to unmark" : "Not viewed yet"
+              }
             >
-              <span class="gl">{props.read ? "✓ " : ""}{props.at + 1}/{props.review.steps.length}</span>
+              <span class="gl">
+                {props.read ? "✓ " : ""}
+                {props.at + 1}/{props.review.steps.length}
+              </span>
               <kbd>m</kbd>
             </button>
             <button
@@ -188,7 +217,11 @@ export function Reading(props: ReadingProps) {
               <span class="gl">✓ back</span>
               <kbd>h</kbd>
             </button>
-            <button class="go" onClick={() => props.onRead(1)} aria-label="Viewed, and next">
+            <button
+              class="go"
+              onClick={() => props.onRead(1)}
+              aria-label="Viewed, and next"
+            >
               <span class="gl">✓ next</span>
               <kbd>l</kbd>
             </button>
@@ -212,7 +245,7 @@ function Definition(props: {
   return (
     <>
       {/* What a definition is comes from a fixed set, so it reads as a label rather than as
-        * more of the sentence the path is. */}
+       * more of the sentence the path is. */}
       <p class="file">
         {props.definition.file}
         <span class="kind">{props.definition.kind}</span>
@@ -220,16 +253,32 @@ function Definition(props: {
 
       <Show when={props.because.length}>
         <p class="why">
-          because: <Names ids={props.because} step={props.step} review={props.review} onOpen={props.onOpen} />
+          because:{" "}
+          <Names
+            ids={props.because}
+            step={props.step}
+            review={props.review}
+            onOpen={props.onOpen}
+          />
         </p>
       </Show>
       <Show when={props.uses.length}>
         <p class="why">
-          uses: <Names ids={props.uses} step={props.step} review={props.review} onOpen={props.onOpen} />
+          uses:{" "}
+          <Names
+            ids={props.uses}
+            step={props.step}
+            review={props.review}
+            onOpen={props.onOpen}
+          />
         </p>
       </Show>
 
-      <Diff definition={props.definition} names={props.names} onOpen={props.onOpen} />
+      <Diff
+        definition={props.definition}
+        names={props.names}
+        onOpen={props.onOpen}
+      />
     </>
   );
 }
@@ -237,9 +286,16 @@ function Definition(props: {
 /* A box that stands for no definition of its own — a folder, a package. There's nothing to
  * read here, so this says what's inside and hands the reader to it. Picking one of its
  * contents on the reader's behalf would be answering a question nobody asked. */
-function Package(props: { box: Box; review: Review; viewed: Set<Identity>; onOpen: (id: Identity) => void }) {
-  const held = () => [...inside(props.box)].sort((a, b) => a.name.localeCompare(b.name));
-  const changed = () => held().filter((one) => one.mark !== "affected" && one.mark !== "still");
+function Package(props: {
+  box: Box;
+  review: Review;
+  viewed: Set<Identity>;
+  onOpen: (id: Identity) => void;
+}) {
+  const held = () =>
+    [...inside(props.box)].sort((a, b) => a.name.localeCompare(b.name));
+  const changed = () =>
+    held().filter((one) => one.mark !== "affected" && one.mark !== "still");
 
   return (
     <>
@@ -248,7 +304,8 @@ function Package(props: { box: Box; review: Review; viewed: Set<Identity>; onOpe
         <span class="kind">package</span>
       </p>
       <p class="why">
-        {held().length} definition{held().length === 1 ? "" : "s"} here, {changed().length} changed
+        {held().length} definition{held().length === 1 ? "" : "s"} here,{" "}
+        {changed().length} changed
       </p>
 
       <ul class="held">
@@ -295,8 +352,12 @@ function Names(props: {
       {(one, index) => (
         <>
           <Show when={index() > 0}>, </Show>
-          <b class={one.soon ? "soon" : ""} onClick={() => props.onOpen(one.definition.id)}>
-            {one.definition.name}{one.soon ? " (not yet seen)" : ""}
+          <b
+            class={one.soon ? "soon" : ""}
+            onClick={() => props.onOpen(one.definition.id)}
+          >
+            {one.definition.name}
+            {one.soon ? " (not yet seen)" : ""}
           </b>
         </>
       )}
@@ -304,33 +365,47 @@ function Names(props: {
   );
 }
 
-function Diff(props: { definition: Def; names: Names; onOpen: (id: Identity) => void }) {
+function Diff(props: {
+  definition: Def;
+  names: Names;
+  onOpen: (id: Identity) => void;
+}) {
   /* Fetches the grammar for whatever this file is written in, once it's known. */
-  createEffect(() => readied(speaks(props.definition.file), dressing(), wearing()));
+  createEffect(() =>
+    readied(speaks(props.definition.file), dressing(), wearing()),
+  );
 
   /* Held rather than worked out again on each read: every one of these is walked once per
    * line while the lines are drawn, and colouring a block is far too much work to repeat
    * a hundred times over the same block. */
   const lines = createMemo(() => {
-    const [was, is] = [stitch(props.definition.before), stitch(props.definition.after)];
+    const [was, is] = [
+      stitch(props.definition.before),
+      stitch(props.definition.after),
+    ];
     if (!was && !is) return [];
-    const all: Shown[] =
-      !was
-        ? is!.map((line) => ({ mark: "+" as const, line }))
-        : !is
-          ? was.map((line) => ({ mark: "−" as const, line }))
-          : compare(was, is);
+    const all: Shown[] = !was
+      ? is!.map((line) => ({ mark: "+" as const, line }))
+      : !is
+        ? was.map((line) => ({ mark: "−" as const, line }))
+        : compare(was, is);
     return focused(all);
   });
 
   /* Unchanged means unchanged: a definition in the review because something it depends on
    * moved has no diff to show, only itself. */
-  const unchanged = createMemo(() => lines().length > 0 && lines().every((one) => one.mark === " "));
+  const unchanged = createMemo(
+    () => lines().length > 0 && lines().every((one) => one.mark === " "),
+  );
 
   /* Coloured in one pass over the whole thing, so the grammar knows where it is. */
   const tinted = createMemo(() => {
     void colouring();
-    return painted(lines().map((one) => one.line.text), speaks(props.definition.file), wearing());
+    return painted(
+      lines().map((one) => one.line.text),
+      speaks(props.definition.file),
+      wearing(),
+    );
   });
 
   /* Room for the largest line number this diff holds, and no more. */
@@ -340,16 +415,24 @@ function Diff(props: { definition: Def; names: Names; onOpen: (id: Identity) => 
   };
 
   return (
-    <pre class={`code${unchanged() ? " same" : ""}`} style={{ "--gutter": gutter() }}>
+    <pre
+      class={`code${unchanged() ? " same" : ""}`}
+      style={{ "--gutter": gutter() }}
+    >
       <For each={lines()}>
         {(one, at) => (
-          <span class={`ln ${one.mark === "+" ? "a" : one.mark === "−" ? "r" : ""}`}>
+          <span
+            class={`ln ${one.mark === "+" ? "a" : one.mark === "−" ? "r" : ""}`}
+          >
             <i>{one.mark === " " ? "" : one.mark}</i>
             {/* Where it is in the file, so a reader can say "line 31" and be understood.
-              * A gap stands between two pieces and is nowhere in the file, so it has no
-              * number to show. */}
+             * A gap stands between two pieces and is nowhere in the file, so it has no
+             * number to show. */}
             <u>{one.line.at ?? ""}</u>
-            <Show when={one.line.at !== null} fallback={<span class="gap">…</span>}>
+            <Show
+              when={one.line.at !== null}
+              fallback={<span class="gap">…</span>}
+            >
               <Code
                 pieces={tinted()[at()] ?? [{ text: one.line.text }]}
                 names={props.names}
@@ -386,7 +469,11 @@ function Code(props: {
       {(part) => (
         <Show
           when={part.goes}
-          fallback={<span style={part.colour ? { color: part.colour } : undefined}>{part.text}</span>}
+          fallback={
+            <span style={part.colour ? { color: part.colour } : undefined}>
+              {part.text}
+            </span>
+          }
         >
           {(goes) => (
             <span

@@ -1,4 +1,12 @@
-import type { Box, Definition, Edge, Identity, Laid, Review, Spot } from "./dagger.ts";
+import type {
+  Box,
+  Definition,
+  Edge,
+  Identity,
+  Laid,
+  Review,
+  Spot,
+} from "./dagger.ts";
 
 /* Boxes inside boxes, all the way down.
  *
@@ -11,13 +19,27 @@ import type { Box, Definition, Edge, Identity, Laid, Review, Spot } from "./dagg
  */
 
 export const NODE_H = 28;
-const ROW_GAP = 22, BAND_GAP = 30, BOX_GAP = 14;
-const PAD_X = 12, PAD_TOP = 24, PAD_BOTTOM = 10, NODE_GAP = 10, MARGIN = 16;
+const ROW_GAP = 22,
+  BAND_GAP = 30,
+  BOX_GAP = 14;
+const PAD_X = 12,
+  PAD_TOP = 24,
+  PAD_BOTTOM = 10,
+  NODE_GAP = 10,
+  MARGIN = 16;
 /* Room for a box's name and nothing else, which is all an empty one needs. */
 const LABEL = 26;
 
 /* Louder first, so a row of nodes reads worst-first when nothing else decides the order. */
-const LOUDNESS = ["contract", "removed", "added", "body", "docs", "affected", "still"];
+const LOUDNESS = [
+  "contract",
+  "removed",
+  "added",
+  "body",
+  "docs",
+  "affected",
+  "still",
+];
 
 /* How wide a character is in the graph's font, which has to agree with style.css: a
  * monospace advance is 0.6 of its size, and the boxes are drawn from this rather than
@@ -36,7 +58,8 @@ export const RADIUS = { node: 5, box: 9, step: 2 };
 /* A box wears its name along the top, so it can't be narrower than the name. Smaller than
  * the nodes' font, and it has to agree with style.css the same way. */
 const BOX_FONT = 12.5;
-const labelWidth = (text: string) => Math.ceil(text.length * BOX_FONT * 0.6) + 22;
+const labelWidth = (text: string) =>
+  Math.ceil(text.length * BOX_FONT * 0.6) + 22;
 
 /** A name as the graph shows it: long ones lose their tail rather than their box. */
 export const shorten = (name: string) =>
@@ -44,7 +67,8 @@ export const shorten = (name: string) =>
 
 /* Rounded up, never down: a box half a pixel too small is a name poking out of it. The 34
  * is the space either side plus the mark and the gap after it. */
-export const widthOf = (text: string) => Math.ceil(shorten(text).length * CHAR) + 34;
+export const widthOf = (text: string) =>
+  Math.ceil(shorten(text).length * CHAR) + 34;
 
 /* Everything with no package above it: a script at the top of the repository, a config
  * file. They have nothing to do with each other, which is the point of keeping them in one
@@ -55,7 +79,8 @@ const MISC = "misc";
 /* What to call a module whose own definition isn't in this review, so its name never got
  * reported. The file it lives in is the best guess left, minus the extension — which is
  * about the file on disk, not about the code. */
-const guessed = (path: string) => (path.split("/").at(-1) ?? path).replace(/\.[^.]+$/, "");
+const guessed = (path: string) =>
+  (path.split("/").at(-1) ?? path).replace(/\.[^.]+$/, "");
 
 /* A module is its place, so it gives its box a name rather than taking a node inside the
  * box that stands for the box. */
@@ -82,7 +107,9 @@ export function layout(review: Review): Laid {
   );
   /* Named for what the page calls a file's box, which is a module where there is one. */
   const modules = new Map<string, Definition>(
-    [...roots].flatMap(([file, held]) => (held.length === 1 ? [[file, held[0]]] : [])),
+    [...roots].flatMap(([file, held]) =>
+      held.length === 1 ? [[file, held[0]]] : [],
+    ),
   );
 
   const leansOn = new Map<Identity, Identity[]>(nodes.map((n) => [n.id, []]));
@@ -94,7 +121,9 @@ export function layout(review: Review): Laid {
    * order — what holds something up is drawn above it, and that's what the lines mean —
    * but wherever the shape leaves a choice, the choice goes to the reading. A reader
    * working down the list shouldn't have their eye thrown across the page and back. */
-  const reading = new Map(review.steps.map((step, at) => [step.definition, at]));
+  const reading = new Map(
+    review.steps.map((step, at) => [step.definition, at]),
+  );
   const soonest = (held: Definition[]) =>
     Math.min(...held.map((one) => reading.get(one.id) ?? Infinity));
 
@@ -102,7 +131,8 @@ export function layout(review: Review): Laid {
   /* A file whose only changed definition is its own module still needs a box: the module is
    * drawn as its file, so without one there's nothing on the page to stand for it — nothing
    * to light up when it's being read, and nothing for the arrow to point at. */
-  for (const place of modules.keys()) if (!byPlace.has(place)) byPlace.set(place, []);
+  for (const place of modules.keys())
+    if (!byPlace.has(place)) byPlace.set(place, []);
 
   const groupOf = (place: string) => {
     const [first] = byPlace.get(place) ?? [];
@@ -116,7 +146,9 @@ export function layout(review: Review): Laid {
      * module a box inside the box would be saying the same thing twice — the same reason a
      * module never takes a node inside its own file. */
     const root = rootOf(everything, byPlace, modules);
-    const under = everything.filter((path: string) => !root || path !== root.file);
+    const under = everything.filter(
+      (path: string) => !root || path !== root.file,
+    );
     const stacked = laning(under);
 
     const inner = [...under]
@@ -165,9 +197,12 @@ export function layout(review: Review): Laid {
       /* Whatever this holds directly. The boxes inside were built first, so by the time
        * the file's own box asks, everything they claimed is spoken for — and whatever is
        * left had a container the page never drew, which shouldn't lose it its place. */
-      const shown = here.filter((node) => (one ? node.parent === one.id : true));
+      const shown = here.filter((node) =>
+        one ? node.parent === one.id : true,
+      );
       for (const node of shown) placed.add(node.id);
-      const left = one === module ? here.filter((node) => !placed.has(node.id)) : [];
+      const left =
+        one === module ? here.filter((node) => !placed.has(node.id)) : [];
 
       return sized({
         key,
@@ -179,9 +214,12 @@ export function layout(review: Review): Laid {
     };
 
     const placed = new Set<Identity>();
-    if (!several) return box(module, path, module ? module.name : guessed(path));
+    if (!several)
+      return box(module, path, module ? module.name : guessed(path));
 
-    const inside = (roots.get(path) ?? []).map((one) => box(one, `${path}#${one.id}`, one.name));
+    const inside = (roots.get(path) ?? []).map((one) =>
+      box(one, `${path}#${one.id}`, one.name),
+    );
     const loose = here.filter((node) => !placed.has(node.id));
     return sized({
       key: path,
@@ -212,10 +250,19 @@ export function layout(review: Review): Laid {
 /* The module a box answers to: the one nothing else in it encloses, whose file holds
  * nothing but the module itself. Anything less certain than that — two of them, or one with
  * definitions of its own to show — keeps a box of its own. */
-function rootOf(paths: string[], byPlace: Map<string, Definition[]>, modules: Map<string, Definition>) {
+function rootOf(
+  paths: string[],
+  byPlace: Map<string, Definition[]>,
+  modules: Map<string, Definition>,
+) {
   const roots = paths
     .map((path) => modules.get(path))
-    .filter((module) => module && module.scope.length === 0 && !byPlace.get(module.file)?.length);
+    .filter(
+      (module) =>
+        module &&
+        module.scope.length === 0 &&
+        !byPlace.get(module.file)?.length,
+    );
   return roots.length === 1 ? roots[0]! : null;
 }
 
@@ -227,7 +274,8 @@ function sized(box: Omit<Box, "boxes" | "w" | "h">): Box {
     box.rows.length ? Math.max(...box.rows.map(rowWidth)) : 0,
   );
   const lanesDeep = box.lanes.length
-    ? box.lanes.reduce((sum, lane) => sum + laneHeight(lane), 0) + BOX_GAP * (box.lanes.length - 1)
+    ? box.lanes.reduce((sum, lane) => sum + laneHeight(lane), 0) +
+      BOX_GAP * (box.lanes.length - 1)
     : 0;
   const rowsDeep = box.rows.length
     ? box.rows.length * NODE_H + ROW_GAP * (box.rows.length - 1)
@@ -242,7 +290,10 @@ function sized(box: Omit<Box, "boxes" | "w" | "h">): Box {
   return {
     ...box,
     boxes: box.lanes.flat(),
-    w: Math.max(across + 2 * PAD_X, labelWidth(box.module ? `${box.label}xx` : box.label)),
+    w: Math.max(
+      across + 2 * PAD_X,
+      labelWidth(box.module ? `${box.label}xx` : box.label),
+    ),
     h: hollow ? LABEL : PAD_TOP + lanesDeep + between + rowsDeep + PAD_BOTTOM,
   };
 }
@@ -297,7 +348,8 @@ function layer(
    * being walked through in order. Anything with no place in the reading is drawn but
    * never stopped at, so it goes last and out of the way. */
   const at = (one: Definition) => reading.get(one.id) ?? Infinity;
-  for (const row of rows) if (row) row.sort((a, b) => at(a) - at(b) || byLoudness(a, b));
+  for (const row of rows)
+    if (row) row.sort((a, b) => at(a) - at(b) || byLoudness(a, b));
   /* Row nought is whatever leans on nothing, and it goes at the top: a reader meets what
    * holds things up before the things it holds. */
   return rows.filter(Boolean).flatMap(folded);
@@ -310,7 +362,8 @@ function layer(
 function folded(row: Definition[]) {
   const across = Math.ceil(Math.sqrt(row.length));
   const lines = [];
-  for (let at = 0; at < row.length; at += across) lines.push(row.slice(at, at + across));
+  for (let at = 0; at < row.length; at += across)
+    lines.push(row.slice(at, at + across));
   return lines;
 }
 
@@ -319,9 +372,12 @@ function folded(row: Definition[]) {
  * whatever order they turned up in, and half the lines between them run the wrong way. */
 function stacking(byPlace: Map<string, Definition[]>, edges: Edge[]) {
   const placeOf = new Map<Identity, string>();
-  for (const [path, held] of byPlace) for (const node of held) placeOf.set(node.id, path);
+  for (const [path, held] of byPlace)
+    for (const node of held) placeOf.set(node.id, path);
 
-  const leansOn = new Map<string, string[]>([...byPlace.keys()].map((path) => [path, []]));
+  const leansOn = new Map<string, string[]>(
+    [...byPlace.keys()].map((path) => [path, []]),
+  );
   for (const edge of edges) {
     const from = placeOf.get(edge.from);
     const to = placeOf.get(edge.to);
@@ -357,10 +413,13 @@ function bands(boxes: Box[], review: Review) {
   /* Side by side in a band, nothing holds anything else up, so which comes first is free
    * — and goes to whichever is read first, left to right, the way the list is worked
    * through. */
-  const reading = new Map(review.steps.map((step, at) => [step.definition, at]));
+  const reading = new Map(
+    review.steps.map((step, at) => [step.definition, at]),
+  );
   const soonest = (box: Box) =>
     Math.min(...[...inside(box)].map((one) => reading.get(one.id) ?? Infinity));
-  for (const band of found) if (band) band.sort((a, b) => soonest(a) - soonest(b));
+  for (const band of found)
+    if (band) band.sort((a, b) => soonest(a) - soonest(b));
 
   return found.filter(Boolean);
 }
@@ -368,10 +427,17 @@ function bands(boxes: Box[], review: Review) {
 /* How far above the bottom something sits: one more than the furthest thing it leans on.
  * A circle is settled by whoever is asked first, which is enough — being in a circle means
  * there is no right answer, only a readable one. */
-function depth<K>(id: K, within: Set<K>, leansOn: Map<K, K[]>, seen: Map<K, number>): number {
+function depth<K>(
+  id: K,
+  within: Set<K>,
+  leansOn: Map<K, K[]>,
+  seen: Map<K, number>,
+): number {
   if (seen.has(id)) return seen.get(id)!;
   seen.set(id, 0);
-  const below = (leansOn.get(id) || []).filter((other) => within.has(other) && other !== id);
+  const below = (leansOn.get(id) || []).filter(
+    (other) => within.has(other) && other !== id,
+  );
   const found = below.length
     ? 1 + Math.max(...below.map((other) => depth(other, within, leansOn, seen)))
     : 0;
@@ -380,10 +446,13 @@ function depth<K>(id: K, within: Set<K>, leansOn: Map<K, K[]>, seen: Map<K, numb
 }
 
 const byLoudness = (a: Definition, b: Definition) =>
-  LOUDNESS.indexOf(a.mark) - LOUDNESS.indexOf(b.mark) || a.name.localeCompare(b.name);
+  LOUDNESS.indexOf(a.mark) - LOUDNESS.indexOf(b.mark) ||
+  a.name.localeCompare(b.name);
 const rowWidth = (row: Definition[]) =>
-  row.reduce((sum, n) => sum + widthOf(n.name), 0) + NODE_GAP * (row.length - 1);
-const laneWidth = (lane: Box[]) => lane.reduce((sum, f) => sum + f.w, 0) + BOX_GAP * (lane.length - 1);
+  row.reduce((sum, n) => sum + widthOf(n.name), 0) +
+  NODE_GAP * (row.length - 1);
+const laneWidth = (lane: Box[]) =>
+  lane.reduce((sum, f) => sum + f.w, 0) + BOX_GAP * (lane.length - 1);
 const laneHeight = (lane: Box[]) => Math.max(...lane.map((f) => f.h));
 
 function collect<T, K>(items: T[], by: (item: T) => K) {

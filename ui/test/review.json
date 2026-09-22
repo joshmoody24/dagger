@@ -323,17 +323,12 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": [
-            "body"
-          ]
+          "parts": ["body"]
         }
       },
       "reached": null,
       "parent": null,
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "409": {
       "role": "item",
@@ -341,19 +336,12 @@
         "kept": {
           "before": {
             "locator": {
-              "scope": [
-                "ui",
-                "src",
-                "App"
-              ],
+              "scope": ["ui", "src", "App"],
               "name": "App"
             },
             "role": "item",
             "parent": {
-              "scope": [
-                "ui",
-                "src"
-              ],
+              "scope": ["ui", "src"],
               "name": "App"
             },
             "kind": "function",
@@ -386,19 +374,12 @@
           },
           "after": {
             "locator": {
-              "scope": [
-                "ui",
-                "src",
-                "App"
-              ],
+              "scope": ["ui", "src", "App"],
               "name": "App"
             },
             "role": "item",
             "parent": {
-              "scope": [
-                "ui",
-                "src"
-              ],
+              "scope": ["ui", "src"],
               "name": "App"
             },
             "kind": "function",
@@ -435,16 +416,12 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": [
-            "body"
-          ]
+          "parts": ["body"]
         }
       },
       "reached": null,
       "parent": "411",
-      "group": [
-        "ui"
-      ]
+      "group": ["ui"]
     },
     "411": {
       "role": "container",
@@ -452,10 +429,7 @@
         "kept": {
           "before": {
             "locator": {
-              "scope": [
-                "ui",
-                "src"
-              ],
+              "scope": ["ui", "src"],
               "name": "App"
             },
             "role": "container",
@@ -479,10 +453,7 @@
           },
           "after": {
             "locator": {
-              "scope": [
-                "ui",
-                "src"
-              ],
+              "scope": ["ui", "src"],
               "name": "App"
             },
             "role": "container",
@@ -515,9 +486,7 @@
       },
       "reached": null,
       "parent": null,
-      "group": [
-        "ui"
-      ]
+      "group": ["ui"]
     },
     "412": {
       "role": "item",
@@ -525,19 +494,12 @@
         "kept": {
           "before": {
             "locator": {
-              "scope": [
-                "ui",
-                "src",
-                "Reading"
-              ],
+              "scope": ["ui", "src", "Reading"],
               "name": "Reading"
             },
             "role": "item",
             "parent": {
-              "scope": [
-                "ui",
-                "src"
-              ],
+              "scope": ["ui", "src"],
               "name": "Reading"
             },
             "kind": "function",
@@ -581,19 +543,12 @@
           },
           "after": {
             "locator": {
-              "scope": [
-                "ui",
-                "src",
-                "Reading"
-              ],
+              "scope": ["ui", "src", "Reading"],
               "name": "Reading"
             },
             "role": "item",
             "parent": {
-              "scope": [
-                "ui",
-                "src"
-              ],
+              "scope": ["ui", "src"],
               "name": "Reading"
             },
             "kind": "function",
@@ -641,16 +596,12 @@
         "kept": {
           "contract": false,
           "moved": false,
-          "parts": [
-            "body"
-          ]
+          "parts": ["body"]
         }
       },
       "reached": null,
       "parent": "416",
-      "group": [
-        "ui"
-      ]
+      "group": ["ui"]
     },
     "416": {
       "role": "container",
@@ -658,10 +609,7 @@
         "kept": {
           "before": {
             "locator": {
-              "scope": [
-                "ui",
-                "src"
-              ],
+              "scope": ["ui", "src"],
               "name": "Reading"
             },
             "role": "container",
@@ -685,10 +633,7 @@
           },
           "after": {
             "locator": {
-              "scope": [
-                "ui",
-                "src"
-              ],
+              "scope": ["ui", "src"],
               "name": "Reading"
             },
             "role": "container",
@@ -721,18 +666,14 @@
       },
       "reached": null,
       "parent": null,
-      "group": [
-        "ui"
-      ]
+      "group": ["ui"]
     },
     "421": {
       "role": "container",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "role": "container",
@@ -781,27 +722,19 @@
       "change": "added",
       "reached": null,
       "parent": "14",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "422": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "spot"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -847,27 +780,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "423": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "reported"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -913,27 +838,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "424": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "opened"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -968,27 +885,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "425": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "preambles"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1023,27 +932,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "426": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "what_is_written_above_a_definition_belongs_to_it"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1089,27 +990,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "427": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_blank_line_ends_the_preamble"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1155,27 +1048,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "428": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_preamble_never_takes_another_definitions_line"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1221,27 +1106,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "429": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_module_keeps_only_what_nobody_else_claims"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1287,27 +1164,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "430": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_module_is_named_after_its_file"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1342,27 +1211,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "431": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_file_with_nothing_left_over_has_no_module"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1408,27 +1269,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "432": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_contract_stops_at_the_documentation"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1474,27 +1327,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "433": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "the_last_block_before_the_rule_is_the_declaration"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1540,27 +1385,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "434": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_hover_with_nothing_fenced_says_nothing"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1595,27 +1432,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "435": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_uri_comes_back_as_a_path_inside_the_snapshot"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1650,27 +1479,19 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     },
     "436": {
       "role": "item",
       "sides": {
         "added": {
           "locator": {
-            "scope": [
-              "dagger_lsp_adapter",
-              "tests"
-            ],
+            "scope": ["dagger_lsp_adapter", "tests"],
             "name": "a_language_is_guessed_from_the_extension"
           },
           "role": "item",
           "parent": {
-            "scope": [
-              "dagger_lsp_adapter"
-            ],
+            "scope": ["dagger_lsp_adapter"],
             "name": "tests"
           },
           "kind": "fn",
@@ -1705,10 +1526,7 @@
       "change": "added",
       "reached": null,
       "parent": "421",
-      "group": [
-        "adapters",
-        "lsp"
-      ]
+      "group": ["adapters", "lsp"]
     }
   },
   "reading": [
@@ -1857,16 +1675,11 @@
   ],
   "groups": [
     {
-      "path": [
-        "adapters",
-        "lsp"
-      ],
+      "path": ["adapters", "lsp"],
       "band": 0
     },
     {
-      "path": [
-        "ui"
-      ],
+      "path": ["ui"],
       "band": 0
     }
   ],

@@ -1,4 +1,11 @@
-import type { Definition, Mark, RawDefinition, Identity, Raw, Review } from "./dagger.ts";
+import type {
+  Definition,
+  Mark,
+  RawDefinition,
+  Identity,
+  Raw,
+  Review,
+} from "./dagger.ts";
 
 /* Turns what dagger sent into the shapes a page wants: one word for what happened to each
  * definition, and the two sides pulled out of a shape built so "in neither" can't be
@@ -6,10 +13,22 @@ import type { Definition, Mark, RawDefinition, Identity, Raw, Review } from "./d
  */
 
 export const MARK = {
-  added: "+", removed: "−", contract: "!", body: "~", docs: '"', affected: "≈", still: "·",
+  added: "+",
+  removed: "−",
+  contract: "!",
+  body: "~",
+  docs: '"',
+  affected: "≈",
+  still: "·",
 };
 export const TINT = {
-  added: "add", removed: "del", contract: "chg", body: "chg", docs: "chg", affected: "aff", still: "aff",
+  added: "add",
+  removed: "del",
+  contract: "chg",
+  body: "chg",
+  docs: "chg",
+  affected: "aff",
+  still: "aff",
 };
 
 /* Nearly nothing, now.
@@ -27,8 +46,18 @@ export function digest(raw: Raw): Review {
      * definition is added, removed, or kept with both — never neither. Asked this way
      * rather than by reaching for a field, the compiler holds that to it. */
     const sides = one.sides;
-    const before = "kept" in sides ? sides.kept.before : "removed" in sides ? sides.removed : null;
-    const after = "kept" in sides ? sides.kept.after : "added" in sides ? sides.added : null;
+    const before =
+      "kept" in sides
+        ? sides.kept.before
+        : "removed" in sides
+          ? sides.removed
+          : null;
+    const after =
+      "kept" in sides
+        ? sides.kept.after
+        : "added" in sides
+          ? sides.added
+          : null;
     const shown = (after || before)!;
 
     definitions.set(id, {
@@ -56,7 +85,9 @@ export function digest(raw: Raw): Review {
     ripples: raw.ripples,
     cost: raw.cost,
     grouping: raw.grouping ?? undefined,
-    bands: new Map(raw.groups.map((group) => [group.path.join("/"), group.band])),
+    bands: new Map(
+      raw.groups.map((group) => [group.path.join("/"), group.band]),
+    ),
     warnings: raw.warnings,
   };
 }
@@ -69,7 +100,8 @@ function marking(one: RawDefinition): Mark {
 
   const edits = change.kept;
   if (edits.contract) return "contract";
-  if (edits.parts.includes("body") || edits.parts.includes("type")) return "body";
+  if (edits.parts.includes("body") || edits.parts.includes("type"))
+    return "body";
   if (edits.parts.includes("docs")) return "docs";
   return one.reached !== null ? "affected" : "still";
 }

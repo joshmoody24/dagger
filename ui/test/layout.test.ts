@@ -13,10 +13,14 @@ import { NODE_H, layout, shorten, widthOf } from "../src/layout.ts";
 import { phases, standing } from "../src/progress.ts";
 import { stitch } from "../src/text.ts";
 
-const raw: Raw = JSON.parse(fs.readFileSync(new URL("./review.json", import.meta.url), "utf8"));
+const raw: Raw = JSON.parse(
+  fs.readFileSync(new URL("./review.json", import.meta.url), "utf8"),
+);
 const review = digest(raw);
 const laid = layout(review);
-const nodes = [...review.definitions.values()].filter((d) => d.kind !== "module");
+const nodes = [...review.definitions.values()].filter(
+  (d) => d.kind !== "module",
+);
 
 /* Two different things arrive: what there is to read, and what has to be on the page for
  * the reading to make sense. Everything in the reading order is here to be drawn, and what
@@ -28,14 +32,19 @@ test("everything to read is on the page, and the rest is modules", () => {
 
   for (const definition of review.definitions.values()) {
     if (ordered.has(definition.id)) continue;
-    assert.equal(definition.kind, "module", `${definition.path} is on the page but never read`);
+    assert.equal(
+      definition.kind,
+      "module",
+      `${definition.path} is on the page but never read`,
+    );
   }
 });
 
 test("every definition but a module gets a place", () => {
   assert.equal(laid.at.size, nodes.length);
   for (const [, spot] of laid.at) {
-    for (const measure of [spot.x, spot.y, spot.w]) assert.ok(Number.isFinite(measure));
+    for (const measure of [spot.x, spot.y, spot.w])
+      assert.ok(Number.isFinite(measure));
   }
 });
 
@@ -44,7 +53,10 @@ test("a module has no node of its own", () => {
   for (const definition of review.definitions.values()) {
     if (definition.kind === "module") assert.ok(!laid.at.has(definition.id));
   }
-  assert.ok(laid.modules.size > 0, "the sample should have at least one module");
+  assert.ok(
+    laid.modules.size > 0,
+    "the sample should have at least one module",
+  );
 });
 
 test("nothing is drawn on top of anything else", () => {
@@ -62,10 +74,17 @@ test("nothing is drawn on top of anything else", () => {
 /* Boxes nest to whatever depth the grouping has, so this checks the rule rather than two
  * named levels of it: nothing is ever drawn outside the box that holds it. */
 test("nothing escapes the box that holds it", () => {
-  type Rect = { x?: number | undefined; y?: number | undefined; w?: number | undefined; h: number };
+  type Rect = {
+    x?: number | undefined;
+    y?: number | undefined;
+    w?: number | undefined;
+    h: number;
+  };
   const within = (child: Rect, box: Box) =>
-    child.x! >= box.x! && child.x! + child.w! <= box.x! + box.w &&
-    child.y! >= box.y! && child.y! + child.h <= box.y! + box.h;
+    child.x! >= box.x! &&
+    child.x! + child.w! <= box.x! + box.w &&
+    child.y! >= box.y! &&
+    child.y! + child.h <= box.y! + box.h;
 
   const walk = (box: Box) => {
     for (const child of box.boxes) {
@@ -75,7 +94,10 @@ test("nothing escapes the box that holds it", () => {
     for (const row of box.rows) {
       for (const node of row) {
         const spot = laid.at.get(node.id);
-        assert.ok(within({ ...spot, h: NODE_H }, box), `${node.name} escapes ${box.key}`);
+        assert.ok(
+          within({ ...spot, h: NODE_H }, box),
+          `${node.name} escapes ${box.key}`,
+        );
       }
     }
   };
@@ -87,7 +109,9 @@ test("nothing escapes the box that holds it", () => {
  * other way are the ones where no drawing could do better: both ends are in the same cycle,
  * so one of them has to come first. Those are drawn differently on purpose. */
 test("a line only runs downwards where the code is circular", () => {
-  const placed = review.edges.filter((edge) => laid.at.has(edge.from) && laid.at.has(edge.to));
+  const placed = review.edges.filter(
+    (edge) => laid.at.has(edge.from) && laid.at.has(edge.to),
+  );
   const circular = cycles(placed);
 
   for (const edge of placed) {
@@ -106,7 +130,8 @@ const name = (id: Identity) => review.definitions.get(id)!.name;
  * group of its own. */
 function cycles(edges: Edge[]) {
   const leadsTo = new Map<Identity, Identity[]>();
-  for (const edge of edges) leadsTo.set(edge.from, [...(leadsTo.get(edge.from) || []), edge.to]);
+  for (const edge of edges)
+    leadsTo.set(edge.from, [...(leadsTo.get(edge.from) || []), edge.to]);
 
   const order = new Map<Identity, number>();
   const low = new Map<Identity, number>();
@@ -146,17 +171,24 @@ test("a name stays inside its node", () => {
   for (const node of nodes) {
     const shown = shorten(node.name);
     const needs = 10 + CHAR + 6 + shown.length * CHAR + 10;
-    assert.ok(widthOf(node.name) >= needs, `${shown} needs ${needs}, box is ${widthOf(node.name)}`);
+    assert.ok(
+      widthOf(node.name) >= needs,
+      `${shown} needs ${needs}, box is ${widthOf(node.name)}`,
+    );
   }
 });
 
 test("a definition in one piece reads as itself", () => {
   const whole = [...review.definitions.values()].find(
-    (definition) => definition.after && Object.values(definition.after.parts).flat().length === 1,
+    (definition) =>
+      definition.after &&
+      Object.values(definition.after.parts).flat().length === 1,
   );
   assert.ok(whole?.after, "no definition arrives in a single piece");
   const piece = Object.values(whole.after.parts).flat()[0];
-  const shown = stitch(whole.after)!.map((line) => line.text).join("\n");
+  const shown = stitch(whole.after)!
+    .map((line) => line.text)
+    .join("\n");
   assert.equal(shown, piece.text.replace(/^\n+|\n+$/g, ""));
 });
 
@@ -164,14 +196,22 @@ test("a definition in one piece reads as itself", () => {
  * running two distant lines together. */
 test("pieces that aren't next to each other are separated", () => {
   const scattered = [...review.definitions.values()].find((definition) => {
-    const pieces = definition.after && Object.values(definition.after.parts).flat();
+    const pieces =
+      definition.after && Object.values(definition.after.parts).flat();
     if (!pieces || pieces.length < 2) return false;
     const inOrder = [...pieces].sort((a, b) => a.span.start - b.span.start);
-    return inOrder.some((piece, index) => index > 0 && piece.span.start > inOrder[index - 1].span.end);
+    return inOrder.some(
+      (piece, index) =>
+        index > 0 && piece.span.start > inOrder[index - 1].span.end,
+    );
   });
 
   if (!scattered) return;
-  assert.ok(stitch(scattered.after)!.some((line) => line.at === null && line.text === "…"));
+  assert.ok(
+    stitch(scattered.after)!.some(
+      (line) => line.at === null && line.text === "…",
+    ),
+  );
 });
 
 /* A reader points at a line — "the check on line 31" — so every line that's really in the
@@ -182,14 +222,19 @@ test("every line says where it is in the file", () => {
     if (!lines) continue;
 
     const numbered = lines.filter((line) => line.at !== null);
-    for (const line of numbered) assert.ok(line.at! >= 1, `${definition.path} has line ${line.at}`);
+    for (const line of numbered)
+      assert.ok(line.at! >= 1, `${definition.path} has line ${line.at}`);
 
     /* Within one stretch they run consecutively; a gap is where they may jump. */
     for (let at = 1; at < lines.length; at++) {
       const before: Line = lines[at - 1];
       const now: Line = lines[at];
       if (before.at === null || now.at === null) continue;
-      assert.equal(now.at, before.at + 1, `${definition.path} jumps from ${before.at} to ${now.at}`);
+      assert.equal(
+        now.at,
+        before.at + 1,
+        `${definition.path} jumps from ${before.at} to ${now.at}`,
+      );
     }
   }
 });
@@ -208,7 +253,11 @@ test("a progress report reads the same however the two readings interleave", () 
   ];
 
   const [laying, older, newer] = phases(said);
-  assert.equal(laying.done, true, "laying out is over once a reading has begun");
+  assert.equal(
+    laying.done,
+    true,
+    "laying out is over once a reading has begun",
+  );
 
   assert.equal(older.said, "reading aaa");
   assert.deepEqual(older.through, [2, 7], "each side took the line naming it");
@@ -280,9 +329,11 @@ test("a short diff is left alone", () => {
  * additions gives back the older version, and everything but the removals the newer. A
  * diff that doesn't is lying about one of them. */
 test("a diff rebuilds both of the sides it came from", () => {
-  const lines = (texts: string[]) => texts.map((text, at) => ({ at: at + 1, text }));
+  const lines = (texts: string[]) =>
+    texts.map((text, at) => ({ at: at + 1, text }));
   let seed = 7;
-  const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const next = () =>
+    (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
 
   for (let round = 0; round < 200; round++) {
     const was = Array.from({ length: Math.floor(next() * 40) }, () =>
@@ -290,7 +341,11 @@ test("a diff rebuilds both of the sides it came from", () => {
     );
     const is = was
       .filter(() => next() > 0.3)
-      .flatMap((one) => (next() > 0.8 ? [String.fromCharCode(97 + Math.floor(next() * 6)), one] : [one]));
+      .flatMap((one) =>
+        next() > 0.8
+          ? [String.fromCharCode(97 + Math.floor(next() * 6)), one]
+          : [one],
+      );
 
     const shown = compare(lines(was), lines(is));
     assert.deepEqual(
@@ -309,7 +364,8 @@ test("a diff rebuilds both of the sides it came from", () => {
 /* The reason the comparison was rewritten: a definition can be a whole file, and the table
  * of every line against every other took most of a second to find a handful of changes. */
 test("a small change in a long file is found without weighing every line against every other", () => {
-  const lines = (texts: string[]) => texts.map((text, at) => ({ at: at + 1, text }));
+  const lines = (texts: string[]) =>
+    texts.map((text, at) => ({ at: at + 1, text }));
   const was = Array.from({ length: 6000 }, (_, at) => `line ${at}`);
   const is = [...was];
   is.splice(3000, 2, "changed one", "changed two", "changed three");
@@ -325,7 +381,10 @@ test("a small change in a long file is found without weighing every line against
 });
 
 test("nothing changed means nothing marked", () => {
-  const lines = ["one", "two", "three"].map((text, at) => ({ at: at + 1, text }));
+  const lines = ["one", "two", "three"].map((text, at) => ({
+    at: at + 1,
+    text,
+  }));
   assert.ok(compare(lines, [...lines]).every((one) => one.mark === " "));
 });
 
@@ -345,8 +404,15 @@ test("a long file of repeated lines is compared without weighing every pair", ()
   const shown = compare(was, is);
   const took = performance.now() - began;
 
-  assert.ok(took < 500, `took ${took.toFixed(0)}ms — the table is being built again`);
-  assert.equal(shown.filter((one) => one.mark !== " ").length, 4, "both ends, nothing else");
+  assert.ok(
+    took < 500,
+    `took ${took.toFixed(0)}ms — the table is being built again`,
+  );
+  assert.equal(
+    shown.filter((one) => one.mark !== " ").length,
+    4,
+    "both ends, nothing else",
+  );
   assert.deepEqual(
     shown.filter((one) => one.mark !== "+").map((one) => one.line.text),
     was.map((one) => one.text),
@@ -362,12 +428,41 @@ test("a long file of repeated lines is compared without weighing every pair", ()
  * page used to keep whichever it saw last, drawing that one and silently losing the rest
  * along with every box inside them. */
 test("a file holding several containers draws all of them", () => {
-  const one = (id: number, name: string, role: "item" | "container", parent: number | null) => {
+  const one = (
+    id: number,
+    name: string,
+    role: "item" | "container",
+    parent: number | null,
+  ) => {
     const kind = role === "container" ? "class" : "function";
-    const shown = { locator: { scope: [], name }, role, parent: null, kind, file: "one.ts", parts: {}, contract: null };
-    return [id, { id, name, scope: [], path: name, file: "one.ts", kind, role,
-      change: "added" as const, before: null, after: shown, mark: "added" as const,
-      away: 0, parent, group: [] }] as const;
+    const shown = {
+      locator: { scope: [], name },
+      role,
+      parent: null,
+      kind,
+      file: "one.ts",
+      parts: {},
+      contract: null,
+    };
+    return [
+      id,
+      {
+        id,
+        name,
+        scope: [],
+        path: name,
+        file: "one.ts",
+        kind,
+        role,
+        change: "added" as const,
+        before: null,
+        after: shown,
+        mark: "added" as const,
+        away: 0,
+        parent,
+        group: [],
+      },
+    ] as const;
   };
 
   const definitions = new Map([
@@ -390,11 +485,14 @@ test("a file holding several containers draws all of them", () => {
   const boxes: string[] = [];
   const walk = (box: { label: string; boxes: unknown[] }) => {
     boxes.push(box.label);
-    (box.boxes as typeof box[]).forEach(walk);
+    (box.boxes as (typeof box)[]).forEach(walk);
   };
   laid.boxes.forEach(walk);
 
-  assert.ok(boxes.includes("Alpha"), `Alpha was not drawn: ${boxes.join(", ")}`);
+  assert.ok(
+    boxes.includes("Alpha"),
+    `Alpha was not drawn: ${boxes.join(", ")}`,
+  );
   assert.ok(boxes.includes("Beta"), `Beta was not drawn: ${boxes.join(", ")}`);
   assert.equal(laid.at.size, 2, "both methods keep a place");
 });

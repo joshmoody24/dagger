@@ -4,175 +4,451 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-* { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; }
-body {
-  background: var(--paper); color: var(--ink); font: 16px/1.5 var(--sans);
-  display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;
+* {
+  box-sizing: border-box;
 }
-#root { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.5 var(--sans);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 
-.add { color: var(--add); } .del { color: var(--del); } .chg { color: var(--chg); } .aff { color: var(--muted); }
-.ch { font: 700 13px/1 var(--mono); display: inline-block; width: 1ch; text-align: center; }
+.add {
+  color: var(--add);
+}
+.del {
+  color: var(--del);
+}
+.chg {
+  color: var(--chg);
+}
+.aff {
+  color: var(--muted);
+}
+.ch {
+  font: 700 13px/1 var(--mono);
+  display: inline-block;
+  width: 1ch;
+  text-align: center;
+}
 /* What's happening while there's nothing to show yet, in the middle of the page because
  * it's the only thing on it. */
 .waiting {
-  flex: 1; display: grid; place-content: center;
-  color: var(--muted); font: 13px var(--mono);
+  flex: 1;
+  display: grid;
+  place-content: center;
+  color: var(--muted);
+  font: 13px var(--mono);
 }
-.phases { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.phases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
 .phase {
-  display: grid; grid-template-columns: 16px 1fr; align-items: center;
-  column-gap: 10px; row-gap: 4px;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
 }
 /* A circle that fills when its stretch is finished, and beats while it's the one being
  * done. Nothing here is a percentage of the whole: only the stretch that can say how far
  * along it is says so, underneath. */
 .phase::before {
-  content: ""; grid-row: 1; width: 9px; height: 9px; border-radius: 50%;
-  border: 1.5px solid var(--rule); justify-self: center; align-self: center;
+  content: "";
+  grid-row: 1;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rule);
+  justify-self: center;
+  align-self: center;
 }
-.phase.at::before { border-color: var(--lean); animation: beating 1.4s ease-in-out infinite; }
-.phase.yet { color: var(--faint); }
-.phase.was::before { background: var(--muted); border-color: var(--muted); }
-.phase.at .what { color: var(--ink); }
-.phase .detail, .phase .through { grid-column: 2; }
-.phase .detail { color: var(--faint); }
+.phase.at::before {
+  border-color: var(--lean);
+  animation: beating 1.4s ease-in-out infinite;
+}
+.phase.yet {
+  color: var(--faint);
+}
+.phase.was::before {
+  background: var(--muted);
+  border-color: var(--muted);
+}
+.phase.at .what {
+  color: var(--ink);
+}
+.phase .detail,
 .phase .through {
-  display: block; height: 2px; background: var(--rule); border-radius: 2px; max-width: 240px;
+  grid-column: 2;
 }
-.phase .through i { display: block; height: 100%; background: var(--lean); border-radius: 2px; }
+.phase .detail {
+  color: var(--faint);
+}
+.phase .through {
+  display: block;
+  height: 2px;
+  background: var(--rule);
+  border-radius: 2px;
+  max-width: 240px;
+}
+.phase .through i {
+  display: block;
+  height: 100%;
+  background: var(--lean);
+  border-radius: 2px;
+}
 
 @keyframes beating {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .phase.at::before { animation: none; }
+  .phase.at::before {
+    animation: none;
+  }
 }
 
-header { padding: 12px 16px 8px; flex: none; }
+header {
+  padding: 12px 16px 8px;
+  flex: none;
+}
 /* One row, laid out rather than floated: the count and the warning sat on top of each
  * other when both were taken out of the flow. */
-.t { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 16px; line-height: 1.3; }
-.prog { font: 500 12.5px/1.6 var(--mono); color: var(--muted); flex: 1; min-width: 0; }
+.t {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.3;
+}
+.prog {
+  font: 500 12.5px/1.6 var(--mono);
+  color: var(--muted);
+  flex: 1;
+  min-width: 0;
+}
 
 /* Whatever dagger couldn't work out: out of the way until there's something to say. */
 /* Quiet by default. It only becomes a warning when something might actually be missing. */
 .worry {
-  width: 30px; height: 30px; flex: none; display: grid; place-items: center;
-  border-radius: 8px; color: var(--muted);
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted);
 }
 /* The mark and how far out the ripples go, side by side: the number is what the reader
  * just changed, so it belongs where they're already looking. */
 .worry.steps {
-  width: auto; padding: 0 7px; grid-auto-flow: column; gap: 3px;
+  width: auto;
+  padding: 0 7px;
+  grid-auto-flow: column;
+  gap: 3px;
 }
-.worry.steps b { font: 600 11.5px/1 var(--mono); }
-.worry.bad { color: var(--chg); }
-.worry.on { color: var(--lean); }
-.worry:hover { background: var(--raised); }
+.worry.steps b {
+  font: 600 11.5px/1 var(--mono);
+}
+.worry.bad {
+  color: var(--chg);
+}
+.worry.on {
+  color: var(--lean);
+}
+.worry:hover {
+  background: var(--raised);
+}
 /* What the page says beside itself. A dialog, so the browser handles being on top, the
  * keyboard staying inside it, and closing on Escape. */
 .panel {
-  width: min(560px, calc(100vw - 32px)); padding: 16px 18px;
-  background: var(--surface); color: var(--ink);
-  border: 1px solid var(--rule); border-radius: 10px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 16px 18px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
 }
-.panel::backdrop { background: rgb(0 0 0 / 45%); }
-.panel h2 { margin: 0 0 10px; font-size: 15px; }
-.panel h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
-.panel ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--muted); max-height: 50dvh; overflow: auto; }
-.panel li { margin-bottom: 5px; }
+.panel::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.panel h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.panel ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--muted);
+  max-height: 50dvh;
+  overflow: auto;
+}
+.panel li {
+  margin-bottom: 5px;
+}
 
-main { flex: 1; min-height: 0; display: flex; }
-.stage { flex: 1; min-width: 0; position: relative; }
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.stage {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
 
 /* The graph has a view of its own rather than being an image scaled to the pane: the reader
  * moves it about, and how far away it is has nothing to do with how big the window is. */
-.canvas { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }
-.canvas:active { cursor: grabbing; }
+.canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.canvas:active {
+  cursor: grabbing;
+}
 .viewkeys {
-  position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: var(--muted);
-  pointer-events: none; display: flex; align-items: center; gap: 4px;
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  font: 12px var(--mono);
+  color: var(--muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 /* The drawing. Everything inside it is painted rather than built, so there are no rules
  * here for nodes, boxes or lines — those colours are read out of this stylesheet by the
  * code that paints them. */
-.canvas canvas { display: block; }
+.canvas canvas {
+  display: block;
+}
 
 /* The same definitions as real buttons, for anything that reads a page rather than looks
  * at one. Taken out of sight without being taken out of the page: `display: none` would
  * hide it from a screen reader too, which is the one thing it's for. */
 .spoken {
-  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
-  overflow: hidden; clip-path: inset(50%); white-space: nowrap; list-style: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  list-style: none;
 }
 .spoken button:focus-visible {
-  position: fixed; left: 12px; top: 12px; z-index: 30; width: auto; height: auto;
-  clip-path: none; padding: 8px 12px; background: var(--surface);
-  border: 1px solid var(--lean); border-radius: 8px; font: 13px var(--mono);
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 30;
+  width: auto;
+  height: auto;
+  clip-path: none;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--lean);
+  border-radius: 8px;
+  font: 13px var(--mono);
 }
 
 /* A drawer, until there's room for it to sit beside the graph. Three heights: away, half
  * the window, and all of it. Sliding rather than appearing is most of what makes it feel
  * like something you pulled up rather than something that happened to you. */
 .sheet {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; height: 58dvh;
-  background: var(--surface); border-top: 1px solid var(--rule);
-  border-radius: 12px 12px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / 28%);
-  transform: translateY(105%); transition: transform 0.2s ease, height 0.2s ease;
-  display: flex; flex-direction: column;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  height: 58dvh;
+  background: var(--surface);
+  border-top: 1px solid var(--rule);
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 28%);
+  transform: translateY(105%);
+  transition:
+    transform 0.2s ease,
+    height 0.2s ease;
+  display: flex;
+  flex-direction: column;
 }
-.sheet.half, .sheet.full { transform: none; }
-.sheet.full { height: 100dvh; border-radius: 0; }
+.sheet.half,
+.sheet.full {
+  transform: none;
+}
+.sheet.full {
+  height: 100dvh;
+  border-radius: 0;
+}
 /* The graph keeps clear of the drawer so what's being read isn't hidden behind it. */
-main.has-sheet.half .canvas { bottom: 58dvh; }
+main.has-sheet.half .canvas {
+  bottom: 58dvh;
+}
 /* The edge you drag. Wide enough to catch and invisible until you're on it. */
 .wider {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 7px; z-index: 1;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  z-index: 1;
   cursor: col-resize;
 }
-.wider:hover { background: var(--rule); }
-.sh { display: flex; align-items: center; gap: 10px; padding: 10px 8px 6px 16px; flex: none; }
-.sh h2 { margin: 0; font: 500 16px/1.3 var(--mono); word-break: break-all; flex: 1; min-width: 0; }
-.sb { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 0 16px 12px; }
+.wider:hover {
+  background: var(--rule);
+}
+.sh {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 6px 16px;
+  flex: none;
+}
+.sh h2 {
+  margin: 0;
+  font: 500 16px/1.3 var(--mono);
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+.sb {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 16px 12px;
+}
 .file {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  font: 13px var(--mono); color: var(--muted); margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font: 13px var(--mono);
+  color: var(--muted);
+  margin: 0 0 10px;
 }
 .kind {
-  border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px;
-  font-size: 12px; line-height: 1.5; color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
 }
-.why { font-size: 13.5px; color: var(--muted); margin: 0 0 8px; }
+.why {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
 
 /* What a package holds, as a way in rather than as a reading order: it's a list of places
  * to go, not a list of things to do. */
-.held { list-style: none; margin: 0; padding: 0; }
-.held button {
-  display: flex; align-items: baseline; gap: 8px; width: 100%;
-  padding: 4px 6px; border-radius: 6px; font: 13px var(--mono); text-align: left;
+.held {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.held button:hover { background: var(--raised); }
-.held button.done { opacity: 0.55; }
-.held .nm { color: var(--ink); }
-.held .at { color: var(--muted); font-size: 12px; margin-left: auto; }
-.why b { color: var(--ink); font-weight: 600; font-family: var(--mono); }
-.why b.soon { color: var(--chg); }
+.held button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font: 13px var(--mono);
+  text-align: left;
+}
+.held button:hover {
+  background: var(--raised);
+}
+.held button.done {
+  opacity: 0.55;
+}
+.held .nm {
+  color: var(--ink);
+}
+.held .at {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+.why b {
+  color: var(--ink);
+  font-weight: 600;
+  font-family: var(--mono);
+}
+.why b.soon {
+  color: var(--chg);
+}
 
 pre.code {
-  margin: 0 0 10px; background: var(--paper); border-radius: 6px;
-  font: 13px/1.6 var(--mono); padding: 6px 0;
+  margin: 0 0 10px;
+  background: var(--paper);
+  border-radius: 6px;
+  font: 13px/1.6 var(--mono);
+  padding: 6px 0;
 }
 /* A long line wraps rather than running off the side. Reading a diff sideways means
  * scrolling away from the column that says which lines changed, and a wrapped line is
  * indented past the mark so the continuation can't be mistaken for one of its own. */
 pre.code .ln {
-  display: block; padding: 0 12px 0 calc(32px + var(--gutter, 3ch)); position: relative;
-  white-space: pre-wrap; overflow-wrap: anywhere; text-indent: 12px hanging;
+  display: block;
+  padding: 0 12px 0 calc(32px + var(--gutter, 3ch));
+  position: relative;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-indent: 12px hanging;
 }
 /* Where the line is in the file. Held apart from the code and dim enough to read past,
  * since it's there to be quoted rather than read.
@@ -181,70 +457,179 @@ pre.code .ln {
  * width fits until a file is long enough that it doesn't, and then the digits pile up on
  * each other in the one place a reader goes to be precise. */
 pre.code .ln u {
-  position: absolute; left: 22px; width: var(--gutter, 3ch); text-align: right;
-  text-decoration: none; color: var(--faint); text-indent: 0;
+  position: absolute;
+  left: 22px;
+  width: var(--gutter, 3ch);
+  text-align: right;
+  text-decoration: none;
+  color: var(--faint);
+  text-indent: 0;
 }
-pre.code .ln .gap { color: var(--muted); }
-pre.code .ln i { position: absolute; left: 8px; font-style: normal; font-weight: 700; }
-pre.code .ln.a { background: var(--addbg); } pre.code .ln.a i { color: var(--add); }
-pre.code .ln.r { background: var(--delbg); } pre.code .ln.r i { color: var(--del); }
-pre.code.same { color: var(--muted); }
-pre.code .tq { color: var(--quiet); }
-pre.code .lnk { color: var(--lean); }
+pre.code .ln .gap {
+  color: var(--muted);
+}
+pre.code .ln i {
+  position: absolute;
+  left: 8px;
+  font-style: normal;
+  font-weight: 700;
+}
+pre.code .ln.a {
+  background: var(--addbg);
+}
+pre.code .ln.a i {
+  color: var(--add);
+}
+pre.code .ln.r {
+  background: var(--delbg);
+}
+pre.code .ln.r i {
+  color: var(--del);
+}
+pre.code.same {
+  color: var(--muted);
+}
+pre.code .tq {
+  color: var(--quiet);
+}
+pre.code .lnk {
+  color: var(--lean);
+}
 
 /* Anything that takes you to another definition looks the same wherever it turns up, and
  * says so under the pointer rather than all the time. */
-.why b, pre.code .lnk { cursor: pointer; text-underline-offset: 3px; }
-.why b:hover, pre.code .lnk:hover { text-decoration: underline dotted; }
+.why b,
+pre.code .lnk {
+  cursor: pointer;
+  text-underline-offset: 3px;
+}
+.why b:hover,
+pre.code .lnk:hover {
+  text-decoration: underline dotted;
+}
 
 /* 44px is the smallest a finger can be relied on to hit. The bottom padding clears the
  * home indicator on a phone, where the drawer sits against the very bottom of the screen. */
 .nav {
-  flex: none; display: flex; align-items: center; gap: 6px;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--rule);
 }
-.nav .pair { display: flex; align-items: stretch; gap: 6px; flex: none; margin-left: auto; }
-.nav .go kbd, .nav .by kbd, .nav .pos kbd { margin-top: 1px; }
-.nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.nav .pair {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  flex: none;
+  margin-left: auto;
+}
+.nav .go kbd,
+.nav .by kbd,
+.nav .pos kbd {
+  margin-top: 1px;
+}
+.nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
 /* Moving without marking: the same shape, said quietly, so the pair that matters stays the
  * pair you see first. */
 .nav .by {
-  height: 50px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 8px;
-  color: var(--muted); font-size: 13.5px;
+  height: 50px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13.5px;
 }
-.nav .by:disabled, .nav .go:disabled { opacity: 0.35; cursor: default; }
+.nav .by:disabled,
+.nav .go:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .nav .pos {
-  height: 50px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 8px;
-  font: 14px var(--mono); color: var(--muted);
+  height: 50px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font: 14px var(--mono);
+  color: var(--muted);
 }
-.nav .pos.done { color: var(--add); border-color: var(--add); }
-.nav .go { height: 50px; padding: 0 14px; border-radius: 8px; background: var(--lean); color: var(--paper); font-weight: 600; font-size: 14.5px; }
+.nav .pos.done {
+  color: var(--add);
+  border-color: var(--add);
+}
+.nav .go {
+  height: 50px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--lean);
+  color: var(--paper);
+  font-weight: 600;
+  font-size: 14.5px;
+}
 
 /* The key that does what the button does, worn by the button. */
 kbd {
-  font: 10.5px/1.4 var(--mono); border: 1px solid currentColor; border-radius: 3px;
-  padding: 0 3px; opacity: 0.6; font-weight: 400;
+  font: 10.5px/1.4 var(--mono);
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 3px;
+  opacity: 0.6;
+  font-weight: 400;
 }
 /* The solid button's text is already dark on bright, which is as much contrast as there is
  * to have. Anything behind the key can only eat into it, so nothing goes behind it. */
-.nav .go kbd { opacity: 1; border-color: currentColor; background: none; }
-.ib { width: 38px; height: 38px; border-radius: 8px; color: var(--muted); font-size: 18px; flex: none; }
+.nav .go kbd {
+  opacity: 1;
+  border-color: currentColor;
+  background: none;
+}
+.ib {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 18px;
+  flex: none;
+}
 
 /* Room enough for the sheet to stop being a drawer and just sit there. */
 @media (min-width: 900px) {
   .sheet {
-    position: relative; transform: none; height: auto; width: 46%;
-    min-width: 320px; max-width: 80vw;
-    flex: none; border-radius: 0; border-top: 0; border-left: 1px solid var(--rule);
-    box-shadow: none; transition: none;
+    position: relative;
+    transform: none;
+    height: auto;
+    width: 46%;
+    min-width: 320px;
+    max-width: 80vw;
+    flex: none;
+    border-radius: 0;
+    border-top: 0;
+    border-left: 1px solid var(--rule);
+    box-shadow: none;
+    transition: none;
   }
-  .sheet.full { height: auto; }
+  .sheet.full {
+    height: auto;
+  }
   /* Put away and nothing left in its place: a strip saying "there's a thing here" is the
    * thing, taking up room. d brings it back, and so does anything else you do. */
-  .sheet.away { display: none; }
-  .grip { display: none; }
+  .sheet.away {
+    display: none;
+  }
+  .grip {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sheet { transition: none; }
+  .sheet {
+    transition: none;
+  }
 }

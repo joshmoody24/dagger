@@ -1,4 +1,12 @@
-import { createEffect, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+} from "solid-js";
 import { select } from "d3-selection";
 import { zoom as zooming, zoomIdentity, zoomTransform } from "d3-zoom";
 import type { Box, Edge, Identity, Laid, Review, Spot } from "./dagger.ts";
@@ -74,8 +82,10 @@ export function Graph(props: GraphProps) {
 
   const behaviour = zooming<HTMLCanvasElement, unknown>()
     /* Wheels are handled below instead. */
-    .filter((event: Event & { ctrlKey?: boolean; button?: number }) =>
-      event.type !== "wheel" && !event.ctrlKey && !event.button)
+    .filter(
+      (event: Event & { ctrlKey?: boolean; button?: number }) =>
+        event.type !== "wheel" && !event.ctrlKey && !event.button,
+    )
     .on("zoom", () => redraw());
 
   const pane = () => frame.getBoundingClientRect();
@@ -92,7 +102,10 @@ export function Graph(props: GraphProps) {
       (room.height - 2 * EDGE) / props.laid.h,
     );
     return zoomIdentity
-      .translate((room.width - props.laid.w * k) / 2, (room.height - props.laid.h * k) / 2)
+      .translate(
+        (room.width - props.laid.w * k) / 2,
+        (room.height - props.laid.h * k) / 2,
+      )
       .scale(k);
   };
 
@@ -101,7 +114,10 @@ export function Graph(props: GraphProps) {
    * ripples away makes it smaller — so these have to be asked again when it does, or the
    * view stays penned in by the shape of a graph that isn't on screen any more. */
   const bounded = () => {
-    behaviour.translateExtent([[0, 0], [props.laid.w, props.laid.h]]);
+    behaviour.translateExtent([
+      [0, 0],
+      [props.laid.w, props.laid.h],
+    ]);
     behaviour.scaleExtent([whole().k, CLOSEST]);
   };
 
@@ -173,13 +189,19 @@ export function Graph(props: GraphProps) {
     return null;
   };
 
-  const every = (boxes: Box[]): Box[] => boxes.flatMap((box) => [box, ...every(box.boxes)]);
+  const every = (boxes: Box[]): Box[] =>
+    boxes.flatMap((box) => [box, ...every(box.boxes)]);
 
   /* What's under a point, in the drawing's own units. A definition wins over the box it's
    * in, and the innermost box wins over the ones around it. */
   const at = ({ x, y }: { x: number; y: number }): Touched | null => {
     for (const [id, spot] of props.laid.at) {
-      if (x >= spot.x && x <= spot.x + spot.w && y >= spot.y && y <= spot.y + NODE_H) {
+      if (
+        x >= spot.x &&
+        x <= spot.x + spot.w &&
+        y >= spot.y &&
+        y <= spot.y + NODE_H
+      ) {
         return { node: id, file: props.review.definitions.get(id)?.file ?? "" };
       }
     }
@@ -188,7 +210,8 @@ export function Graph(props: GraphProps) {
     for (const box of every(props.laid.boxes)) {
       const [bx, by] = [box.x ?? 0, box.y ?? 0];
       if (x < bx || x > bx + box.w || y < by || y > by + box.h) continue;
-      if (!innermost || box.w * box.h < innermost.w * innermost.h) innermost = box;
+      if (!innermost || box.w * box.h < innermost.w * innermost.h)
+        innermost = box;
     }
     return innermost ? { box: innermost, file: innermost.key } : null;
   };
@@ -209,7 +232,7 @@ export function Graph(props: GraphProps) {
     frame.style.cursor = what ? "pointer" : "grab";
     frame.title =
       what && what.node !== undefined
-        ? props.review.definitions.get(what.node)?.path ?? ""
+        ? (props.review.definitions.get(what.node)?.path ?? "")
         : "";
   };
 
@@ -234,9 +257,17 @@ export function Graph(props: GraphProps) {
     const had = getComputedStyle(document.documentElement);
     const of = (name: string) => had.getPropertyValue(`--${name}`).trim();
     paint = {
-      paper: of("paper"), ink: of("ink"), muted: of("muted"), faint: of("faint"),
-      rule: of("rule"), lean: of("lean"), path: of("path"),
-      add: of("add"), del: of("del"), chg: of("chg"), aff: of("muted"),
+      paper: of("paper"),
+      ink: of("ink"),
+      muted: of("muted"),
+      faint: of("faint"),
+      rule: of("rule"),
+      lean: of("lean"),
+      path: of("path"),
+      add: of("add"),
+      del: of("del"),
+      chg: of("chg"),
+      aff: of("muted"),
     };
   };
 
@@ -267,7 +298,14 @@ export function Graph(props: GraphProps) {
 
     ink.setTransform(dense, 0, 0, dense, 0, 0);
     ink.clearRect(0, 0, room.width, room.height);
-    ink.setTransform(dense * view.k, 0, 0, dense * view.k, dense * view.x, dense * view.y);
+    ink.setTransform(
+      dense * view.k,
+      0,
+      0,
+      dense * view.k,
+      dense * view.x,
+      dense * view.y,
+    );
     ink.lineJoin = "round";
     ink.textBaseline = "alphabetic";
 
@@ -298,7 +336,13 @@ export function Graph(props: GraphProps) {
      * colour rather than a pile of ever-paler grounds. */
     ink.setLineDash(soon ? [5, 3] : deep && !here ? [3, 3] : []);
     ink.lineWidth = here || soon ? 1.8 : under ? 1.4 : 1;
-    ink.strokeStyle = here ? paint.lean : soon ? paint.path : under ? paint.muted : paint.rule;
+    ink.strokeStyle = here
+      ? paint.lean
+      : soon
+        ? paint.path
+        : under
+          ? paint.muted
+          : paint.rule;
     round(bx, by, box.w, box.h, radius);
     ink.stroke();
     ink.setLineDash([]);
@@ -336,7 +380,16 @@ export function Graph(props: GraphProps) {
     /* Under the pointer it comes back to full strength and thickens, which is all a shape
      * with nothing bright inside it has to say with. */
     const under = id === touching();
-    ink.globalAlpha = here || soon || under ? 1 : read && dim ? 0.42 : read ? 0.6 : dim ? 0.55 : 1;
+    ink.globalAlpha =
+      here || soon || under
+        ? 1
+        : read && dim
+          ? 0.42
+          : read
+            ? 0.6
+            : dim
+              ? 0.55
+              : 1;
 
     /* The outline and the name are the same colour: a node is a word in a box, and two
      * colours there read as two things being said. Read ones fade by alpha instead, which
@@ -368,7 +421,8 @@ export function Graph(props: GraphProps) {
     const to = spotOf(edge.to);
     if (!from || !to) return;
 
-    const touching = props.here && (edge.from === props.here || edge.to === props.here);
+    const touching =
+      props.here && (edge.from === props.here || edge.to === props.here);
     const upwards = to.y <= from.y;
 
     ink.globalAlpha = touching ? 1 : near.size ? 0.3 : 0.85;
@@ -411,8 +465,14 @@ export function Graph(props: GraphProps) {
     const long = 9;
     ink.beginPath();
     ink.moveTo(to.x, to.y);
-    ink.lineTo(to.x - long * Math.cos(turn - wide), to.y - long * Math.sin(turn - wide));
-    ink.lineTo(to.x - long * Math.cos(turn + wide), to.y - long * Math.sin(turn + wide));
+    ink.lineTo(
+      to.x - long * Math.cos(turn - wide),
+      to.y - long * Math.sin(turn - wide),
+    );
+    ink.lineTo(
+      to.x - long * Math.cos(turn + wide),
+      to.y - long * Math.sin(turn + wide),
+    );
     ink.closePath();
     ink.fill();
   }
@@ -448,8 +508,10 @@ export function Graph(props: GraphProps) {
 
   const onKey = (event: KeyboardEvent) => {
     if (event.metaKey || event.altKey) return;
-    if (event.key === "+" || event.key === "=") behaviour.scaleBy(select(paper), 1.2);
-    else if (event.key === "-" || event.key === "_") behaviour.scaleBy(select(paper), 1 / 1.2);
+    if (event.key === "+" || event.key === "=")
+      behaviour.scaleBy(select(paper), 1.2);
+    else if (event.key === "-" || event.key === "_")
+      behaviour.scaleBy(select(paper), 1 / 1.2);
     else if (event.key === "0") fit();
     else if (event.key === "1") closer();
     else return;
@@ -493,8 +555,16 @@ export function Graph(props: GraphProps) {
    * it draws again. A stylesheet can't reach what's painted, so a change of theme is read
    * the same way and the palette is fetched afresh. */
   createEffect(() => {
-    void [props.here, props.next, props.read, props.review, props.laid, props.box,
-      over(), touching()];
+    void [
+      props.here,
+      props.next,
+      props.read,
+      props.review,
+      props.laid,
+      props.box,
+      over(),
+      touching(),
+    ];
     redraw();
   });
 
@@ -516,7 +586,9 @@ export function Graph(props: GraphProps) {
     const room = pane();
     const [x, y] = [view.applyX(spot.x), view.applyY(spot.y)];
     const showing =
-      x >= 0 && y >= 0 && x + spot.w * view.k <= room.width &&
+      x >= 0 &&
+      y >= 0 &&
+      x + spot.w * view.k <= room.width &&
       y + (spot.h ?? NODE_H) * view.k <= room.height;
     if (showing) return;
 
@@ -554,7 +626,8 @@ export function Graph(props: GraphProps) {
       </ul>
 
       <div class="viewkeys">
-        <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current · <kbd>t</kbd> {wearing()}
+        <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current · <kbd>t</kbd>{" "}
+        {wearing()}
       </div>
     </div>
   );
