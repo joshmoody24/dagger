@@ -42,7 +42,7 @@ dagger md
 
 ## Configuration
 
-Optional. Without a `dagger.toml`, `dagger` infers everything from the repository. One at the repository root overrides that. Every supported setting:
+Optional. Without a `dagger.toml`, `dagger` infers everything from the repository. A `dagger.toml` at the repository root overrides the inferred configuration. Every supported setting:
 
 ```toml
 [snapshots]
@@ -87,7 +87,7 @@ ripples = 1
 
 ## Supporting another language
 
-If the language has a language server, that's one extractor entry:
+If the language has a language server, supporting it is one extractor entry:
 
 ```toml
 [[extractors]]
@@ -96,7 +96,7 @@ include = ["**/*.py"]
 settings = { server = ["pyright-langserver", "--stdio"] }
 ```
 
-If it doesn't, or the server's symbols aren't good enough, an extractor is any program that answers `dagger`'s JSON requests on stdin with responses on stdout: what's defined in a file, split into contract, body and docs, and what each definition mentions. The built-in `rust` adapter is one of these, wrapping rust-analyzer with its own parser. The requests and responses are in `crates/protocol`, and the vocabulary is in [docs/model.md](docs/model.md).
+If the language does not have a language server, or the server's symbols aren't good enough, an extractor is any program that answers `dagger`'s JSON requests on stdin with responses on stdout: what's defined in a file, split into contract, body and docs, and what each definition mentions. The built-in `rust` adapter is one such program: a parser of its own for definitions, with rust-analyzer for references. The requests and responses are in `crates/protocol`, and the vocabulary is in [docs/model.md](docs/model.md).
 
 ```toml
 [[extractors]]
@@ -104,7 +104,7 @@ adapter = "./tools/dagger-python"
 include = ["**/*.py"]
 ```
 
-A path with a slash is relative to the repository; a bare name comes off `PATH`. The same goes for `[snapshots]`, for a version control system other than git.
+A path with a slash is relative to the repository; a bare name comes off `PATH`. A `[snapshots]` adapter is named the same way, for a version control system other than git.
 
 ## Developing
 

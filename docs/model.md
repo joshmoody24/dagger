@@ -18,260 +18,62 @@ nothing else.
 
 ## The core model
 
-```mermaid
-classDiagram
-    class Part {
-        <<enumeration>>
-        Type
-        Body
-        Docs
-    }
-    class Role {
-        <<enumeration>>
-        Item
-        Container
-    }
-    class Span
-    class Piece {
-        +text: String
-        +span: Span
-        +line: u32
-        +file: String
-    }
-    class Locator {
-        +scope: Vec~String~
-        +name: String
-    }
-    class Occurrence {
-        +locator: Locator
-        +role: Role
-        +parent: Option~Locator~
-        +kind: String
-        +file: String
-        +parts: Map~Part to Vec~Piece~~
-        +contract: Option~String~
-    }
-    class Identity
-    class Sides {
-        <<enumeration>>
-        Added(Occurrence)
-        Removed(Occurrence)
-        Kept(before and after)
-    }
-    class ModelDefinition["model::Definition"] {
-        +identity: Identity
-        +sides: Sides
-    }
-
-    class BinderId
-    class Target~T~ {
-        <<enumeration>>
-        Known(T)
-        Unknown(symbol)
-    }
-    class Site {
-        +part: Part
-        +span: Span
-        +found_by: BinderId
-    }
-    class Mention {
-        +from: Locator
-        +to: Target~Locator~
-        +site: Site
-    }
-    class Reference {
-        +from: Identity
-        +to: Target~Identity~
-        +before: Vec~Site~
-        +after: Vec~Site~
-    }
-
-    class Change {
-        <<enumeration>>
-        Added
-        Removed
-        Kept(Edits)
-    }
-    class Edits {
-        +contract: bool
-        +moved: bool
-        +parts: Set~Part~
-    }
-    class Diagnostic {
-        <<enumeration>>
-        LopsidedContract
-        UnboundInContract
-        MentionFromNowhere
-        Tangled
-        TwoOfOneName
-        Unattributed
-    }
-
-    class Edge {
-        +from: Identity
-        +to: Identity
-    }
-    class Impact {
-        <<enumeration>>
-        Incomplete
-        Degraded
-    }
-    class Warning {
-        +impact: Impact
-        +message: String
-        +about: Option~Identity~
-    }
-    class ReviewDefinition["review::Definition"] {
-        +role: Role
-        +sides: Sides
-        +change: Change
-        +reached: Option~NonZeroU32~
-        +parent: Option~Identity~
-    }
-    class Review {
-        +title: Option~String~
-        +definitions: Map~Identity to Definition~
-        +reading: Vec~Step~
-        +edges: Vec~Edge~
-        +groups: Vec~Group~
-        +grouping: Option~String~
-        +ripples: u32
-        +cost: Cost
-        +warnings: Vec~Warning~
-    }
-    class Step {
-        +definition: Identity
-        +on_faith: Vec~Identity~
-    }
-    class Cost {
-        +peak_open: usize
-        +total_open: usize
-        +taken_on_faith: usize
-        +jumps: usize
-    }
-    class Group {
-        <<enumeration>>
-        Group(name, tier, children)
-        Node(id, tier)
-    }
-    class Grouping {
-        +name: String
-        +of: Map~Identity to Path~
-    }
-
-    ModelDefinition *-- Identity
-    ModelDefinition *-- Sides
-    Sides o-- "1..2" Occurrence
-    Occurrence *-- Locator
-    Occurrence *-- "*" Piece
-    Occurrence --> Role
-    Occurrence --> Part : parts keyed by
-    Piece *-- Span
-    Mention --> Locator : from
-    Mention --> Target~Locator~ : to
-    Mention *-- Site
-    Site --> BinderId
-    Site --> Part
-    Reference --> Identity : from
-    Reference --> Target~Identity~ : to
-    Reference *-- "*" Site
-    Change *-- Edits
-    Edits --> "*" Part
-    Diagnostic ..> Warning : worded as
-    Review "1" *-- "*" ReviewDefinition
-    ReviewDefinition *-- Sides
-    ReviewDefinition *-- Change
-    ReviewDefinition --> Role
-    Review *-- "*" Step
-    Review *-- "*" Edge
-    Review *-- "*" Group
-    Review *-- Cost
-    Review *-- "*" Warning
-    Group *-- "*" Group : children
-    Group --> Identity : Node id
-    Warning --> Impact
-    Grouping ..> Review : shapes groups
-```
-
-`Definition` names two types: `model::Definition` is the matched pair of occurrences
-handed to the core; `review::Definition` is what the review keeps about one (sides,
-change, reached, parent). `order()` returns `Ordering { steps, cost }`, which the review
-carries as `reading` and `cost`. `Span` is `start`/`end` byte offsets; `Identity` and
-`BinderId` wrap a number and a string.
-
-## The adapter protocol
-
-An adapter is any executable: one JSON request on stdin, one JSON response on stdout,
-stderr reaches the user. A snapshot adapter answers Describe, Resolve and Materialize.
-An extractor answers Describe and Extract.
+A `Review` is what one reading of a change comes to. Everything hangs off its definitions.
 
 ```mermaid
-classDiagram
-    class Request {
-        <<enumeration>>
-        Describe(settings)
-        Resolve(asked, settings)
-        Materialize(rev, settings)
-        Extract(dir, files, changed, ripples, settings)
-    }
-    class Response {
-        <<enumeration>>
-        Described(Described)
-        Resolved(revisions)
-        Materialized(dir, temporary, files)
-        Extracted(extraction, notes)
-        Failed(message)
-    }
-    class Described {
-        +include: Vec~String~
-        +revisions: Option~Revisions~
-        +usage: Vec~String~
-    }
-    class Revisions {
-        +before: String
-        +after: String
-        +title: Option~String~
-    }
-    class Changed {
-        +file: String
-        +at: Vec~Span~
-    }
-    class Extraction {
-        +occurrences: Vec~Occurrence~
-        +mentions: Vec~Mention~
-    }
-    class Note {
-        +message: String
-        +file: Option~String~
-    }
-    class SnapshotAdapter {
-        Describe
-        Resolve
-        Materialize
-    }
-    class Extractor {
-        Describe
-        Extract
-    }
+erDiagram
+    Review ||--|{ Definition : "definitions"
+    Review ||--|{ Step : "reading"
+    Review ||--o{ Edge : "edges"
+    Review ||--o{ Group : "groups"
+    Definition ||--o| Occurrence : "before"
+    Definition ||--o| Occurrence : "after"
+    Occurrence ||--|| Locator : "locator"
+    Occurrence ||--|{ Piece : "parts"
+    Edge }o--|| Definition : "from"
+    Edge }o--|| Definition : "to"
+    Step ||--|| Definition : "definition"
+    Group ||--o{ Group : "children"
+    Group |o--o| Definition : "node"
 
-    Request --> "*" Changed : Extract carries
-    Response *-- Described
-    Response *-- Revisions : Resolved
-    Response *-- Extraction : Extracted
-    Response *-- "*" Note : Extracted
-    Described *-- Revisions
-    SnapshotAdapter ..> Response : Described, Resolved, Materialized
-    Extractor ..> Response : Described, Extracted
+    Review {
+        string title
+        int ripples
+    }
+    Definition {
+        Identity id
+        Role role "container or item"
+        Change change "added, removed, or kept with edits"
+        Identity parent "what it is written inside"
+    }
+    Occurrence {
+        string file
+        string kind "function, struct, module..."
+    }
+    Locator {
+        strings scope
+        string name
+    }
+    Piece {
+        Part part "contract, body, or docs"
+        string text
+        int line
+    }
+    Edge {
+        Identity from
+        Identity to "what from depends on"
+    }
+    Step {
+        Identity definition
+        Identities on_faith "dependencies not yet read"
+    }
+    Group {
+        string name
+        int tier "rows down from what it depends on"
+    }
 ```
 
-An adapter may also write `Progress` lines to stderr (`StartingServer`, `Indexing`,
-`Walked`, `Finished`), a fixed vocabulary so wording matches across adapters.
-
-`dagger.toml` names the adapters. `Config` holds one `snapshots: Adapter` (command, args,
-settings), a list of `extractors: Extractor` (the same plus `include` globs; the last
-listed wins a contested file), one `grouping: GroupingConfig` (a name like "package" and
-marker files like `Cargo.toml`), and `review: ReviewConfig` (`ignore` globs, default
-`ripples`). Without a `dagger.toml`, git and the visible languages are inferred.
+A definition is one named thing with an occurrence on each side of the change; either side can be missing, which is how added and removed are known. An occurrence is located by file and locator and is made of pieces, each a stretch of text that is contract, body, or docs. Edges say what depends on what among the definitions shown. Steps are the order to read them in. Groups are the boxes on the page, nested, each holding a definition's node when it is read.
 
 ## Glossary
 
