@@ -35,7 +35,10 @@ impl Default for Settings {
 pub fn answer(request: Request) -> Result<Response> {
     match request {
         Request::Materialize { rev, .. } if rev == CURRENT => Ok(Response::Materialized {
-            dir: std::env::current_dir()?.to_string_lossy().into_owned(),
+            dir: std::env::current_dir()?
+                .canonicalize()?
+                .to_string_lossy()
+                .into_owned(),
             temporary: false,
             files: Some(current_files()?),
         }),
@@ -311,6 +314,10 @@ fn materialize(rev: &str, carry_ignored: bool) -> Result<PathBuf> {
     let commit = rev_parse(rev)?;
     let dir = std::env::temp_dir().join(format!("dagger-{}-{}", std::process::id(), commit));
     fs::create_dir_all(&dir).with_context(|| format!("couldn't make {}", dir.display()))?;
+    // Canonical, so it matches the paths a language server reports: on macOS the temp
+    // directory is behind a symlink, and a prefix check against the other spelling drops
+    // every file.
+    let dir = dir.canonicalize()?;
     export(&commit, &dir)?;
     if carry_ignored {
         carry(&dir)?;
