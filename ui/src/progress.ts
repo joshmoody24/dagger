@@ -33,7 +33,7 @@ export function phases(said: string[]): Phase[] {
   ];
 
   const found: Phase[] = [
-    { said: "laying out both snapshots", done: false, going: true },
+    { said: "preparing both snapshots", done: false, going: true },
     { said: `reading ${before}`, done: false, going: false },
     { said: `reading ${after}`, done: false, going: false },
   ];
@@ -41,7 +41,7 @@ export function phases(said: string[]): Phase[] {
   for (const line of said) {
     if (!line.trim()) continue;
 
-    /* A line with no side belongs to laying out, which happens before either reading. */
+    /* A line with no side belongs to preparing, which happens before either reading. */
     const [side, rest] = told(line);
     if (!side) {
       found[0].detail = line.trim();

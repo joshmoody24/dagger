@@ -233,7 +233,7 @@ test("a progress report reads the same however the two readings interleave", () 
   assert.equal(
     laying.done,
     true,
-    "laying out is over once a reading has begun",
+    "preparing is over once a reading has begun",
   );
 
   assert.equal(older.said, "reading aaa");
