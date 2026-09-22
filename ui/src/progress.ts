@@ -29,7 +29,7 @@ export function compared(said: string[]): [string, string] | null {
 export function phases(said: string[]): Phase[] {
   const [before, after] = compared(said) ?? [
     "the first snapshot",
-    "the second",
+    "the second snapshot",
   ];
 
   const found: Phase[] = [

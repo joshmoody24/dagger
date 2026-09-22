@@ -47,7 +47,9 @@ export function Toolbar(props: ToolbarProps) {
       </Show>
       <div class="toolbar">
         <span class="prog">
-          {props.at + 1}/{props.total}
+          {props.total === 0
+            ? "nothing to read"
+            : `${props.at + 1}/${props.total}`}
         </span>
         <label class="find">
           <input

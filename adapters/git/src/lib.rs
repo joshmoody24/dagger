@@ -164,27 +164,30 @@ fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> {
         parted,
     } = read(asked)?;
 
-    let left = if left == TRUNK {
+    let base = if left == TRUNK {
         trunk(settings)?
     } else {
         left.to_string()
     };
-    let (left, right) = (commit(&left)?, commit(right)?);
+    let (base_commit, tip) = (commit(&base)?, commit(right)?);
 
     let before = if parted {
-        let found = say(&["merge-base", &left, &right])?;
+        let found = say(&["merge-base", &base_commit, &tip])?;
         if found.is_empty() {
-            bail!("those two share no history, so there's nothing between them");
+            bail!("{right} and {base} share no history, so there's nothing between them");
+        }
+        if found == tip {
+            bail!("{right} has nothing beyond {base}, so there's nothing to read");
         }
         found
     } else {
-        left
+        base_commit
     };
 
     Ok(Revisions {
         before,
-        title: subject(&right),
-        after: right,
+        title: subject(&tip),
+        after: tip,
     })
 }
 
