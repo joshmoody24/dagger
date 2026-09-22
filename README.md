@@ -108,7 +108,7 @@ A path with a slash is relative to the repository; a bare name comes off `PATH`.
 
 ## Developing
 
-You need stable Rust, Node 22, and the two language servers from Install. `nix develop` provides all of that and is the easiest way in.
+You need stable Rust, Node 22, and the two language servers from Install. With nix, `nix develop` installs all four.
 
 ```sh
 npm --prefix ui ci
