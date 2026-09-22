@@ -1,20 +1,21 @@
 /* The graph pans and zooms independently of the window size. */
-.canvas {
-  position: absolute;
-  inset: 0;
+.graph {
+  flex: 1;
+  min-width: 0;
+  position: relative;
   overflow: hidden;
   cursor: grab;
   touch-action: none;
 }
-.canvas:active {
+.graph:active {
   cursor: grabbing;
 }
-.canvas svg {
+.graph svg {
   display: block;
   width: 100%;
   height: 100%;
 }
-.canvas svg * {
+.graph svg * {
   stroke-linejoin: round;
 }
 .viewkeys {

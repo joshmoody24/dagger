@@ -46,11 +46,6 @@ main {
   min-height: 0;
   display: flex;
 }
-.stage {
-  flex: 1;
-  min-width: 0;
-  position: relative;
-}
 
 kbd {
   font: 10.5px/1.4 var(--mono);

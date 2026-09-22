@@ -17,7 +17,7 @@
   text-align: center;
 }
 
-/* A bottom drawer (away, half, full) until there's room for it beside the graph. */
+/* Along the bottom (away, half, full) until there's room for it beside the graph. */
 .sheet {
   position: fixed;
   inset-inline: 0;
@@ -43,9 +43,9 @@
   height: 100dvh;
   border-radius: 0;
 }
-/* Keep the graph clear of the drawer. */
-main.has-sheet.half .canvas {
-  bottom: 58dvh;
+/* Keep the graph clear of the sheet. */
+main.has-sheet.half .graph {
+  margin-bottom: 58dvh;
 }
 /* Drag handle: wide enough to grab, invisible until hovered. */
 .wider {
@@ -130,7 +130,7 @@ main.has-sheet.half .canvas {
   flex: none;
 }
 
-/* Wide enough for the sheet to sit beside the graph instead of being a drawer. The
+/* Wide enough for the sheet to sit beside the graph instead of below it. The
  * number is WIDE in media.ts; a media query can't read a custom property. */
 @media (min-width: 900px) {
   .sheet {

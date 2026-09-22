@@ -7,10 +7,9 @@ import { ReadingNav } from "./ReadingNav.tsx";
 import { Resizer } from "./Resizer.tsx";
 import "./Reading.css";
 
-/** How far the drawer is open on a narrow screen. */
-export type Sheet = "closed" | "half" | "full";
-/** Where the sheet sits: a column on a wide screen, a drawer on a narrow one. */
-export type Facing = "beside" | "away" | Sheet;
+/** Where the sheet sits: beside the graph on a wide screen, below it (closed, half or
+ * full) on a narrow one, or away entirely. */
+export type Sheet = "beside" | "away" | "closed" | "half" | "full";
 
 /* j/k scroll speed in px/s. About sixty lines: fast enough to cross a long definition,
  * slow enough to still read on the way past. */
@@ -23,7 +22,7 @@ interface ReadingProps {
   at: number;
   names: Names;
   read: boolean;
-  sheet: Facing;
+  sheet: Sheet;
   onStep: (by: number) => void;
   onRead: (by: number) => void;
   onOpen: (id: Identity) => void;
@@ -44,7 +43,7 @@ export function Reading(props: ReadingProps) {
   const dependsOn = () =>
     dependencies().filter((id) => !broke(props.review, id));
 
-  /* Dragged width of the column; 0 leaves the stylesheet's default. */
+  /* Dragged width of the sheet; 0 leaves the stylesheet's default. */
   const [width, setWidth] = createSignal(0);
 
   let body: HTMLDivElement | undefined;

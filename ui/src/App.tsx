@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal } from "solid-js";
 import { Graph } from "./Graph.tsx";
-import { Reading, type Facing } from "./Reading.tsx";
+import { Reading, type Sheet } from "./Reading.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import { CostPanel, type Opened, WarningsPanel } from "./Panels.tsx";
 import type { Identity, Raw } from "./dagger.ts";
@@ -13,9 +13,6 @@ import { narrowed } from "./narrow.ts";
 import { compared } from "./progress.ts";
 import { namesIn } from "./text.ts";
 import { next as another, wear, wearing } from "./theme.ts";
-
-/** Where the reader wants the sheet: a column or a drawer, as the screen allows. */
-type Pane = "away" | "beside" | "half" | "full";
 
 export function App(props: { raw: Raw; said: string[] }) {
   const whole = createMemo(() => digest(props.raw));
@@ -84,23 +81,24 @@ export function App(props: { raw: Raw; said: string[] }) {
   const weaker = () =>
     review().warnings.filter((one) => one.impact === "degraded");
 
-  /* Wide: a closable, resizable column. Narrow: a drawer, which starts closed and any
-   * navigation opens. One intent, clamped to whichever the screen can show. */
+  /* Wide: a closable, resizable sheet beside the graph. Narrow: a sheet below it, which
+   * starts closed and any navigation opens. One intent, clamped to whichever the screen
+   * can show. */
   const wide = createMediaQuery(`(min-width: ${WIDE}px)`);
-  const [pane, setPane] = createSignal<Pane>("beside");
-  const facing = createMemo((): Facing => {
-    const want = pane();
+  const [sheet, setSheet] = createSignal<Sheet>("beside");
+  const facing = createMemo((): Sheet => {
+    const want = sheet();
     if (wide()) return want === "away" ? "away" : "beside";
     return want === "away" || want === "beside" ? "closed" : want;
   });
   const showing = () => facing() !== "away" && facing() !== "closed";
   const open = () => {
-    if (!showing()) setPane(wide() ? "beside" : "half");
+    if (!showing()) setSheet(wide() ? "beside" : "half");
   };
   const shut = () => {
-    setPane("away");
+    setSheet("away");
   };
-  const expand = () => setPane(facing() === "full" ? "half" : "full");
+  const expand = () => setSheet(facing() === "full" ? "half" : "full");
 
   /* Turning ripples down can shrink steps() below the index, so `at` is the clamp. */
   const steps = () => review().steps;
@@ -206,17 +204,15 @@ export function App(props: { raw: Raw; said: string[] }) {
       />
 
       <main class={showing() ? `has-sheet ${facing()}` : ""}>
-        <div class="stage">
-          <Graph
-            review={review()}
-            laid={laid()}
-            here={here()}
-            next={showNext() ? next() : null}
-            read={read()}
-            query={query()}
-            onOpen={goTo}
-          />
-        </div>
+        <Graph
+          review={review()}
+          laid={laid()}
+          here={here()}
+          next={showNext() ? next() : null}
+          read={read()}
+          query={query()}
+          onOpen={goTo}
+        />
         <Reading
           review={review()}
           here={here()}

@@ -101,7 +101,7 @@ export function Graph(props: GraphProps) {
   });
 
   return (
-    <div class="canvas" ref={frame}>
+    <div class="graph" ref={frame}>
       <svg
         ref={paper}
         role="img"
