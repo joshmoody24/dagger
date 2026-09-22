@@ -3,7 +3,7 @@
  * changes, from the repo root:
  *
  *   ./target/debug/dagger --json commits ea9d673~1 ea9d673 \
- *     | npx --prefix ui prettier --parser json > ui/test/review.json
+ *     > ui/test/review.json && npm --prefix ui run format
  */
 
 import assert from "node:assert/strict";

@@ -1,0 +1,12 @@
+# Steps dist runs before `cargo build` on every release runner: the page has to be built
+# so the binary can embed it.
+- name: Install node
+  uses: actions/setup-node@v4
+  with:
+    node-version: 22
+- name: Install the page's dependencies
+  run: npm ci
+  working-directory: ui
+- name: Build the page
+  run: npm run build
+  working-directory: ui

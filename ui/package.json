@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "node --test test/*.test.ts && tsc --noEmit && eslint . && prettier --check .",
+    "test": "node --test test/*.test.ts",
+    "check": "npm test && tsc --noEmit && eslint . && prettier --check . && vite build",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

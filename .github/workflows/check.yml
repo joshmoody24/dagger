@@ -1,0 +1,25 @@
+# What ./check runs, on both platforms a release is built for.
+name: check
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, rust-analyzer
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # TypeScript 7 is the language server the tests read TypeScript with.
+      - run: npm install -g typescript@7.0.2
+      - run: npm ci
+        working-directory: ui
+      - run: ./check

@@ -1,8 +1,9 @@
 [package]
-name = "dagger-cli"
+name = "dagger"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "dagger"

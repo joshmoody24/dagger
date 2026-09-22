@@ -3,6 +3,11 @@ name = "dagger-typescript"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+
+# A build-time tool, not something to release.
+[package.metadata.dist]
+dist = false
 
 [[bin]]
 name = "dagger-typescript"

@@ -3,6 +3,6 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 if [ -d ui/node_modules ]; then
-  (cd ui && npx --no-install vite build)
+  npm --prefix ui run build
 fi
 cargo build --workspace "$@"
