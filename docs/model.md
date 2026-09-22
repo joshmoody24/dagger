@@ -12,7 +12,7 @@ produces the thing it names.
 1. A **snapshot** is one version of the code, laid out on disk. The **snapshot adapter**
    turns what the user asked for, such as `main...HEAD`, into two snapshots: **before**
    and **after**.
-2. In each snapshot, the **extractor adapters** read the files they claim. For every named
+2. In each snapshot, the **extractor adapters** read their assigned files. For every named
    thing in a file they report an **occurrence**. An occurrence has a **locator**, which is
    the file and a path of names, and a list of **pieces**. A piece is a stretch of text that
    belongs to one **part**. The parts are the **contract**, which callers can see, the
@@ -77,7 +77,7 @@ A definition has an occurrence in the before snapshot, the after snapshot, or bo
 | definition | one named thing in the source. `model::Definition` is its two occurrences under one identity. `review::Definition` is everything the review knows about it. |
 | docs | the part written for callers that can't break them. |
 | edge | one shown definition depending on another (`Edge { from, to }`), with unshown definitions stepped over. Held on `Review::edges`. |
-| extractor adapter | an adapter that reads one snapshot and reports an `Extraction`: occurrences and mentions for the files it claims. Configured under `[[extractors]]`. |
+| extractor adapter | an adapter that reads one snapshot and reports an `Extraction`: occurrences and mentions for its assigned files. Configured under `[[extractors]]`. |
 | group | one box on the page (`Group::Group`: name, tier, children) or one thing in it (`Group::Node`). Boxes come from `[group]` and from containers. Held on `Review::groups`. |
 | grouping | the one way of grouping definitions in use, like "package" or "crate": a name and each identity's path (`Grouping`). Configured by `[group]` in `dagger.toml`. |
 | identity | the number matching hands a definition so both snapshots share it (`Identity`). Means nothing on its own. |
