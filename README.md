@@ -42,7 +42,7 @@ dagger md
 
 ## Configuration
 
-Optional. Without a `dagger.toml`, `dagger` infers everything from the repository. A `dagger.toml` at the repository root overrides the inferred configuration. Every supported setting:
+Without a `dagger.toml`, `dagger` infers everything from the repository. A `dagger.toml` at the repository root overrides the inferred configuration. Every supported setting:
 
 ```toml
 [snapshots]
