@@ -11,7 +11,7 @@
   color: var(--muted);
 }
 .mark {
-  font: 700 13px/1 var(--mono);
+  font: 700 var(--text)/1 var(--mono);
   display: inline-block;
   width: 1ch;
   text-align: center;
@@ -70,7 +70,7 @@ main.has-sheet.half .graph {
 }
 .sheet-head h2 {
   margin: 0;
-  font: 500 16px/1.3 var(--mono);
+  font: 500 var(--text-large)/1.3 var(--mono);
   word-break: break-all;
   flex: 1;
   min-width: 0;
@@ -91,7 +91,7 @@ main.has-sheet.half .graph {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font: 13px var(--mono);
+  font: var(--text) var(--mono);
   color: var(--muted);
   margin: 0 0 10px;
 }
@@ -99,12 +99,12 @@ main.has-sheet.half .graph {
   border: 1px solid var(--rule);
   border-radius: 999px;
   padding: 1px 9px;
-  font-size: 12px;
+  font-size: var(--text-small);
   line-height: 1.5;
   color: var(--muted);
 }
 .why {
-  font-size: 13.5px;
+  font-size: var(--text);
   color: var(--muted);
   margin: 0 0 8px;
 }
@@ -126,7 +126,7 @@ main.has-sheet.half .graph {
   height: 38px;
   border-radius: var(--corner);
   color: var(--muted);
-  font-size: 18px;
+  font-size: var(--text-large);
   flex: none;
 }
 
@@ -168,7 +168,7 @@ main.has-sheet.half .graph {
 }
 
 .legend {
-  font-size: 12px;
+  font-size: var(--text-small);
   color: var(--faint);
   margin: 0 0 8px;
 }

@@ -22,17 +22,20 @@ const PAD_X = 12,
   NODE_GAP = 10,
   MARGIN = 16;
 
-/* Must agree with style.css. Monospace advance is 0.6 of the font size; widths are computed
- * rather than measured so tests can run without a page. */
-export const FONT = 14;
-const CHAR = FONT * 0.6;
+/* Text sizes come from the stylesheet. Read when first needed rather than at import, since
+ * the stylesheet may not be on the page yet. Monospace advance is 0.6 of the size; widths
+ * are computed rather than measured so they're the same wherever the graph is laid out. */
+const advance = (name: string) =>
+  parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(name),
+  ) * 0.6;
+export const CHAR = () => advance("--text");
 /* Test names are sentences with underscores; one can be as wide as a dozen ordinary definitions. */
 const LONGEST = 22;
 
-/* A group can't be narrower than its label. Must agree with style.css. */
-export const BOX_FONT = 12.5;
+/* A group can't be narrower than its label. */
 const labelWidth = (text: string) =>
-  Math.ceil(text.length * BOX_FONT * 0.6) + 22;
+  Math.ceil(text.length * advance("--text-small")) + 22;
 
 /** A name as the graph shows it: long ones lose their tail rather than their width. */
 export const shorten = (name: string) =>
@@ -41,7 +44,7 @@ export const shorten = (name: string) =>
 /* Rounded up: half a pixel short and the name pokes out. 34 is the side padding plus the
  * mark and its gap. */
 export const widthOf = (text: string) =>
-  Math.ceil(shorten(text).length * CHAR) + 34;
+  Math.ceil(shorten(text).length * CHAR()) + 34;
 
 /* One band of a group. A run of definitions is folded into one block; a nested group is a cell of its
  * own. */

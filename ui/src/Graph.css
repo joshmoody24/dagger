@@ -22,7 +22,7 @@
   position: absolute;
   inset-inline-start: 12px;
   bottom: 10px;
-  font: 12px var(--mono);
+  font: var(--text-small) var(--mono);
   color: var(--muted);
   pointer-events: none;
   display: flex;
@@ -47,7 +47,7 @@
   stroke-width: 1.4;
 }
 .group text {
-  font: 12.5px var(--mono);
+  font: var(--text-small) var(--mono);
   fill: var(--muted);
   pointer-events: none;
 }
@@ -144,7 +144,7 @@
   stroke: var(--ink);
 }
 .definition text {
-  font: 14px var(--mono);
+  font: var(--text) var(--mono);
   fill: var(--tone);
   pointer-events: none;
 }

@@ -1,3 +1,15 @@
+/* Registered so layout.ts reads them back in px rather than as an unresolved calc. */
+@property --text {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --text-small {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 /* Colours come from theme.ts. What's here is only what a theme has no opinion about. */
 :root {
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -6,6 +18,11 @@
   --corner: 2px;
   --corner-panel: calc(var(--corner) * 1.5);
   --corner-small: calc(var(--corner) * 0.5);
+  /* One text size. Graph widths are computed from it in layout.ts, so it lives only here. */
+  --text: 14px;
+  --text-tiny: calc(var(--text) * 0.8);
+  --text-small: calc(var(--text) * 0.9);
+  --text-large: calc(var(--text) * 1.15);
   /* How faded anything out of play is: read, disabled, or not near the current definition. */
   --dim: 0.55;
 }
@@ -21,7 +38,7 @@ body {
 body {
   background: var(--paper);
   color: var(--ink);
-  font: 16px/1.5 var(--sans);
+  font: var(--text-large)/1.5 var(--sans);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -54,7 +71,7 @@ main {
 }
 
 kbd {
-  font: 10.5px/1.4 var(--mono);
+  font: var(--text-tiny)/1.4 var(--mono);
   border: 1px solid currentColor;
   border-radius: var(--corner-small);
   padding: 0 3px;

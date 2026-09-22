@@ -2,7 +2,7 @@ pre.code {
   margin: 0 0 10px;
   background: var(--paper);
   border-radius: var(--corner);
-  font: 13px/1.6 var(--mono);
+  font: var(--text)/1.6 var(--mono);
   padding: 6px 0;
 }
 /* Long lines wrap: horizontal scrolling loses the change marks. The hanging indent keeps a

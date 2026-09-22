@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/*.test.ts",
+    "test": "node --test --import ./test/page.ts test/*.test.ts",
     "check": "npm test && tsc --noEmit && eslint . && prettier --check . && vite build",
     "lint": "eslint .",
     "format": "prettier --write .",

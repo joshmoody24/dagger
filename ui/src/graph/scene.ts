@@ -8,7 +8,7 @@ import type {
   Spot,
 } from "../dagger.ts";
 import { MARK, TINT } from "../digest.ts";
-import { FONT, shorten } from "../layout.ts";
+import { CHAR, shorten } from "../layout.ts";
 
 /* What the graph shows, as plain data: geometry and class names, never colours. Colours
  * live in Graph.css so a theme change needs nothing here. Plain functions so it can be
@@ -92,7 +92,6 @@ interface Point {
 const TEXT_X = 10;
 export const NODE_TEXT_Y = 18.5;
 export const BOX_TEXT_Y = 16;
-const CHAR = FONT * 0.6;
 
 export function scene(input: Input): Scene {
   /* A filter is the only thing that dims while one is typed. */
@@ -162,7 +161,7 @@ function definition(
       id,
       ...spot,
       name: shorten(definition.name),
-      nameX: TEXT_X + (mark.length + 1) * CHAR,
+      nameX: TEXT_X + (mark.length + 1) * CHAR(),
       mark,
       tint: TINT[definition.mark],
       title: definition.locator,

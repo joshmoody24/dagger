@@ -4,7 +4,7 @@
   display: grid;
   place-content: center;
   color: var(--muted);
-  font: 13px var(--mono);
+  font: var(--text) var(--mono);
 }
 .phases {
   list-style: none;

@@ -31,7 +31,7 @@
   border: 1px solid var(--rule);
   border-radius: var(--corner);
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: var(--text);
 }
 .nav .nav-quiet:disabled,
 .nav .nav-primary:disabled {
@@ -43,7 +43,7 @@
   padding-inline: 12px;
   border: 1px solid var(--rule);
   border-radius: var(--corner);
-  font: 14px var(--mono);
+  font: var(--text) var(--mono);
   color: var(--muted);
 }
 .nav .nav-progress.done {
@@ -57,7 +57,7 @@
   background: var(--lean);
   color: var(--paper);
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: var(--text);
 }
 /* Dark on bright is already maximum contrast; a background behind the key could only
  * reduce it. */
