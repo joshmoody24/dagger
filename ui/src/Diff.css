@@ -31,9 +31,10 @@ pre.code .gutter {
 pre.code .gap {
   color: var(--muted);
 }
+/* An ellipsis, the same as any other gap in the code; hovering says it opens. */
 pre.code button.fold {
   font: inherit;
-  color: var(--muted);
+  color: var(--faint);
   background: none;
   border: 0;
   width: 100%;
@@ -42,7 +43,7 @@ pre.code button.fold {
 }
 pre.code button.fold:hover,
 pre.code button.fold:focus-visible {
-  color: var(--lean);
+  color: var(--muted);
   outline: none;
 }
 /* The words that differ, on a darker ground than the line they sit in. */
