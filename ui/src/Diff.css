@@ -28,6 +28,30 @@ pre.code .gutter {
 pre.code .gap {
   color: var(--muted);
 }
+pre.code button.fold {
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  width: 100%;
+  text-align: start;
+  cursor: pointer;
+}
+pre.code button.fold:hover,
+pre.code button.fold:focus-visible {
+  color: var(--lean);
+  outline: none;
+}
+/* The words that differ, on a darker ground than the line they sit in. */
+pre.code .changed {
+  border-radius: 2px;
+}
+pre.code .line.added .changed {
+  background: color-mix(in srgb, var(--add) 30%, transparent);
+}
+pre.code .line.removed .changed {
+  background: color-mix(in srgb, var(--del) 30%, transparent);
+}
 pre.code .marker {
   position: absolute;
   inset-inline-start: 8px;
@@ -54,4 +78,17 @@ pre.code .link {
 }
 pre.code .link:hover {
   text-decoration: underline dotted;
+}
+/* Coloured by what became of the thing it names, since that is why it's being read. */
+pre.code .link.add {
+  color: var(--add);
+}
+pre.code .link.del {
+  color: var(--del);
+}
+pre.code .link.chg {
+  color: var(--chg);
+}
+pre.code .link.broke {
+  text-decoration: underline wavy;
 }

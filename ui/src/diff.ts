@@ -7,6 +7,16 @@ import type { Line, Shown } from "./dagger.ts";
 /* Largest a×b table worth building; 6000×6000 is not. */
 const EXACT = 40_000;
 
+/** Character range within a line, end exclusive. */
+export type Range = [number, number];
+
+/** A diff line with what the page adds: words to stress, or the stretch it stands in for. */
+export interface Detailed extends Shown {
+  emphasis?: Range[];
+  /** Indexes into the full diff of the lines elided here. */
+  gap?: { from: number; to: number };
+}
+
 /** Line by line, marked as kept, gone, or new. */
 export function compare(before: Line[] | null, after: Line[] | null): Shown[] {
   return diffing(before ?? [], after ?? []);
@@ -162,36 +172,130 @@ function exactly(a: Line[], b: Line[]): Shown[] {
   ];
 }
 
+/* A removed line followed by an added one is usually an edit, not a swap; a run of n and n
+ * likewise, in order. Shorter than this in common and they're just different lines. */
+const ALIKE = 0.5;
+
+/** Removed-then-added runs paired in order, each pair stressing the words that differ. */
+export function paired(lines: Shown[]): Detailed[] {
+  const run = (from: number, mark: Shown["mark"]) => {
+    let to = from;
+    while (to < lines.length && lines[to].mark === mark) to++;
+    return to - from;
+  };
+
+  const stressed = new Map<number, Range[]>();
+  for (let at = 0; at < lines.length;) {
+    const gone = run(at, "−");
+    const came = gone ? run(at + gone, "+") : 0;
+    for (let k = 0; gone === came && k < gone; k++) {
+      const [was, is] = [at + k, at + gone + k];
+      const differ = differing(lines[was].line.text, lines[is].line.text);
+      if (!differ) continue;
+      stressed.set(was, differ[0]);
+      stressed.set(is, differ[1]);
+    }
+    at += gone + came || 1;
+  }
+
+  return lines.map((one, at) => {
+    const emphasis = stressed.get(at);
+    return emphasis ? { ...one, emphasis } : one;
+  });
+}
+
+interface Token {
+  text: string;
+  from: number;
+}
+
+/* Words, runs of whitespace, and single punctuation marks, each knowing where it starts. */
+function tokens(text: string): Token[] {
+  return [...text.matchAll(/\w+|\s+|./g)].map((hit) => ({
+    text: hit[0],
+    from: hit.index,
+  }));
+}
+
+/* Where two lines differ, as ranges on each, or null when they share too little for the
+ * differences to mean anything. */
+function differing(a: string, b: string): [Range[], Range[]] | null {
+  const [x, y] = [tokens(a), tokens(b)];
+  if (x.length * y.length > EXACT) return null;
+
+  const same = Array.from({ length: x.length + 1 }, () =>
+    new Array<number>(y.length + 1).fill(0),
+  );
+  for (let i = x.length - 1; i >= 0; i--) {
+    for (let j = y.length - 1; j >= 0; j--) {
+      same[i][j] =
+        x[i].text === y[j].text
+          ? same[i + 1][j + 1] + 1
+          : Math.max(same[i + 1][j], same[i][j + 1]);
+    }
+  }
+  if (same[0][0] < ALIKE * Math.max(x.length, y.length)) return null;
+
+  const [keptX, keptY] = [new Set<number>(), new Set<number>()];
+  for (let i = 0, j = 0; i < x.length && j < y.length;) {
+    if (x[i].text === y[j].text) {
+      keptX.add(i);
+      keptY.add(j);
+      i++;
+      j++;
+    } else if (same[i + 1][j] >= same[i][j + 1]) i++;
+    else j++;
+  }
+  return [ranges(x, keptX), ranges(y, keptY)];
+}
+
+/* The tokens not kept, as ranges, with neighbours joined into one. */
+function ranges(all: Token[], kept: Set<number>): Range[] {
+  return all.reduce<Range[]>((out, token, at) => {
+    if (kept.has(at)) return out;
+    const [from, to] = [token.from, token.from + token.text.length];
+    const last = out.at(-1);
+    return last && last[1] === from
+      ? [...out.slice(0, -1), [last[0], to]]
+      : [...out, [from, to]];
+  }, []);
+}
+
 /* Lines of context around a change. A definition can be a 10,000-line file, and far from a
  * change unchanged code is just noise. */
 const REACH = 100;
 
-/** What's worth showing: everything near a change, and a mark where the rest was. */
-export function focused(lines: Shown[], reach = REACH): Shown[] {
+/** What's worth showing: everything near a change, and a gap recording the rest. */
+export function focused(lines: Detailed[], reach = REACH): Detailed[] {
   const changed = lines.flatMap((one, at) => (one.mark === " " ? [] : [at]));
-  /* Nothing changed (it's here because a dependency changed), so show the top. */
-  const anchors = changed.length ? changed : [0];
 
-  const near = new Set<number>();
-  for (const at of anchors) {
+  /* The first line is the signature, which says what's being read, so it always shows. */
+  const near = new Set<number>([0]);
+  for (const at of changed) {
     const [from, to] = [
       Math.max(0, at - reach),
       Math.min(lines.length - 1, at + reach),
     ];
     for (let line = from; line <= to; line++) near.add(line);
   }
-  if (near.size === lines.length) return lines;
+  /* Nothing changed (it's here because a dependency changed), so show the top. */
+  if (!changed.length) for (let at = 0; at <= reach; at++) near.add(at);
+  if (near.size >= lines.length) return lines;
 
-  const shown: Shown[] = [];
-  let standing = false;
-  for (let at = 0; at < lines.length; at++) {
-    if (near.has(at)) {
-      shown.push(lines[at]);
-      standing = false;
-    } else if (!standing) {
-      shown.push({ mark: " ", line: { at: null, text: "…" } });
-      standing = true;
-    }
+  /* Each stretch stood down, keyed by where it starts. */
+  const gaps = new Map<number, number>();
+  for (let at = 0, from = 0; at < lines.length; at++) {
+    if (near.has(at)) continue;
+    if (!gaps.has(from) || gaps.get(from) !== at) from = at;
+    gaps.set(from, at + 1);
   }
-  return shown;
+
+  return lines.flatMap((one, at): Detailed[] => {
+    const to = gaps.get(at);
+    if (near.has(at)) return [one];
+    if (to === undefined) return [];
+    return [
+      { mark: " ", line: { at: null, text: "…" }, gap: { from: at, to } },
+    ];
+  });
 }

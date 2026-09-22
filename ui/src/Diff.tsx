@@ -6,9 +6,10 @@ import {
   on,
   Show,
 } from "solid-js";
-import type { Definition as Def, Identity, Shown } from "./dagger.ts";
+import type { Definition as Def, Identity, Review, Shown } from "./dagger.ts";
 import type { Painted } from "./colouring.ts";
-import { compare, focused } from "./diff.ts";
+import { compare, focused, paired, type Range } from "./diff.ts";
+import { broke, TINT } from "./digest.ts";
 import { stitch } from "./text.ts";
 import { colouring, painted, readied, speaks } from "./colouring.ts";
 import { dressing, wearing } from "./theme.ts";
@@ -19,6 +20,7 @@ export type Names = Map<string, Identity>;
 export function Diff(props: {
   definition: Def;
   names: Names;
+  review: Review;
   onOpen: (id: Identity) => void;
 }) {
   createEffect(() =>
@@ -26,20 +28,43 @@ export function Diff(props: {
   );
 
   /* Memoised: read once per rendered line, and diffing/colouring is expensive. */
-  const lines = createMemo(() => {
+  const all = createMemo(() => {
     const [was, is] = [
       stitch(props.definition.before),
       stitch(props.definition.after),
     ];
-    const all: Shown[] =
+    const shown: Shown[] =
       was && is
         ? compare(was, is)
         : [
             ...(was ?? []).map((line) => ({ mark: "−" as const, line })),
             ...(is ?? []).map((line) => ({ mark: "+" as const, line })),
           ];
-    return focused(all);
+    return paired(shown);
   });
+  const cut = createMemo(() => focused(all()));
+
+  /* Gaps unfolded, by where each starts; remembered with the definition so another one's
+   * gaps start folded without an effect to reset them. */
+  const [unfolded, setUnfolded] = createSignal<{
+    of: Identity | null;
+    gaps: Set<number>;
+  }>({ of: null, gaps: new Set() });
+  const opened = () =>
+    unfolded().of === props.definition.id ? unfolded().gaps : new Set<number>();
+  const unfold = (from: number) =>
+    setUnfolded({
+      of: props.definition.id,
+      gaps: new Set([...opened(), from]),
+    });
+
+  const lines = createMemo(() =>
+    cut().flatMap((one) =>
+      one.gap && opened().has(one.gap.from)
+        ? all().slice(one.gap.from, one.gap.to)
+        : [one],
+    ),
+  );
 
   const unchanged = createMemo(
     () => lines().length > 0 && lines().every((one) => one.mark === " "),
@@ -68,9 +93,10 @@ export function Diff(props: {
   const [first, setFirst] = createSignal<HTMLElement | null>(null);
   let code!: HTMLPreElement;
 
+  /* Unfolding a gap re-renders too, and mustn't scroll away from what was just opened. */
   createEffect(
-    on([lines, first], ([shown, changed]) => {
-      const pane = code.parentElement;
+    on(cut, (shown) => {
+      const [pane, changed] = [code.parentElement, first()];
       if (!pane) return;
       if (!changed || !shown.some((one) => one.mark !== " ")) {
         pane.scrollTop = 0;
@@ -90,28 +116,45 @@ export function Diff(props: {
     >
       <For each={lines()}>
         {(one, at) => (
-          <span
-            class={`line ${one.mark === "+" ? "added" : one.mark === "−" ? "removed" : ""}`}
-            ref={(line) => at() === firstChanged() && setFirst(line)}
+          <Show
+            when={one.gap}
+            fallback={
+              <span
+                class={`line ${one.mark === "+" ? "added" : one.mark === "−" ? "removed" : ""}`}
+                ref={(line) => at() === firstChanged() && setFirst(line)}
+              >
+                <span class="marker" aria-hidden="true">
+                  {one.mark === " " ? "" : one.mark}
+                </span>
+                <span class="gutter" aria-hidden="true">
+                  {one.line.at ?? ""}
+                </span>
+                <Show
+                  when={one.line.at !== null}
+                  fallback={<span class="gap">…</span>}
+                >
+                  <Code
+                    pieces={tinted()[at()] ?? [{ text: one.line.text }]}
+                    emphasis={one.emphasis ?? []}
+                    names={props.names}
+                    review={props.review}
+                    here={props.definition.id}
+                    onOpen={props.onOpen}
+                  />
+                </Show>
+              </span>
+            }
           >
-            <span class="marker" aria-hidden="true">
-              {one.mark === " " ? "" : one.mark}
-            </span>
-            <span class="gutter" aria-hidden="true">
-              {one.line.at ?? ""}
-            </span>
-            <Show
-              when={one.line.at !== null}
-              fallback={<span class="gap">…</span>}
-            >
-              <Code
-                pieces={tinted()[at()] ?? [{ text: one.line.text }]}
-                names={props.names}
-                here={props.definition.id}
-                onOpen={props.onOpen}
-              />
-            </Show>
-          </span>
+            {(gap) => (
+              <button
+                type="button"
+                class="line fold"
+                onClick={() => unfold(gap().from)}
+              >
+                {gap().to - gap().from} unchanged lines
+              </button>
+            )}
+          </Show>
         )}
       </For>
     </pre>
@@ -122,15 +165,37 @@ export function Diff(props: {
  * which no highlighting library can do on its own. */
 function Code(props: {
   pieces: Painted[];
+  emphasis: Range[];
   names: Names;
+  review: Review;
   here: Identity;
   onOpen: (id: Identity) => void;
 }) {
   const parts = createMemo((): Led[] =>
-    props.pieces.flatMap((piece) =>
+    stressed(props.pieces, props.emphasis).flatMap((piece) =>
       piece.colour ? split(piece, props.names, props.here) : [piece],
     ),
   );
+
+  const marked = (part: Led) =>
+    part.goes && props.review.definitions.get(part.goes)?.mark;
+  const classes = (part: Led) => {
+    const mark = marked(part);
+    return [
+      part.goes && "link",
+      mark && TINT[mark],
+      part.goes && broke(props.review, part.goes) && "broke",
+      part.changed && "changed",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  };
+  /* A change's tint says more than the grammar's colour, so it wins where there is one. */
+  const colour = (part: Led) => {
+    const mark = marked(part);
+    const tinted = mark && TINT[mark] !== "aff";
+    return part.colour && !tinted ? { color: part.colour } : undefined;
+  };
 
   return (
     <For each={parts()}>
@@ -138,7 +203,7 @@ function Code(props: {
         <Show
           when={part.goes}
           fallback={
-            <span style={part.colour ? { color: part.colour } : undefined}>
+            <span class={classes(part) || undefined} style={colour(part)}>
               {part.text}
             </span>
           }
@@ -148,8 +213,8 @@ function Code(props: {
             <span
               role="link"
               tabindex="0"
-              class="link"
-              style={part.colour ? { color: part.colour } : undefined}
+              class={classes(part)}
+              style={colour(part)}
               onClick={() => props.onOpen(goes())}
               onKeyDown={(event) => {
                 if (event.key === "Enter") props.onOpen(goes());
@@ -164,9 +229,38 @@ function Code(props: {
   );
 }
 
-type Led = Painted & { goes?: Identity };
+type Led = Painted & { goes?: Identity; changed?: boolean };
 
-function split(piece: Painted, names: Names, here: Identity): Led[] {
+/* Pieces cut at the edges of the stressed ranges, so a colour can span a stressed word and
+ * an unstressed one. */
+function stressed(pieces: Painted[], ranges: Range[]): Led[] {
+  if (!ranges.length) return pieces;
+
+  const starts = pieces.reduce<number[]>(
+    (acc, piece) => [...acc, acc[acc.length - 1] + piece.text.length],
+    [0],
+  );
+  return pieces.flatMap((piece, at) => {
+    const [from, to] = [starts[at], starts[at + 1]];
+    const edges = [
+      ...new Set([
+        from,
+        ...ranges.flat().filter((edge) => edge > from && edge < to),
+        to,
+      ]),
+    ].sort((a, b) => a - b);
+    return edges.slice(1).map((end, k) => {
+      const start = edges[k];
+      return {
+        ...piece,
+        text: piece.text.slice(start - from, end - from),
+        changed: ranges.some(([x, y]) => x <= start && end <= y),
+      };
+    });
+  });
+}
+
+function split(piece: Led, names: Names, here: Identity): Led[] {
   const goes = names.get(piece.text.trim());
   if (goes !== undefined && goes !== here && piece.text.trim() === piece.text) {
     return [{ ...piece, goes }];

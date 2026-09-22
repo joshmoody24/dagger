@@ -127,6 +127,7 @@ export function Reading(props: ReadingProps) {
             <Diff
               definition={one()}
               names={props.names}
+              review={props.review}
               onOpen={props.onOpen}
             />
           </div>

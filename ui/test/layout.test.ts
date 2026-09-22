@@ -2,7 +2,7 @@
  * review is pinned to one commit of this repository; regenerate it when the output shape
  * changes, from the repo root:
  *
- *   ./target/debug/dagger --json commits ea9d673~1 ea9d673 \
+ *   ./target/debug/dagger json commits ea9d673~1 ea9d673 \
  *     > ui/test/review.json && npm --prefix ui run format
  */
 
@@ -11,7 +11,7 @@ import fs from "node:fs";
 import test from "node:test";
 import type { Box, Edge, Group, Identity, Line, Raw } from "../src/dagger.ts";
 import { digest } from "../src/digest.ts";
-import { compare, focused } from "../src/diff.ts";
+import { compare, focused, paired } from "../src/diff.ts";
 import { NODE_H, layout, shorten, widthOf } from "../src/layout.ts";
 import { phases, standing } from "../src/progress.ts";
 import { stitch } from "../src/text.ts";
@@ -281,11 +281,57 @@ test("a long diff is cut down to what sits near a change", () => {
   const kept = shown.filter((one) => one.line.at !== null);
   const gaps = shown.filter((one) => one.line.at === null);
 
-  assert.equal(kept.length, 21, "the changed line and ten either side");
+  assert.equal(
+    kept.length,
+    22,
+    "the signature, the changed line and ten either side",
+  );
   assert.equal(gaps.length, 2, "one mark for each stretch stood down");
   assert.ok(
-    kept.every((one) => Math.abs(one.line.at! - 251) <= 10),
+    kept.every(
+      (one) => one.line.at === 1 || Math.abs(one.line.at! - 251) <= 10,
+    ),
     "kept something far from the change",
+  );
+  assert.deepEqual(
+    gaps.map((one) => one.gap),
+    [
+      { from: 1, to: 240 },
+      { from: 261, to: 500 },
+    ],
+    "each gap records the lines it stands in for",
+  );
+});
+
+test("a removed line and its replacement stress only the words that differ", () => {
+  const shown = paired([
+    { mark: "−", line: { at: 1, text: "let total = count + 1;" } },
+    { mark: "+", line: { at: 1, text: "let total = count + 2;" } },
+  ]);
+  assert.deepEqual(shown[0].emphasis, [[20, 21]]);
+  assert.deepEqual(shown[1].emphasis, [[20, 21]]);
+});
+
+test("lines that share too little are not stressed at all", () => {
+  const shown = paired([
+    { mark: "−", line: { at: 1, text: "return None" } },
+    { mark: "+", line: { at: 1, text: "for x in xs: yield f(x)" } },
+  ]);
+  assert.ok(shown.every((one) => one.emphasis === undefined));
+});
+
+test("a run of removals then as many additions pairs up in order", () => {
+  const shown = paired([
+    { mark: " ", line: { at: 1, text: "{" } },
+    { mark: "−", line: { at: 2, text: "a = one(x)" } },
+    { mark: "−", line: { at: 3, text: "b = two(x)" } },
+    { mark: "+", line: { at: 2, text: "a = one(y)" } },
+    { mark: "+", line: { at: 3, text: "b = three(x)" } },
+    { mark: " ", line: { at: 4, text: "}" } },
+  ]);
+  assert.deepEqual(
+    shown.map((one) => one.emphasis),
+    [undefined, [[8, 9]], [[4, 7]], [[8, 9]], [[4, 9]], undefined],
   );
 });
 
