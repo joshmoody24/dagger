@@ -28,10 +28,13 @@ fi
 
 ./check
 
-sed -i.bak "s/^version = \"$current\"$/version = \"$version\"/" Cargo.toml && rm Cargo.toml.bak
-cargo update --workspace --quiet
-git add Cargo.toml Cargo.lock
-git commit -q -m "$version"
+# The same version again means a tag that was removed after a failed build: nothing to bump.
+if [ "$version" != "$current" ]; then
+  sed -i.bak "s/^version = \"$current\"$/version = \"$version\"/" Cargo.toml && rm Cargo.toml.bak
+  cargo update --workspace --quiet
+  git add Cargo.toml Cargo.lock
+  git commit -q -m "$version"
+fi
 git tag "v$version"
 git push
 git push origin "v$version"
