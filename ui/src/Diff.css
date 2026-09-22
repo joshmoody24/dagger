@@ -31,10 +31,10 @@ pre.code .gutter {
 pre.code .gap {
   color: var(--muted);
 }
-/* An ellipsis in the gutter's colour, centred, wearing the key that opens it. */
+/* An ellipsis, centred, wearing the key that opens it. */
 pre.code button.fold {
   font: inherit;
-  color: var(--faint);
+  color: var(--muted);
   background: none;
   border: 0;
   width: 100%;
@@ -48,7 +48,7 @@ pre.code button.fold kbd {
 }
 pre.code button.fold:hover,
 pre.code button.fold:focus-visible {
-  color: var(--muted);
+  color: var(--ink);
   outline: none;
 }
 /* The words that differ, on a darker ground than the line they sit in. */
