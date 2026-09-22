@@ -21,7 +21,7 @@ use dagger_core::prose::{line_end, line_start, preamble};
 use dagger_core::reference::BinderId;
 use dagger_lsp_client::walk::{Source, Walk};
 use dagger_lsp_client::{self as lsp, Lines, Server};
-use dagger_protocol::{Changed, Note, Request, Response};
+use dagger_protocol::{Changed, Note, Progress, Request, Response};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -140,7 +140,12 @@ fn extract(
     let root = dir.canonicalize()?;
     let ours: BTreeSet<String> = files.iter().cloned().collect();
 
-    eprintln!("  starting {}", binder.0);
+    eprintln!(
+        "{}",
+        Progress::StartingServer {
+            name: binder.0.clone()
+        }
+    );
     let server = Server::start(&settings.server, dir, settings.options.clone())?;
 
     let mut walk = Walk::new(
@@ -172,9 +177,11 @@ fn extract(
 
     let occurrences = definitions(&seen, &contracts);
     eprintln!(
-        "  read {} files, found {} definitions",
-        seen.len(),
-        occurrences.len()
+        "{}",
+        Progress::Finished {
+            files: seen.len(),
+            definitions: occurrences.len(),
+        }
     );
 
     Ok((

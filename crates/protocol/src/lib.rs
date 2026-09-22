@@ -100,6 +100,43 @@ pub struct Changed {
     pub at: Vec<Span>,
 }
 
+/// What an adapter says on stderr while a reading is under way, in place of one-off
+/// prose. A fixed vocabulary means the same event is worded the same way everywhere it
+/// happens, rather than each adapter inventing — and slowly drifting from — its own
+/// text for "started a server" or "here's what I found".
+#[derive(Debug, Clone, PartialEq)]
+pub enum Progress {
+    /// A server was started to answer what's ahead.
+    StartingServer { name: String },
+    /// The server is indexing before it can be trusted to answer anything.
+    Indexing { name: String },
+    /// How far a walk outward from what changed has gotten.
+    Walked {
+        done: usize,
+        known: usize,
+        opened: usize,
+    },
+    /// What a reading found, with nothing left to ask.
+    Finished { files: usize, definitions: usize },
+}
+
+impl std::fmt::Display for Progress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Progress::StartingServer { name } => write!(f, "  starting {name}"),
+            Progress::Indexing { name } => write!(f, "  waiting for {name} to index"),
+            Progress::Walked {
+                done,
+                known,
+                opened,
+            } => write!(f, "  walked {done} of {known} files, opened {opened}"),
+            Progress::Finished { files, definitions } => {
+                write!(f, "  read {files} files, found {definitions} definitions")
+            }
+        }
+    }
+}
+
 /// Something an adapter wants the reader to know: a file it couldn't parse, a project
 /// it couldn't make sense of. Prose rather than a fixed set of cases, because dagger
 /// can't know in advance what a given language's tooling will run into.
@@ -156,4 +193,44 @@ pub enum Response {
     Failed {
         message: String,
     },
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::Progress;
+
+    #[test]
+    fn rendering_matches_what_adapters_used_to_write_by_hand() {
+        assert_eq!(
+            Progress::StartingServer {
+                name: "rust-analyzer".to_string()
+            }
+            .to_string(),
+            "  starting rust-analyzer"
+        );
+        assert_eq!(
+            Progress::Indexing {
+                name: "rust-analyzer".to_string()
+            }
+            .to_string(),
+            "  waiting for rust-analyzer to index"
+        );
+        assert_eq!(
+            Progress::Walked {
+                done: 3,
+                known: 5,
+                opened: 7
+            }
+            .to_string(),
+            "  walked 3 of 5 files, opened 7"
+        );
+        assert_eq!(
+            Progress::Finished {
+                files: 8,
+                definitions: 141
+            }
+            .to_string(),
+            "  read 8 files, found 141 definitions"
+        );
+    }
 }

@@ -18,7 +18,7 @@ use dagger_core::prose::preamble;
 use dagger_core::reference::BinderId;
 use dagger_lsp_client::walk::{Source, Walk};
 use dagger_lsp_client::{Lines, Server};
-use dagger_protocol::{Changed, Note, Request, Response};
+use dagger_protocol::{Changed, Note, Progress, Request, Response};
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -121,7 +121,12 @@ fn extract(
     ripples: u32,
     settings: &Settings,
 ) -> Result<(Extraction, Vec<Note>)> {
-    eprintln!("  starting rust-analyzer");
+    eprintln!(
+        "{}",
+        Progress::StartingServer {
+            name: "rust-analyzer".to_string()
+        }
+    );
     let mut options = json!({
         // Nothing here needs macros expanded or build scripts run, and both cost real
         // time on a cold tree.
@@ -132,7 +137,12 @@ fn extract(
         options["linkedProjects"] = json!(settings.linked);
     }
     let mut server = Server::start(&["rust-analyzer".to_string()], dir, options)?;
-    eprintln!("  waiting for rust-analyzer to index");
+    eprintln!(
+        "{}",
+        Progress::Indexing {
+            name: "rust-analyzer".to_string()
+        }
+    );
     server.wait_until(|message| {
         message["method"] == "experimental/serverStatus"
             && message["params"]["quiescent"] == serde_json::Value::Bool(true)
@@ -180,9 +190,11 @@ fn extract(
 
     notes.extend(source.modules.notes);
     eprintln!(
-        "  read {} files, found {} definitions",
-        parsed.len(),
-        occurrences.len()
+        "{}",
+        Progress::Finished {
+            files: parsed.len(),
+            definitions: occurrences.len(),
+        }
     );
 
     Ok((

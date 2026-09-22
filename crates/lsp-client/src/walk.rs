@@ -13,7 +13,7 @@ use crate::{Lines, Server};
 use anyhow::Result;
 use dagger_core::model::{Locator, Part, Span};
 use dagger_core::reference::{BinderId, Mention, Site, Target};
-use dagger_protocol::{Changed, Note};
+use dagger_protocol::{Changed, Note, Progress};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
@@ -161,10 +161,12 @@ impl<S: Source> Walk<S> {
 
         while let Some((path, wanted, away)) = front.next() {
             eprintln!(
-                "  walked {} of {} files, opened {}",
-                front.walked(),
-                front.known(),
-                self.seen.len()
+                "{}",
+                Progress::Walked {
+                    done: front.walked(),
+                    known: front.known(),
+                    opened: self.seen.len(),
+                }
             );
             if front.walked() > self.walk_limit {
                 self.notes.push(Note {
