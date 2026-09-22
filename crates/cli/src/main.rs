@@ -351,7 +351,7 @@ fn compare(
     let matched = match_snapshots(before, after);
 
     // Grouping needs marker files on disk, so it's worked out here rather than in the core.
-    let grouping = match config.grouping.as_ref() {
+    let grouping = match config.group.as_ref() {
         Some(wanted) => grouping::of(wanted, &after_dir, &matched.definitions),
         None => Grouping::default(),
     };

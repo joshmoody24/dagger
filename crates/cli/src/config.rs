@@ -13,14 +13,14 @@ pub struct Config {
     pub extractors: Vec<Extractor>,
     /// One grouping, not a list: drawn boxes have to nest, and two groupings of the same
     /// code rarely nest inside one another.
-    pub grouping: Option<GroupingConfig>,
+    pub group: Option<GroupConfig>,
     #[serde(default)]
     pub review: ReviewConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct GroupingConfig {
+pub struct GroupConfig {
     /// What a reader would call it: "package", "crate", "service".
     pub name: String,
     /// Files whose directory is a group: `BUILD.bazel`, `Cargo.toml`, `package.json`. A

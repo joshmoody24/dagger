@@ -2,13 +2,13 @@
 //! holding a `BUILD.bazel`, `Cargo.toml`, `package.json`, and so on. Anything a marker
 //! can't express would need an adapter; nothing needs one yet.
 
-use crate::config::GroupingConfig;
+use crate::config::GroupConfig;
 use dagger_core::group::{Grouping, Path as GroupPath};
 use dagger_core::model::{Definition, segments};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-pub fn of(config: &GroupingConfig, dir: &Path, definitions: &[Definition]) -> Grouping {
+pub fn of(config: &GroupConfig, dir: &Path, definitions: &[Definition]) -> Grouping {
     let mut known: BTreeMap<String, GroupPath> = BTreeMap::new();
 
     let of = definitions

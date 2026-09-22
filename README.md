@@ -59,7 +59,7 @@ adapter = "lsp"
 include = ["**/*.ts", "**/*.tsx"]
 settings = { server = ["tsc", "--lsp", "--stdio"] }
 
-[grouping]
+[group]
 name = "package"
 markers = ["Cargo.toml", "package.json"]
 
@@ -78,7 +78,7 @@ ripples = 1
   - `settings.server` (`lsp`): the language server command
   - `settings.options` (`lsp`): passed to the server as its initialization options
   - `settings.linked` (`rust`): extra Cargo manifests outside the workspace
-- `[grouping]`: how definitions are grouped. Each group is drawn as a box on the graph.
+- `[group]`: how definitions are grouped. Each group is drawn as a box on the graph.
   - `name`: what a group is called
   - `markers`: files whose directory is a group. A definition belongs to the nearest marker above its file. Groups do not nest.
 - `[review]`
