@@ -132,9 +132,9 @@ jobs:
         with:
           "node-version": 22
       - name: "Install the page's dependencies"
-        run: "npm ci"
+        run: "npm --prefix ui ci"
       - name: "Build the page"
-        run: "npm run build"
+        run: "npm --prefix ui run build"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
