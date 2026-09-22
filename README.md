@@ -74,7 +74,7 @@ ripples = 1
   - `settings.carry_ignored`: link ignored files (build output, installed packages) into each snapshot so language servers can resolve imports. Default true.
 - `[[extractors]]`: the extractor adapters that read the code, one per language
   - `adapter`: `rust` and `lsp` are built in
-  - `include`: globs this extractor adapter claims. A later one wins a contested file. Unclaimed files are compared whole.
+  - `include`: globs assigning files to this extractor adapter. A file matched by two is assigned to the later one. Files assigned to none are compared whole.
   - `settings.server` (`lsp`): the language server command
   - `settings.options` (`lsp`): passed to the server as its initialization options
   - `settings.linked` (`rust`): extra Cargo manifests outside the workspace
