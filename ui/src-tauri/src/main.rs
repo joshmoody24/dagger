@@ -3,7 +3,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use tauri::Emitter;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -45,22 +45,29 @@ async fn review(
             })
         });
 
-        let mut said = String::new();
-        if let Some(mut stdout) = run.stdout.take() {
-            stdout
-                .read_to_string(&mut said)
-                .map_err(|error| format!("dagger said something odd: {error}"))?;
-        }
+        // The review is one line. Taken as soon as it ends: dagger still has its snapshots
+        // to remove, which on a big repository is seconds nobody should wait through.
+        let said = run
+            .stdout
+            .take()
+            .and_then(|stdout| BufReader::new(stdout).lines().next())
+            .transpose()
+            .map_err(|error| format!("dagger said something odd: {error}"))?;
 
-        let ended = run
-            .wait()
-            .map_err(|error| format!("dagger didn't finish: {error}"))?;
-        let wrong = told.and_then(|told| told.join().ok()).unwrap_or_default();
-
-        if !ended.success() {
-            return Err(wrong.trim().to_string());
+        match said {
+            Some(said) => {
+                std::thread::spawn(move || {
+                    let _ = run.wait();
+                    told.map(|told| told.join());
+                });
+                Ok(said)
+            }
+            None => {
+                let _ = run.wait();
+                let wrong = told.and_then(|told| told.join().ok()).unwrap_or_default();
+                Err(wrong.trim().to_string())
+            }
         }
-        Ok(said)
     })
     .await
     .map_err(|error| format!("the reading didn't finish: {error}"))?

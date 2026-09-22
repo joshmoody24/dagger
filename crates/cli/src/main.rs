@@ -335,10 +335,12 @@ fn compare(
     );
 
     if args.json {
+        // One line, so whoever is reading can take it the moment it ends rather than
+        // waiting for this process to finish removing its snapshots.
         let _ = writeln!(
             std::io::stdout().lock(),
             "{}",
-            serde_json::to_string_pretty(&review)?
+            serde_json::to_string(&review)?
         );
     } else {
         report::print(&review);

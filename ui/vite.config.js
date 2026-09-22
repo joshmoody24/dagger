@@ -42,7 +42,17 @@ function live() {
         let wrong = "";
         let left = "";
 
-        dagger.stdout.on("data", (chunk) => (said += chunk));
+        /* The review is one line, handed over as soon as it ends: dagger still has its
+         * snapshots to remove afterwards. */
+        dagger.stdout.on("data", (chunk) => {
+          said += chunk;
+          const end = said.indexOf("\n");
+          if (end < 0 || response.writableEnded) return;
+          response.write(
+            `${JSON.stringify({ review: JSON.parse(said.slice(0, end)) })}\n`,
+          );
+          response.end();
+        });
         dagger.stderr.on("data", (chunk) => {
           wrong += chunk;
           process.stderr.write(chunk);
@@ -61,12 +71,9 @@ function live() {
           response.end();
         });
         dagger.on("close", (code) => {
-          if (code !== 0) {
-            const why = wrong.trim() || `dagger gave up with ${code}`;
-            response.write(`${JSON.stringify({ wrong: why })}\n`);
-          } else {
-            response.write(`${JSON.stringify({ review: JSON.parse(said) })}\n`);
-          }
+          if (response.writableEnded) return;
+          const why = wrong.trim() || `dagger gave up with ${code}`;
+          response.write(`${JSON.stringify({ wrong: why })}\n`);
           response.end();
         });
       });

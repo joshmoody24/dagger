@@ -240,6 +240,18 @@ test("a progress report reads the same however the two readings interleave", () 
 });
 
 /* Both are under way together, so both beat. */
+/* A side with two extractors says "read" twice; the circle used to fill after the first. */
+test("a reading is not done until its last extractor is", () => {
+  const [, , after] = phases([
+    "comparing aaa to bbb",
+    "after · reading 9 files of bbb with dagger-rust",
+    "after ·   read 9 files, found 40 definitions",
+    "after · reading 3 files of bbb with dagger-lsp",
+  ]);
+  assert.equal(after.done, false);
+  assert.equal(after.detail, "with dagger-lsp");
+});
+
 test("every reading still going is shown as going", () => {
   const found = phases([
     "comparing aaa to bbb",

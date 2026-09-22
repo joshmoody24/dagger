@@ -50,6 +50,9 @@ export function phases(said: string[]): Phase[] {
     if (reading) {
       phase.detail = `with ${reading[1].split("/").pop()}`;
       phase.through = undefined;
+      // A side with several extractors reports "read" once per extractor; it's done
+      // only when the last one has.
+      phase.done = false;
       continue;
     }
 
