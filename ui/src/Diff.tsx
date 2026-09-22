@@ -12,6 +12,7 @@ import { compare, focused, paired, type Detailed, type Range } from "./diff.ts";
 import { TINT } from "./digest.ts";
 import { stitch } from "./text.ts";
 import { colouring, painted, readied, speaks } from "./colouring.ts";
+import { editing, listen, modified } from "./keys.ts";
 import { dressing, wearing } from "./theme.ts";
 import "./Diff.css";
 
@@ -121,6 +122,23 @@ export function Diff(props: {
   );
   const [first, setFirst] = createSignal<HTMLElement | null>(null);
   let code!: HTMLPreElement;
+
+  /* `o` opens the first collapsed run in view, the way you'd meet it scrolling down.
+   * Repeats, so holding it unrolls a long one. */
+  listen(document, "keydown", (event) => {
+    if (event.key !== "o" || modified(event) || editing(event.target)) return;
+    const pane = code.parentElement;
+    if (!pane) return;
+    const top = pane.getBoundingClientRect().top;
+    const folds = [...code.querySelectorAll<HTMLButtonElement>("button.fold")];
+    const next = folds.find(
+      (fold) => fold.getBoundingClientRect().bottom >= top,
+    );
+    if (next) {
+      next.click();
+      event.preventDefault();
+    }
+  });
 
   /* Unfolding a gap re-renders too, and mustn't scroll away from what was just opened. */
   createEffect(

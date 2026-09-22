@@ -6,7 +6,7 @@ export const editing = (target: EventTarget | null) =>
   (target.isContentEditable ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
-const modified = (event: KeyboardEvent) =>
+export const modified = (event: KeyboardEvent) =>
   event.metaKey || event.ctrlKey || event.altKey;
 
 /* Listeners live from mount to cleanup, so a component that unmounts stops hearing. */
