@@ -291,3 +291,82 @@ mod tests {
         );
     }
 }
+
+/// The one word a definition gets on the page, in the terminal, and in markdown, with
+/// the glyph and wording every rendering uses. Kept in one place so the legends can't
+/// drift apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[serde(rename_all = "snake_case")]
+pub enum Mark {
+    Added,
+    Removed,
+    Type,
+    Body,
+    Docs,
+    /// Unchanged, but a change reached it.
+    Reached,
+    Untouched,
+}
+
+impl Mark {
+    pub const ALL: [Mark; 7] = [
+        Mark::Added,
+        Mark::Removed,
+        Mark::Type,
+        Mark::Body,
+        Mark::Docs,
+        Mark::Reached,
+        Mark::Untouched,
+    ];
+
+    pub fn glyph(self) -> char {
+        match self {
+            Mark::Added => '+',
+            Mark::Removed => '-',
+            Mark::Type => '!',
+            Mark::Body => '~',
+            Mark::Docs => '"',
+            Mark::Reached => '=',
+            Mark::Untouched => '.',
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Mark::Added => "added",
+            Mark::Removed => "removed",
+            Mark::Type => "type changed",
+            Mark::Body => "body changed",
+            Mark::Docs => "docs changed",
+            Mark::Reached => "reached, unchanged",
+            Mark::Untouched => "untouched",
+        }
+    }
+
+    /// The legend as one line, each entry as `glyph label`, joined by `between`.
+    pub fn legend(between: &str) -> String {
+        Mark::ALL
+            .iter()
+            .map(|mark| format!("{} {}", mark.glyph(), mark.label()))
+            .collect::<Vec<_>>()
+            .join(between)
+    }
+}
+
+impl Change {
+    /// The mark for a definition, given whether a change reached it.
+    pub fn mark(&self, reached: bool) -> Mark {
+        match self {
+            Change::Added => Mark::Added,
+            Change::Removed => Mark::Removed,
+            Change::Kept(edits) if edits.type_changed => Mark::Type,
+            Change::Kept(edits) if edits.changed(Part::Type) || edits.changed(Part::Body) => {
+                Mark::Body
+            }
+            Change::Kept(edits) if edits.changed(Part::Docs) => Mark::Docs,
+            Change::Kept(_) if reached => Mark::Reached,
+            Change::Kept(_) => Mark::Untouched,
+        }
+    }
+}

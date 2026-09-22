@@ -1,21 +1,6 @@
-use dagger_core::change::Change;
-use dagger_core::model::Part;
+use dagger_core::change::Mark;
 use dagger_core::review::{Definition, Impact, Review};
 use std::io::Write;
-
-/// One-character summary of a change. A type change is louder than a body change.
-pub fn glyph(change: &Change) -> char {
-    match change {
-        Change::Added => '+',
-        Change::Removed => '-',
-        Change::Kept(edits) if edits.type_changed => '!',
-        // Signature rewritten without changing meaning: reformatted, or a type spelled differently.
-        Change::Kept(edits) if edits.changed(Part::Type) => '~',
-        Change::Kept(edits) if edits.changed(Part::Body) => '~',
-        Change::Kept(edits) if edits.changed(Part::Docs) => '"',
-        Change::Kept(_) => '.',
-    }
-}
 
 pub fn name(definition: &Definition) -> String {
     definition.sides.latest().locator.to_string()
@@ -48,19 +33,18 @@ pub fn print(review: &Review) {
     );
     let _ = writeln!(
         out,
-        "+ added   - removed   ! type changed   ~ body changed   \" docs changed   = reached, unchanged   . untouched\n\
-         at most {} open at peak, {} taken on faith, {} jumps\n",
-        review.cost.peak_open, review.cost.taken_on_faith, review.cost.jumps
+        "{}\nat most {} open at peak, {} taken on faith, {} jumps\n",
+        Mark::legend("   "),
+        review.cost.peak_open,
+        review.cost.taken_on_faith,
+        review.cost.jumps
     );
 
     for (step, place) in review.reading.iter().zip(1..) {
         let Some(definition) = review.definitions.get(&step.definition) else {
             continue;
         };
-        let mark = match definition.change.worth_reading() {
-            true => glyph(&definition.change),
-            false => '=',
-        };
+        let mark = definition.mark.glyph();
         let reached = match definition.reached {
             Some(_) => " (reached)",
             None => "",

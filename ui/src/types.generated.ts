@@ -78,6 +78,10 @@ change: Change,
  */
 reached: number | null, 
 /**
+ * The one word for what happened to it, as every rendering shows it.
+ */
+mark: Mark, 
+/**
  * What it's written inside. Always present in this review when it isn't `None`.
  */
 parent: Identity | null, };
@@ -121,6 +125,8 @@ moved: boolean,
 parts: Array<Part>, };
 
 export type Change = "added" | "removed" | { "kept": Edits };
+
+export type Mark = "added" | "removed" | "type" | "body" | "docs" | "reached" | "untouched";
 
 export type Edge = { from: Identity, to: Identity, };
 
@@ -188,4 +194,15 @@ export type Note = { message: string,
  * The file it's about, when it's about one.
  */
 file: string | null, };
+
+/** Each mark's glyph and wording, in the order a legend lists them. */
+export const LEGEND = [
+  ["added", "+", "added"],
+  ["removed", "-", "removed"],
+  ["type", "!", "type changed"],
+  ["body", "~", "body changed"],
+  ["docs", "\"", "docs changed"],
+  ["reached", "=", "reached, unchanged"],
+  ["untouched", ".", "untouched"],
+] as const;
 

@@ -1,3 +1,4 @@
+import { LEGEND } from "./types.generated.ts";
 import type {
   Definition,
   Mark,
@@ -11,15 +12,9 @@ import type {
  * about the code; that arrives already settled.
  */
 
-export const MARK = {
-  added: "+",
-  removed: "-",
-  type: "!",
-  body: "~",
-  docs: '"',
-  reached: "=",
-  still: ".",
-};
+export const MARK = Object.fromEntries(
+  LEGEND.map(([mark, glyph]) => [mark, glyph]),
+) as Record<Mark, string>;
 export const TINT = {
   added: "add",
   removed: "del",
@@ -27,7 +22,7 @@ export const TINT = {
   body: "chg",
   docs: "chg",
   reached: "reached",
-  still: "reached",
+  untouched: "reached",
 };
 
 export function digest(raw: Raw): Review {
@@ -73,24 +68,10 @@ function digested(id: Identity, one: RawDefinition): Definition {
     change: one.change,
     before,
     after,
-    mark: marking(one),
+    mark: one.mark,
     reached: one.reached ?? 0,
     parent: one.parent,
   };
-}
-
-/* One word for what happened, which is all a node has room for. */
-function marking(one: RawDefinition): Mark {
-  const change = one.change;
-  if (change === "added") return "added";
-  if (change === "removed") return "removed";
-
-  const edits = change.kept;
-  if (edits.type_changed) return "type";
-  if (edits.parts.includes("body") || edits.parts.includes("type"))
-    return "body";
-  if (edits.parts.includes("docs")) return "docs";
-  return one.reached !== null ? "reached" : "still";
 }
 
 /** Whether a change to this one means its callers have to change too. */

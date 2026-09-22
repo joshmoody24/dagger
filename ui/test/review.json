@@ -47,6 +47,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": null,
+      "mark": "body",
       "parent": null
     },
     "1": {
@@ -207,6 +208,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "9": {
@@ -293,6 +295,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": 1,
+      "mark": "body",
       "parent": "1"
     },
     "15": {
@@ -373,6 +376,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": 1,
+      "mark": "body",
       "parent": "1"
     },
     "192": {
@@ -493,6 +497,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "198": {
@@ -547,6 +552,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "192"
     },
     "202": {
@@ -633,6 +639,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "192"
     },
     "255": {
@@ -913,6 +920,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "260": {
@@ -977,6 +985,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": null,
+      "mark": "body",
       "parent": "255"
     },
     "261": {
@@ -1061,6 +1070,7 @@
         }
       },
       "reached": null,
+      "mark": "type",
       "parent": "255"
     },
     "264": {
@@ -1129,6 +1139,7 @@
         }
       },
       "reached": null,
+      "mark": "type",
       "parent": "255"
     },
     "277": {
@@ -1213,6 +1224,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "280": {
@@ -1293,6 +1305,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "277"
     },
     "281": {
@@ -1465,6 +1478,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "283": {
@@ -1529,6 +1543,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "281"
     },
     "284": {
@@ -1593,6 +1608,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "281"
     },
     "287": {
@@ -1673,6 +1689,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "281"
     },
     "288": {
@@ -1753,6 +1770,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "281"
     },
     "461": {
@@ -1925,6 +1943,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "467": {
@@ -1989,6 +2008,7 @@
         "kept": { "type_changed": true, "moved": false, "parts": ["type"] }
       },
       "reached": null,
+      "mark": "type",
       "parent": "461"
     },
     "468": {
@@ -2073,6 +2093,7 @@
         }
       },
       "reached": 1,
+      "mark": "type",
       "parent": "461"
     },
     "475": {
@@ -2161,6 +2182,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": "461"
     },
     "478": {
@@ -2231,6 +2253,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": 1,
+      "mark": "body",
       "parent": "475"
     },
     "576": {
@@ -2331,6 +2354,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "578": {
@@ -2395,6 +2419,7 @@
         "kept": { "type_changed": true, "moved": false, "parts": ["type"] }
       },
       "reached": null,
+      "mark": "type",
       "parent": "576"
     },
     "584": {
@@ -2443,6 +2468,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "576"
     },
     "600": {
@@ -2507,6 +2533,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": null,
+      "mark": "body",
       "parent": "602"
     },
     "602": {
@@ -2555,6 +2582,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": null,
+      "mark": "body",
       "parent": null
     },
     "610": {
@@ -2609,6 +2637,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "615"
     },
     "612": {
@@ -2679,6 +2708,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "615"
     },
     "615": {
@@ -2727,6 +2757,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "616": {
@@ -2781,6 +2812,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "624"
     },
     "624": {
@@ -2841,6 +2873,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "640": {
@@ -2905,6 +2938,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "649"
     },
     "643": {
@@ -2953,6 +2987,7 @@
         "kept": { "type_changed": true, "moved": false, "parts": ["type"] }
       },
       "reached": null,
+      "mark": "type",
       "parent": "649"
     },
     "649": {
@@ -3013,6 +3048,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "652": {
@@ -3093,6 +3129,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": ["body"] }
       },
       "reached": 1,
+      "mark": "body",
       "parent": "655"
     },
     "654": {
@@ -3173,6 +3210,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "655"
     },
     "655": {
@@ -3221,6 +3259,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "677": {
@@ -3301,6 +3340,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "692"
     },
     "685": {
@@ -3381,6 +3421,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "692"
     },
     "692": {
@@ -3429,6 +3470,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "701": {
@@ -3509,6 +3551,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": 1,
+      "mark": "reached",
       "parent": "702"
     },
     "702": {
@@ -3557,6 +3600,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "719": {
@@ -3611,6 +3655,7 @@
         "kept": { "type_changed": true, "moved": false, "parts": ["type"] }
       },
       "reached": null,
+      "mark": "type",
       "parent": "724"
     },
     "724": {
@@ -3659,6 +3704,7 @@
         "kept": { "type_changed": false, "moved": false, "parts": [] }
       },
       "reached": null,
+      "mark": "untouched",
       "parent": null
     },
     "732": {
@@ -3701,6 +3747,7 @@
       },
       "change": "added",
       "reached": null,
+      "mark": "added",
       "parent": "1"
     }
   },

@@ -4,7 +4,7 @@
 //! Only what dagger emits: the shapes the page makes for itself live in dagger.ts.
 
 use anyhow::{Context, Result};
-use dagger_core::change::{Change, Edits};
+use dagger_core::change::{Change, Edits, Mark};
 use dagger_core::diagnostic::Diagnostic;
 use dagger_core::model::{Identity, Locator, Occurrence, Part, Piece, Role, Sides, Span};
 use dagger_core::order::{Cost, Ordering, Step};
@@ -40,6 +40,7 @@ fn main() -> Result<()> {
         Warning::decl(&how),
         Edits::decl(&how),
         Change::decl(&how),
+        Mark::decl(&how),
         Edge::decl(&how),
         Diagnostic::decl(&how),
         Review::decl(&how),
@@ -52,6 +53,20 @@ fn main() -> Result<()> {
         out.push_str(declaration.trim_end_matches(';'));
         out.push_str(";\n\n");
     }
+
+    // The legend is values, not a type, so it's written out by hand from the same table
+    // the terminal prints.
+    out.push_str("/** Each mark's glyph and wording, in the order a legend lists them. */\n");
+    out.push_str("export const LEGEND = [\n");
+    for mark in Mark::ALL {
+        let name = serde_json::to_string(&mark)?;
+        out.push_str(&format!(
+            "  [{name}, {}, {}],\n",
+            serde_json::to_string(&mark.glyph().to_string())?,
+            serde_json::to_string(mark.label())?
+        ));
+    }
+    out.push_str("] as const;\n\n");
 
     let to = std::env::args().nth(1).context("say where to write it")?;
     let mut file = std::fs::File::create(&to).with_context(|| format!("couldn't write {to}"))?;

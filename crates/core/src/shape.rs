@@ -193,7 +193,7 @@ fn tiers(units: &[Vec<Identity>], edges: &[Edge]) -> Vec<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change::Change;
+    use crate::change::{Change, Mark};
     use crate::model::{Part, Role, Sides};
     use crate::testing::occurrence;
 
@@ -206,6 +206,7 @@ mod tests {
                 sides: Sides::Added(occurrence(name, &[(Part::Body, "new")])),
                 change: Change::Added,
                 reached: None,
+                mark: Mark::Added,
                 parent: parent.map(Identity),
             },
         )

@@ -3,7 +3,7 @@
 //! One object, built in one place at the end, with everything about a definition on that
 //! definition, so nothing can name a definition that wasn't handed over.
 
-use crate::change::{Change, classify};
+use crate::change::{Change, Mark, classify};
 use crate::diagnostic::Diagnostic;
 use crate::group::Grouping;
 use crate::model::{self, Identity, Locator, Role, Sides};
@@ -77,6 +77,8 @@ pub struct Definition {
     pub change: Change,
     /// Hops from the nearest change that reached it. Never zero: its own change is `change`.
     pub reached: Option<NonZeroU32>,
+    /// The one word for what happened to it, as every rendering shows it.
+    pub mark: Mark,
     /// What it's written inside. Always present in this review when it isn't `None`.
     pub parent: Option<Identity>,
 }
@@ -178,6 +180,7 @@ pub fn review(
                 identity,
                 Definition {
                     role: def.sides.latest().role,
+                    mark: change.mark(reached.contains_key(&identity)),
                     change,
                     reached: reached.get(&identity).copied(),
                     parent: parent_of.get(&identity).copied(),

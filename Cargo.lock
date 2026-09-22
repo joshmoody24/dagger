@@ -163,6 +163,7 @@ dependencies = [
  "anyhow",
  "dagger-core",
  "dagger-protocol",
+ "serde_json",
  "ts-rs",
 ]
 

@@ -4,6 +4,7 @@
 
 use crate::diff::{self, Paint};
 use crate::{report, walk};
+use dagger_core::change::Mark;
 use dagger_core::model::Identity;
 use dagger_core::review::Review;
 use std::collections::BTreeMap;
@@ -27,19 +28,16 @@ pub fn render(review: &Review) -> String {
     let _ = writeln!(out, "# {}\n", review.title.as_deref().unwrap_or("Review"));
     let _ = writeln!(
         out,
-        "{} definitions to read, in the order below. Marks: + added, - removed, \
-         ! type changed, ~ body changed, \" docs changed, = reached, unchanged, . untouched.\n",
-        review.reading.len()
+        "{} definitions to read, in the order below. Marks: {}.\n",
+        review.reading.len(),
+        Mark::legend(", ")
     );
 
     for (step, place) in review.reading.iter().zip(1..) {
         let Some(definition) = review.definitions.get(&step.definition) else {
             continue;
         };
-        let mark = match definition.change.worth_reading() {
-            true => report::glyph(&definition.change),
-            false => '=',
-        };
+        let mark = definition.mark.glyph();
         let latest = definition.sides.latest();
         let _ = writeln!(
             out,

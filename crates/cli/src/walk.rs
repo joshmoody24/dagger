@@ -64,8 +64,7 @@ fn show(
     let mark = review
         .definitions
         .get(&identity)
-        .map(|one| report::glyph(&one.change))
-        .unwrap_or('=');
+        .map_or('=', |one| one.mark.glyph());
 
     println!(
         "\n{} {mark} {}  {}",
