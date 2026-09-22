@@ -18,8 +18,8 @@ use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
 use dagger_core::prose::{line_end, line_start, preamble};
-use dagger_core::reference::{BinderId, Mention, Site, Target};
-use dagger_lsp_client::frontier::{Frontier, Wanted};
+use dagger_core::reference::BinderId;
+use dagger_lsp_client::walk::{Source, Walk};
 use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Changed, Note, Request, Response};
 use serde::Deserialize;
@@ -27,7 +27,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Read};
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -143,279 +143,72 @@ fn extract(
     eprintln!("  starting {}", binder.0);
     let server = Server::start(&settings.server, dir, settings.options.clone())?;
 
-    let mut walk = Walk {
+    let mut walk = Walk::new(
         server,
         root,
         binder,
         ours,
-        seen: BTreeMap::new(),
-        mentions: Vec::new(),
-        contracts: BTreeMap::new(),
-        notes: Vec::new(),
-        walk_limit: settings.max_walk,
-        open_limit: settings.max_open,
+        LspSource,
+        settings.max_walk,
+        settings.max_open,
         ripples,
-    };
+    );
     walk.spread(changed);
 
-    let occurrences = definitions(&walk.seen, &walk.contracts);
+    let (_source, seen, mentions, contracts, notes) = walk.finish();
+    let seen: BTreeMap<String, Opened> = seen
+        .into_iter()
+        .map(|(path, (lines, symbols))| {
+            (
+                path.clone(),
+                Opened {
+                    path,
+                    lines,
+                    symbols,
+                },
+            )
+        })
+        .collect();
+
+    let occurrences = definitions(&seen, &contracts);
     eprintln!(
         "  read {} files, found {} definitions",
-        walk.seen.len(),
+        seen.len(),
         occurrences.len()
     );
 
     Ok((
         Extraction {
             occurrences,
-            mentions: walk.mentions,
+            mentions,
         },
-        walk.notes,
+        notes,
     ))
 }
 
-struct Walk {
-    server: Server,
-    root: PathBuf,
-    binder: BinderId,
-    ours: BTreeSet<String>,
-    seen: BTreeMap<String, Opened>,
-    mentions: Vec<Mention>,
-    contracts: BTreeMap<Locator, String>,
-    notes: Vec<Note>,
-    /// Files whose users we chase, and files we open at all. Two budgets because they cost
-    /// wildly different amounts: with one, the cheap thing spends what the dear thing needs.
-    walk_limit: usize,
-    open_limit: usize,
-    /// How far past a changed file to carry on. Walking a file at one remove is what
-    /// turns up what sits at two, so the walk stops one short of what's asked for.
-    ripples: u32,
-}
+/// Discovers a TypeScript-or-whatever file's definitions by asking the language server
+/// about it, and reads a contract back out of what it says on hover.
+struct LspSource;
 
-/// Turns what dagger said a changed file differs in into what's worth asking about.
-fn wanted_of(changed: &Changed) -> Wanted {
-    Wanted::from_spans(&changed.at)
-}
+impl Source for LspSource {
+    type Item = symbols::Symbol;
 
-impl Walk {
-    /// Starts at the files that differ and spreads to whatever a break could reach.
-    ///
-    /// A file is asked who uses it only if something can travel onward from it: because it
-    /// changed, or because it mentions a changed definition somewhere its own callers can
-    /// see. A file that merely calls a changed definition from inside a body is opened far
-    /// enough to say which definition the call sits in, and no further.
-    ///
-    /// Spreading through every reference instead is what made a nine file change
-    /// unreadable. One widely used name answers with a thousand places; each of those
-    /// files holds dozens of definitions; asking all of theirs in turn walks the monorepo.
-    fn spread(&mut self, changed: &[Changed]) {
-        let mut front = Frontier::default();
-        for one in changed
-            .iter()
-            .filter(|one| self.ours.contains(one.file.as_str()))
-        {
-            front.want(&one.file, wanted_of(one), 0);
-        }
-
-        /* Which files changed is the same list on both snapshots, so opening them and
-         * nobody else — regardless of what a reference walk turns up — is a rule that
-         * lands the same way twice. Letting the walk decide instead meant a file could be
-         * opened on one side and not the other, and its contents read as though they'd
-         * moved when nothing had. */
-        let changed: BTreeSet<String> = changed.iter().map(|one| one.file.clone()).collect();
-
-        // Open every changed file before asking anything about any of them. A server
-        // answers "who uses this" out of the projects it has loaded, and telling it about
-        // a file is what loads that file's project. Asking one package's question while
-        // the package that calls it is still unknown gets a truthful answer about a
-        // smaller world: the change looks self-contained when it isn't.
-        for path in front.waiting() {
-            self.look(&path);
-        }
-
-        while let Some((path, wanted, away)) = front.next() {
-            /* How far the walk has got. There's no total to count towards — what's left to
-             * walk is whatever the files walked so far turn out to mention — so this says
-             * how much has been done and how much is known to be left, which is the truth
-             * and changes as it goes. Opened files are counted apart because they're the
-             * cheap half: a change reaches far more files than it ever walks. */
-            eprintln!(
-                "  walked {} of {} files, opened {}",
-                front.walked(),
-                front.known(),
-                self.seen.len()
-            );
-            if front.walked() > self.walk_limit {
-                self.notes.push(Note {
-                    message: format!(
-                        "stopped after chasing users of {} files. This change reaches \
-                         further than that, so some of what it affects is missing",
-                        self.walk_limit
-                    ),
-                    file: None,
-                });
-                return;
-            }
-            if !self.look(&path) {
-                continue;
-            }
-
-            /* Walking a file one step out is what turns up what sits two steps out, so
-             * the walk stops one short of how far the reading was asked to go. Everything
-             * reached from the last step is still recorded — it just isn't followed. */
-            if away + 1 < self.ripples {
-                for (path, definition) in self.ask_about(&path, &wanted, &changed, away) {
-                    front.want(&path, Wanted::named(definition), away + 1);
-                }
-            } else {
-                self.ask_about(&path, &wanted, &changed, away);
-            }
-        }
-    }
-
-    /// Opens a file once, keeping what was found. Whether it worked.
-    fn look(&mut self, path: &str) -> bool {
-        if self.seen.contains_key(path) {
-            return true;
-        }
-        match open(&mut self.server, &self.root, path) {
-            Ok(file) => {
-                self.seen.insert(path.to_string(), file);
-                true
-            }
-            Err(error) => {
-                self.notes.push(Note {
-                    message: format!("skipped it: {error:#}"),
-                    file: Some(path.to_string()),
-                });
-                false
-            }
-        }
-    }
-
-    /// Asks what each definition worth asking about looks like from outside and who uses
-    /// it, recording the mentions. Returns the files a break can travel on to.
-    ///
-    /// "Worth asking about" is `wanted`'s to say: a definition whose own span overlaps
-    /// something that changed, or one named because a break travels through it. Nothing
-    /// else in the file is asked about at all — a changed file used to mean every
-    /// definition in it got both questions, whether or not that definition's own text had
-    /// moved, which was most of what a walk cost.
-    fn ask_about(
+    fn open(
         &mut self,
+        server: &mut Server,
+        root: &Path,
         path: &str,
-        wanted: &Wanted,
-        changed: &BTreeSet<String>,
-        away: u32,
-    ) -> Vec<(String, Locator)> {
-        let questions: Vec<(Value, Locator)> = {
-            let file = &self.seen[path];
-            file.symbols
-                .iter()
-                .filter(|symbol| wanted.covers(&symbol.whole, &locator(file, symbol)))
-                .map(|symbol| (position(&self.root, file, symbol), locator(file, symbol)))
-                .collect()
-        };
-
-        let mut onward = Vec::new();
-        for (at, to) in questions {
-            // Hover is a summary written for a person, not a statement of what callers can
-            // see, so it's worth having but not worth trusting on its own. Dagger takes it
-            // alongside the written declaration rather than instead of it.
-            if let Ok(hover) = self.server.request("textDocument/hover", at.clone())
-                && let Some(contract) = fenced(&hover)
-            {
-                self.contracts.insert(to.clone(), contract);
-            }
-
-            let mut question = at;
-            question["context"] = json!({ "includeDeclaration": false });
-            let referrers = match self.server.request("textDocument/references", question) {
-                Ok(referrers) => referrers,
-                Err(error) => {
-                    self.notes.push(Note {
-                        message: format!("couldn't find what uses {}: {error:#}", to.name),
-                        file: Some(path.to_string()),
-                    });
-                    continue;
-                }
-            };
-
-            onward.extend(self.record(&referrers, &to, changed, away));
-        }
-
-        onward
+    ) -> Result<(Lines, Vec<symbols::Symbol>)> {
+        let Opened {
+            path: _,
+            lines,
+            symbols,
+        } = open(server, root, path)?;
+        Ok((lines, symbols))
     }
 
-    /// Turns each place a definition is used into a mention, and says which of those
-    /// places can carry a break onward — the file, and the one definition in it that does.
-    fn record(
-        &mut self,
-        referrers: &Value,
-        to: &Locator,
-        changed: &BTreeSet<String>,
-        away: u32,
-    ) -> Vec<(String, Locator)> {
-        let places: Vec<(String, u32, u32)> = referrers
-            .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-            .iter()
-            .filter_map(|place| {
-                Some((
-                    relative(place["uri"].as_str()?, &self.root)?,
-                    place["range"]["start"]["line"].as_u64()? as u32,
-                    place["range"]["start"]["character"].as_u64()? as u32,
-                ))
-            })
-            .filter(|(path, _, _)| self.ours.contains(path.as_str()))
-            .collect();
-
-        let mut onward = Vec::new();
-        for (path, line, column) in places {
-            /* Opening a file is how a mention gets the name of the definition it sits in.
-             * Worth doing only where the mention can end up in the review: inside a file
-             * that changed, which anybody reads whatever they asked for, or near enough to
-             * the change to be reached at the distance they did ask for. Beyond that it's
-             * a file read, parsed and thrown away — which at no ripples at all was every
-             * file that so much as names something that changed. */
-            let worth_opening = changed.contains(&path) || away < self.ripples;
-            if !worth_opening || self.seen.len() >= self.open_limit || !self.look(&path) {
-                continue;
-            }
-
-            let file = &self.seen[&path];
-            let at = file.lines.offset(line, column);
-            let Some(from) = innermost(file, at) else {
-                continue;
-            };
-            let Some(part) = part_at(from, at) else {
-                continue;
-            };
-
-            let inside = locator(file, from);
-            self.mentions.push(Mention {
-                from: inside.clone(),
-                to: Target::Known(to.clone()),
-                site: Site {
-                    part,
-                    span: Span {
-                        start: at as u32,
-                        end: at as u32,
-                    },
-                    found_by: self.binder.clone(),
-                },
-            });
-
-            // Callers of this one can be broken by what broke it, so the trail carries on
-            // — through this definition, and not through everything else sharing its file.
-            // A mention inside a body stops here: nobody outside can tell it changed.
-            if part == Part::Type {
-                onward.push((path, inside));
-            }
-        }
-
-        onward
+    fn contract(&self, hover: &Value) -> Option<String> {
+        fenced(hover)
     }
 }
 /// Whether this name belongs to something defined elsewhere. An import is reported as a
@@ -465,7 +258,7 @@ fn open(server: &mut Server, root: &Path, path: &str) -> Result<Opened> {
 
     let mut file = Opened {
         path: path.to_string(),
-        symbols: symbols::read(&reported, &lines),
+        symbols: symbols::read(&reported, &lines, &path_scope(path)),
         lines,
     };
 
@@ -495,20 +288,14 @@ fn position(root: &Path, file: &Opened, symbol: &symbols::Symbol) -> Value {
     })
 }
 
-fn locator(file: &Opened, symbol: &symbols::Symbol) -> Locator {
-    let mut scope: Vec<String> = file
-        .path
-        .trim_end_matches(|character: char| character != '.')
+/// A file's own scope, its own name a break travels by: its path without the extension,
+/// split into segments the way a locator's scope is written everywhere else.
+fn path_scope(path: &str) -> Vec<String> {
+    path.trim_end_matches(|character: char| character != '.')
         .trim_end_matches('.')
         .split('/')
         .map(str::to_string)
-        .collect();
-    scope.extend(symbol.scope.clone());
-
-    Locator {
-        scope,
-        name: symbol.name.clone(),
-    }
+        .collect()
 }
 
 fn definitions(
@@ -542,7 +329,7 @@ fn definitions(
                     parts.insert(Part::Docs, pieces(file, &[told]));
                 }
 
-                let locator = locator(file, symbol);
+                let locator = symbol.locator.clone();
                 Occurrence {
                     contract: contracts.get(&locator).cloned(),
                     locator,
@@ -669,34 +456,6 @@ fn pieces(file: &Opened, ranges: &[Range<usize>]) -> Vec<Piece> {
         .collect()
 }
 
-fn innermost(file: &Opened, at: usize) -> Option<&symbols::Symbol> {
-    file.symbols
-        .iter()
-        .filter(|symbol| symbol.whole.contains(&at))
-        .min_by_key(|symbol| symbol.whole.len())
-}
-
-fn part_at(symbol: &symbols::Symbol, at: usize) -> Option<Part> {
-    if symbol.declaration().contains(&at) {
-        return Some(Part::Type);
-    }
-    symbol
-        .body()
-        .is_some_and(|body| body.contains(&at))
-        .then_some(Part::Body)
-}
-
-fn relative(uri: &str, root: &Path) -> Option<String> {
-    let path = uri.strip_prefix("file://")?;
-    Some(
-        PathBuf::from(path)
-            .strip_prefix(root)
-            .ok()?
-            .to_string_lossy()
-            .into_owned(),
-    )
-}
-
 /// Servers want to be told what they're looking at. The extension is as good a guess as
 /// any, and a wrong guess only costs us that file.
 fn language_of(path: &str) -> &'static str {
@@ -745,6 +504,7 @@ fn fenced(hover: &Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dagger_lsp_client::walk;
     use serde_json::json;
 
     /// Where a piece of text sits, as a server would say it: a line and a character.
@@ -781,7 +541,7 @@ mod tests {
         let lines = Lines::new(source);
         Opened {
             path: "src/money.ts".to_string(),
-            symbols: symbols::read(&reported, &lines),
+            symbols: symbols::read(&reported, &lines, &path_scope("src/money.ts")),
             lines,
         }
     }
@@ -965,10 +725,10 @@ mod tests {
         let root = Path::new("/tmp/dagger-1");
 
         assert_eq!(
-            relative("file:///tmp/dagger-1/src/money.ts", root).as_deref(),
+            walk::relative("file:///tmp/dagger-1/src/money.ts", root).as_deref(),
             Some("src/money.ts")
         );
-        assert_eq!(relative("file:///elsewhere/money.ts", root), None);
+        assert_eq!(walk::relative("file:///elsewhere/money.ts", root), None);
     }
 
     #[test]

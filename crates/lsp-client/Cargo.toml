@@ -7,4 +7,5 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 dagger-core = { path = "../core" }
+dagger-protocol = { path = "../protocol" }
 serde_json.workspace = true

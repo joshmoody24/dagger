@@ -4,6 +4,7 @@
 //! the shapes are stable. Framing is a Content-Length header, then a JSON body.
 
 pub mod frontier;
+pub mod walk;
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};

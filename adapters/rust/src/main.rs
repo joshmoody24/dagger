@@ -15,9 +15,9 @@ use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
 use dagger_core::prose::preamble;
-use dagger_core::reference::{BinderId, Mention, Site, Target};
-use dagger_lsp_client::frontier::{Frontier, Wanted};
-use dagger_lsp_client::{self as lsp, Lines, Server};
+use dagger_core::reference::BinderId;
+use dagger_lsp_client::walk::{Source, Walk};
+use dagger_lsp_client::{Lines, Server};
 use dagger_protocol::{Changed, Note, Request, Response};
 use serde::Deserialize;
 use serde_json::json;
@@ -121,39 +121,69 @@ fn extract(
     ripples: u32,
     settings: &Settings,
 ) -> Result<(Extraction, Vec<Note>)> {
-    let mut modules = modules::Modules::default();
-    let mut notes = Vec::new();
+    eprintln!("  starting rust-analyzer");
+    let mut options = json!({
+        // Nothing here needs macros expanded or build scripts run, and both cost real
+        // time on a cold tree.
+        "cargo": { "buildScripts": { "enable": false } },
+        "procMacro": { "enable": false },
+    });
+    if !settings.linked.is_empty() {
+        options["linkedProjects"] = json!(settings.linked);
+    }
+    let mut server = Server::start(&["rust-analyzer".to_string()], dir, options)?;
+    eprintln!("  waiting for rust-analyzer to index");
+    server.wait_until(|message| {
+        message["method"] == "experimental/serverStatus"
+            && message["params"]["quiescent"] == serde_json::Value::Bool(true)
+    })?;
 
-    let parsed: Vec<Parsed> = files
+    let root = dir.canonicalize()?;
+    let ours: std::collections::BTreeSet<String> = files
         .iter()
         .filter(|path| path.ends_with(".rs"))
-        .filter_map(|path| match parse(dir, path, &mut modules) {
-            Ok(parsed) => Some(parsed),
-            Err(error) => {
-                notes.push(Note {
-                    message: format!("skipped it: {error:#}"),
-                    file: Some(path.clone()),
-                });
-                None
-            }
-        })
+        .cloned()
+        .collect();
+
+    let mut walk = Walk::new(
+        server,
+        root,
+        BinderId("rust-analyzer".to_string()),
+        ours.clone(),
+        RustSource::default(),
+        settings.max_walk,
+        usize::MAX,
+        ripples,
+    );
+
+    // `syn` costs nothing over the wire, so every claimed file is parsed up front rather
+    // than only what the walk happens to reach — a file nobody's change touches still gets
+    // to say what it defines. Only the rust-analyzer half of reading it stays lazy.
+    for path in &ours {
+        walk.look(path);
+    }
+    walk.spread(changed);
+
+    let (source, seen, mentions, contracts, mut notes) = walk.finish();
+    let parsed: BTreeMap<String, Parsed> = seen
+        .into_iter()
+        .map(|(path, (lines, found))| (path.clone(), Parsed { path, lines, found }))
         .collect();
 
     let mut occurrences: Vec<Occurrence> = parsed
-        .iter()
+        .values()
         .flat_map(|file| file.found.iter().map(|found| occurrence(file, found)))
         .collect();
+    for occurrence in occurrences.iter_mut() {
+        occurrence.contract = contracts.get(&occurrence.locator).cloned();
+    }
 
-    let mentions = bind(
-        dir,
-        &parsed,
-        changed,
-        ripples,
-        &mut occurrences,
-        &mut notes,
-        settings,
-    )?;
-    notes.append(&mut modules.notes);
+    notes.extend(source.modules.notes);
+    eprintln!(
+        "  read {} files, found {} definitions",
+        parsed.len(),
+        occurrences.len()
+    );
 
     Ok((
         Extraction {
@@ -162,6 +192,31 @@ fn extract(
         },
         notes,
     ))
+}
+
+/// Discovers a Rust file's definitions by parsing it, and reads a contract back out of
+/// what rust-analyzer says on hover.
+#[derive(Default)]
+struct RustSource {
+    modules: modules::Modules,
+}
+
+impl Source for RustSource {
+    type Item = items::Found;
+
+    fn open(
+        &mut self,
+        _server: &mut Server,
+        dir: &Path,
+        path: &str,
+    ) -> Result<(Lines, Vec<items::Found>)> {
+        let parsed = parse(dir, path, &mut self.modules)?;
+        Ok((parsed.lines, parsed.found))
+    }
+
+    fn contract(&self, hover: &serde_json::Value) -> Option<String> {
+        signature(hover)
+    }
 }
 
 /// A file that won't parse is skipped and spoken about, rather than taking the whole
@@ -286,219 +341,6 @@ fn locator(found: &items::Found) -> Locator {
         scope: found.scope.clone(),
         name: found.name.clone(),
     }
-}
-
-/// Turns what dagger said a changed file differs in into what's worth asking about.
-fn wanted_of(changed: &Changed) -> Wanted {
-    Wanted::from_spans(&changed.at)
-}
-
-/// Asks rust-analyzer who refers to each definition worth asking about, and what each
-/// looks like from outside — starting at what changed and following whatever a break can
-/// travel through, the same walk the LSP adapter does.
-///
-/// Parsing every claimed file stays eager: `syn` costs nothing over the wire, and it's
-/// what tells a definition what holds it. Only the rust-analyzer conversation — one
-/// round trip per question — is worth being lazy about.
-fn bind(
-    dir: &Path,
-    parsed: &[Parsed],
-    changed: &[Changed],
-    ripples: u32,
-    occurrences: &mut [Occurrence],
-    notes: &mut Vec<Note>,
-    settings: &Settings,
-) -> Result<Vec<Mention>> {
-    eprintln!("  starting rust-analyzer");
-    let mut options = json!({
-        // Nothing here needs macros expanded or build scripts run, and both cost real
-        // time on a cold tree.
-        "cargo": { "buildScripts": { "enable": false } },
-        "procMacro": { "enable": false },
-    });
-    if !settings.linked.is_empty() {
-        options["linkedProjects"] = json!(settings.linked);
-    }
-    let mut server = Server::start(&["rust-analyzer".to_string()], dir, options)?;
-    // Indexing is the slow part by a wide margin, so it's worth admitting to.
-    eprintln!("  waiting for rust-analyzer to index");
-    server.wait_until(|message| {
-        message["method"] == "experimental/serverStatus"
-            && message["params"]["quiescent"] == serde_json::Value::Bool(true)
-    })?;
-    let root = dir.canonicalize()?;
-    let by_path: BTreeMap<&str, &Parsed> = parsed
-        .iter()
-        .map(|file| (file.path.as_str(), file))
-        .collect();
-
-    let mut mentions = Vec::new();
-    let mut contracts: BTreeMap<Locator, String> = BTreeMap::new();
-
-    let mut front = Frontier::default();
-    for one in changed
-        .iter()
-        .filter(|one| by_path.contains_key(one.file.as_str()))
-    {
-        front.want(&one.file, wanted_of(one), 0);
-    }
-
-    while let Some((path, wanted, away)) = front.next() {
-        eprintln!("  walked {} of {} files", front.walked(), front.known());
-        if front.walked() > settings.max_walk {
-            notes.push(Note {
-                message: format!(
-                    "stopped after chasing users of {} files. This change reaches further \
-                     than that, so some of what it affects is missing",
-                    settings.max_walk
-                ),
-                file: None,
-            });
-            break;
-        }
-
-        let Some(file) = by_path.get(path.as_str()) else {
-            continue;
-        };
-        let uri = lsp::uri(&root.join(&file.path));
-
-        let questions: Vec<&items::Found> = file
-            .found
-            .iter()
-            .filter(|found| found.referenceable())
-            .filter(|found| wanted.covers(&found.covers, &locator(found)))
-            .collect();
-
-        for found in questions {
-            let (line, column) = file.lines.position(found.name_at.start);
-            let at = json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": line, "character": column },
-            });
-
-            match server.request("textDocument/hover", at.clone()) {
-                Ok(hover) => {
-                    if let Some(contract) = signature(&hover) {
-                        contracts.insert(locator(found), contract);
-                    }
-                }
-                Err(error) => notes.push(Note {
-                    message: format!("couldn't ask about {}: {error:#}", found.name),
-                    file: Some(file.path.clone()),
-                }),
-            }
-
-            let mut question = at;
-            question["context"] = json!({ "includeDeclaration": false });
-            let referrers = match server.request("textDocument/references", question) {
-                Ok(referrers) => referrers,
-                Err(error) => {
-                    notes.push(Note {
-                        message: format!("couldn't find what uses {}: {error:#}", found.name),
-                        file: Some(file.path.clone()),
-                    });
-                    continue;
-                }
-            };
-
-            let (found_mentions, onward) = referring(&referrers, &root, &by_path, found);
-            mentions.extend(found_mentions);
-            if away + 1 < ripples {
-                for (path, from) in onward {
-                    front.want(&path, Wanted::named(from), away + 1);
-                }
-            }
-        }
-    }
-
-    for occurrence in occurrences.iter_mut() {
-        occurrence.contract = contracts.get(&occurrence.locator).cloned();
-    }
-
-    eprintln!(
-        "  read {} files, found {} definitions",
-        parsed.len(),
-        occurrences.len()
-    );
-    Ok(mentions)
-}
-
-/// Each place rust-analyzer found, turned into a mention from whichever definition
-/// encloses it, alongside which of those places can carry a break onward — the file, and
-/// the one definition in it that does. A reference from outside any definition we know
-/// about is dropped: there is nothing to hang it on.
-fn referring(
-    referrers: &serde_json::Value,
-    root: &Path,
-    by_path: &BTreeMap<&str, &Parsed>,
-    to: &items::Found,
-) -> (Vec<Mention>, Vec<(String, Locator)>) {
-    let Some(places) = referrers.as_array() else {
-        return (Vec::new(), Vec::new());
-    };
-
-    let mut mentions = Vec::new();
-    let mut onward = Vec::new();
-
-    for place in places {
-        let found = (|| {
-            let path = relative(place["uri"].as_str()?, root)?;
-            let file = by_path.get(path.as_str())?;
-            let line = place["range"]["start"]["line"].as_u64()? as u32;
-            let column = place["range"]["start"]["character"].as_u64()? as u32;
-            let at = file.lines.offset(line, column);
-
-            let from = innermost(file, at)?;
-            let part = from.part_at(at)?;
-            Some((path, from, part, at))
-        })();
-
-        let Some((path, from, part, at)) = found else {
-            continue;
-        };
-
-        mentions.push(Mention {
-            from: locator(from),
-            to: Target::Known(locator(to)),
-            site: Site {
-                part,
-                span: Span {
-                    start: at as u32,
-                    end: (at + to.name.len()) as u32,
-                },
-                found_by: BinderId("rust-analyzer".to_string()),
-            },
-        });
-
-        // Callers of this one can be broken by what broke it, so the trail carries on
-        // through this definition, and not through everything else sharing its file. A
-        // mention inside a body stops here: nobody outside can tell it changed.
-        if part == Part::Type {
-            onward.push((path, locator(from)));
-        }
-    }
-
-    (mentions, onward)
-}
-
-fn relative(uri: &str, root: &Path) -> Option<String> {
-    let path = uri.strip_prefix("file://")?;
-    Some(
-        Path::new(path)
-            .strip_prefix(root)
-            .ok()?
-            .to_string_lossy()
-            .into_owned(),
-    )
-}
-
-/// The tightest definition covering a spot, so a method's references land on the method
-/// rather than on whatever encloses it.
-fn innermost(file: &Parsed, at: usize) -> Option<&items::Found> {
-    file.found
-        .iter()
-        .filter(|found| found.extent().contains(&at))
-        .min_by_key(|found| found.extent().len())
 }
 
 /// Hover is markdown with the definition fenced off in it, which is rust-analyzer's

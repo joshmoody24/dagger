@@ -5,8 +5,9 @@
 //! guessed, and the guess is made from the symbol's kind: something callable has a
 //! signature and then a body, while a type is contract all the way through.
 
-use dagger_core::model::Locator;
+use dagger_core::model::{Locator, Part};
 use dagger_lsp_client::Lines;
+use dagger_lsp_client::walk;
 use serde_json::Value;
 use std::ops::Range;
 
@@ -14,6 +15,9 @@ pub struct Symbol {
     pub name: String,
     /// Enclosing symbol names, outermost first. A method carries its class.
     pub scope: Vec<String>,
+    /// The name a break travels by, which is the file's own path folded in ahead of
+    /// `scope`: nothing downstream of here knows what file a symbol came from otherwise.
+    pub locator: Locator,
     pub kind: &'static str,
     pub whole: Range<usize>,
     /// Where the name itself sits, which is where the server has to be asked about it.
@@ -39,12 +43,47 @@ impl Symbol {
         let signature = self.signature.clone()?;
         (signature.end < self.whole.end).then_some(signature.end..self.whole.end)
     }
+
+    /// A declaration wins where parts overlap: it's the half a caller can see, and the
+    /// question being asked is whether a caller could be broken.
+    pub fn part_at(&self, at: usize) -> Option<Part> {
+        if self.declaration().contains(&at) {
+            return Some(Part::Type);
+        }
+        self.body()
+            .is_some_and(|body| body.contains(&at))
+            .then_some(Part::Body)
+    }
 }
 
-/// Flattens the tree a server reports, keeping enclosing names as scope.
-pub fn read(symbols: &Value, lines: &Lines) -> Vec<Symbol> {
+impl walk::Item for Symbol {
+    fn locator(&self) -> Locator {
+        self.locator.clone()
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn whole(&self) -> Range<usize> {
+        self.whole.clone()
+    }
+
+    fn name_at(&self) -> Range<usize> {
+        self.name_at.clone()
+    }
+
+    fn part_at(&self, at: usize) -> Option<Part> {
+        Symbol::part_at(self, at)
+    }
+}
+
+/// Flattens the tree a server reports, keeping enclosing names as scope. `file_scope` is the
+/// file's own path, folded into every symbol's locator — the one thing a server's tree never
+/// says, because it was never asked about more than one file.
+pub fn read(symbols: &Value, lines: &Lines, file_scope: &[String]) -> Vec<Symbol> {
     let mut found = Vec::new();
-    collect(symbols, &[], None, lines, &mut found);
+    collect(symbols, file_scope, &[], None, lines, &mut found);
     found
 }
 
@@ -59,6 +98,7 @@ pub fn holds(kind: &str) -> bool {
 
 fn collect(
     symbols: &Value,
+    file_scope: &[String],
     scope: &[String],
     parent: Option<&Locator>,
     lines: &Lines,
@@ -85,9 +125,15 @@ fn collect(
         let name_at = span(&symbol["selectionRange"], lines).unwrap_or(whole.clone());
         let kind = kind_of(symbol["kind"].as_u64().unwrap_or(0));
 
+        let locator = Locator {
+            scope: file_scope.iter().chain(scope).cloned().collect(),
+            name: name.to_string(),
+        };
+
         found.push(Symbol {
             name: name.to_string(),
             scope: scope.to_vec(),
+            locator,
             parent: parent.cloned(),
             kind,
             signature: splits(kind)
@@ -107,7 +153,14 @@ fn collect(
             scope: scope.to_vec(),
             name: name.to_string(),
         };
-        collect(&symbol["children"], &inner, Some(&holding), lines, found);
+        collect(
+            &symbol["children"],
+            file_scope,
+            &inner,
+            Some(&holding),
+            lines,
+            found,
+        );
     }
 }
 
@@ -249,6 +302,7 @@ export function addMoney(a: Money, b: Money): Money {
         let symbols = read(
             &json!([reported("addMoney", 12, (4, 0, 6, 1), (4, 16, 24))]),
             &lines,
+            &[],
         );
 
         let symbol = &symbols[0];
@@ -269,6 +323,7 @@ export function addMoney(a: Money, b: Money): Money {
         let symbols = read(
             &json!([reported("Money", 11, (0, 0, 2, 1), (0, 17, 22))]),
             &lines,
+            &[],
         );
 
         assert!(symbols[0].body().is_none());
@@ -287,7 +342,7 @@ export function addMoney(a: Money, b: Money): Money {
         let mut interface = reported("Money", 11, (0, 0, 2, 1), (0, 17, 22));
         interface["children"] = json!([reported("amount", 7, (1, 2, 1, 17), (1, 2, 8))]);
 
-        let symbols = read(&json!([interface]), &lines);
+        let symbols = read(&json!([interface]), &lines, &[]);
 
         assert_eq!(symbols.len(), 1);
         assert_eq!(symbols[0].name, "Money");
@@ -303,7 +358,7 @@ export function addMoney(a: Money, b: Money): Money {
             reported("addMoney", 12, (4, 0, 6, 1), (4, 16, 24)),
         ]);
 
-        let symbols = read(&reported, &lines);
+        let symbols = read(&reported, &lines, &[]);
         let names: Vec<&str> = symbols.iter().map(|symbol| symbol.name.as_str()).collect();
         assert_eq!(names, vec!["addMoney"]);
     }
@@ -318,7 +373,7 @@ export function addMoney(a: Money, b: Money): Money {
             reported("impl Display for Money", 5, (0, 0, 2, 1), (0, 0, 1)),
         ]);
 
-        let symbols = read(&reported, &lines);
+        let symbols = read(&reported, &lines, &[]);
         let names: Vec<&str> = symbols.iter().map(|symbol| symbol.name.as_str()).collect();
         assert_eq!(
             names,
@@ -333,7 +388,7 @@ export function addMoney(a: Money, b: Money): Money {
         let mut outer = reported("addMoney", 12, (4, 0, 6, 1), (4, 16, 24));
         outer["children"] = json!([reported("total", 13, (5, 2, 5, 12), (5, 8, 13))]);
 
-        assert_eq!(read(&json!([outer]), &lines).len(), 1);
+        assert_eq!(read(&json!([outer]), &lines, &[]).len(), 1);
     }
 
     /// A class's methods are worth listing, unlike a function's variables.
@@ -343,7 +398,7 @@ export function addMoney(a: Money, b: Money): Money {
         let mut outer = reported("Repo", 5, (0, 0, 2, 1), (0, 17, 21));
         outer["children"] = json!([reported("find", 6, (1, 2, 1, 16), (1, 2, 6))]);
 
-        let symbols = read(&json!([outer]), &lines);
+        let symbols = read(&json!([outer]), &lines, &[]);
         assert_eq!(symbols.len(), 2);
         assert_eq!(symbols[1].name, "find");
         assert_eq!(symbols[1].scope, vec!["Repo".to_string()]);
@@ -365,7 +420,7 @@ export function addMoney(a: Money, b: Money): Money {
             },
         }]);
 
-        let symbols = read(&flat, &lines);
+        let symbols = read(&flat, &lines, &[]);
         assert_eq!(symbols.len(), 1);
         assert_eq!(lines.slice(&symbols[0].whole).lines().count(), 3);
     }

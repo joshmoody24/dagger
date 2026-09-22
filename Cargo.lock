@@ -107,6 +107,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "dagger-core",
+ "dagger-protocol",
  "serde_json",
 ]
 

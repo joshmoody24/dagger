@@ -1,6 +1,7 @@
 //! Finding the definitions in a parsed file, and where each of their parts sits.
 
-use dagger_core::model::Part;
+use dagger_core::model::{Locator, Part};
+use dagger_lsp_client::walk;
 use proc_macro2::Span;
 use quote::ToTokens;
 use std::collections::BTreeMap;
@@ -29,14 +30,6 @@ pub struct Found {
 pub type Parts = BTreeMap<Part, Vec<Range<usize>>>;
 
 impl Found {
-    /// Everything the definition covers, used to spot mentions inside it.
-    pub fn extent(&self) -> Range<usize> {
-        let stretches = || self.parts.values().flatten();
-        let start = stretches().map(|range| range.start).min().unwrap_or(0);
-        let end = stretches().map(|range| range.end).max().unwrap_or(0);
-        start..end
-    }
-
     /// Whether a language server can be asked about this by name.
     ///
     /// A module and an implementation block are things a reader looks at, but not things
@@ -59,6 +52,35 @@ impl Found {
                     .get(part)
                     .is_some_and(|ranges| ranges.iter().any(|range| range.contains(&at)))
             })
+    }
+}
+
+impl walk::Item for Found {
+    fn locator(&self) -> Locator {
+        Locator {
+            scope: self.scope.clone(),
+            name: self.name.clone(),
+        }
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn whole(&self) -> Range<usize> {
+        self.covers.clone()
+    }
+
+    fn name_at(&self) -> Range<usize> {
+        self.name_at.clone()
+    }
+
+    fn referenceable(&self) -> bool {
+        Found::referenceable(self)
+    }
+
+    fn part_at(&self, at: usize) -> Option<Part> {
+        Found::part_at(self, at)
     }
 }
 
