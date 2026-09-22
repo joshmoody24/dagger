@@ -5,13 +5,13 @@ use crate::reference::{Reference, Target};
 use std::collections::{BTreeMap, VecDeque};
 use std::num::NonZeroU32;
 
-/// Unchanged definitions downstream of a type break, each with how many hops away it
+/// Unchanged definitions downstream of a type break, each with how many hops out it
 /// is. Only type parts are followed: a body can call anything without its callers caring.
-/// `depth` is how far to follow; zero means not at all.
-pub fn affected(
+/// `ripples` is how far to follow; zero means not at all.
+pub fn reached(
     changes: &BTreeMap<Identity, Change>,
     references: &[Reference],
-    depth: u32,
+    ripples: u32,
 ) -> (BTreeMap<Identity, NonZeroU32>, Vec<Diagnostic>) {
     let mut callers: BTreeMap<Identity, Vec<Identity>> = BTreeMap::new();
     let mut diagnostics = Vec::new();
@@ -36,7 +36,7 @@ pub fn affected(
     // Breadth first so each definition keeps its shortest distance: something called
     // directly and also through a chain is, to a reader, called directly.
     while let Some((broken, away)) = queue.pop_front() {
-        if away >= depth {
+        if away >= ripples {
             continue;
         }
         for caller in callers.get(&broken).into_iter().flatten() {
@@ -75,17 +75,17 @@ mod tests {
         )])
     }
 
-    /// Everything reached at unlimited depth.
+    /// Everything reached with unlimited ripples.
     fn reached(references: &[Reference]) -> BTreeSet<Identity> {
-        affected(&broken_at_zero(), references, u32::MAX)
+        super::reached(&broken_at_zero(), references, u32::MAX)
             .0
             .into_keys()
             .collect()
     }
 
     /// How far out each one sits.
-    fn away(references: &[Reference], depth: u32) -> BTreeMap<Identity, u32> {
-        affected(&broken_at_zero(), references, depth)
+    fn away(references: &[Reference], ripples: u32) -> BTreeMap<Identity, u32> {
+        super::reached(&broken_at_zero(), references, ripples)
             .0
             .into_iter()
             .map(|(identity, far)| (identity, far.get()))
@@ -130,11 +130,15 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_affected_when_nothing_breaks() {
+    fn nothing_is_reached_when_nothing_breaks() {
         let untouched = BTreeMap::from([(Identity(0), Change::Kept(Edits::default()))]);
         let references = [reference(1, 0, Part::Type)];
 
-        assert!(affected(&untouched, &references, u32::MAX).0.is_empty());
+        assert!(
+            super::reached(&untouched, &references, u32::MAX)
+                .0
+                .is_empty()
+        );
     }
 
     #[test]
@@ -201,7 +205,7 @@ mod tests {
             symbol: "Money".to_string(),
         };
 
-        let (_, diagnostics) = affected(&broken_at_zero(), &[unbound], u32::MAX);
+        let (_, diagnostics) = super::reached(&broken_at_zero(), &[unbound], u32::MAX);
         assert_eq!(
             diagnostics,
             vec![Diagnostic::UnboundInType {

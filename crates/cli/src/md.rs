@@ -27,8 +27,8 @@ pub fn render(review: &Review) -> String {
     let _ = writeln!(out, "# {}\n", review.title.as_deref().unwrap_or("Review"));
     let _ = writeln!(
         out,
-        "{} definitions to read, in the order below. Marks: + new, - gone, ! callers \
-         affected, ~ body, \" docs, . untouched, = unchanged but affected.\n",
+        "{} definitions to read, in the order below. Marks: + new, - gone, ! type \
+         changed, ~ body, \" docs, . untouched, = reached, unchanged.\n",
         review.reading.len()
     );
 

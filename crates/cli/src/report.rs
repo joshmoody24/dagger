@@ -27,7 +27,7 @@ pub fn print(review: &Review) {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    // Changed and affected overlap, so they don't add up to the total on purpose.
+    // Changed and reached overlap, so they don't add up to the total on purpose.
     let read = review.reading.len();
     let changed = review
         .reading
@@ -43,7 +43,7 @@ pub fn print(review: &Review) {
 
     let _ = writeln!(
         out,
-        "{} definitions, {read} to read ({changed} changed, {reached} affected)",
+        "{} definitions, {read} to read ({changed} changed, {reached} reached)",
         review.definitions.len(),
     );
     let _ = writeln!(
@@ -61,8 +61,8 @@ pub fn print(review: &Review) {
             true => glyph(&definition.change),
             false => '=',
         };
-        let affected = match definition.reached {
-            Some(_) => " (affected)",
+        let reached = match definition.reached {
+            Some(_) => " (reached)",
             None => "",
         };
         let faith = if step.on_faith.is_empty() {
@@ -72,7 +72,7 @@ pub fn print(review: &Review) {
         };
         let _ = writeln!(
             out,
-            "{place:>3}. {mark} {:<44} {}{affected}{faith}",
+            "{place:>3}. {mark} {:<44} {}{reached}{faith}",
             name(definition),
             definition.sides.latest().file
         );

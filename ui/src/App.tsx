@@ -51,10 +51,10 @@ export function App(props: { raw: Raw; said: string[] }) {
     }
   };
 
-  /* Starts at 0 so affected-only definitions are opt-in. Capped at what dagger was run
+  /* Starts at 0 so reached-only definitions are opt-in. Capped at what dagger was run
    * with (--ripples), since nothing beyond that exists in the data. */
   const [ripples, setRipples] = createSignal(0);
-  const further = () =>
+  const ripple = () =>
     setRipples((was) => (was >= whole().ripples ? 0 : was + 1));
 
   const review = createMemo(() => narrowed(whole(), ripples()));
@@ -169,7 +169,7 @@ export function App(props: { raw: Raw; said: string[] }) {
       open();
     },
     toggleSheet: () => (showing() ? shut() : open()),
-    ripples: further,
+    ripples: ripple,
     theme: () => void wear(another(wearing())),
     first: () => setIndex(0),
     last: () => setIndex(steps().length - 1),
@@ -189,7 +189,7 @@ export function App(props: { raw: Raw; said: string[] }) {
         showNext={showNext()}
         rippled={
           whole().ripples > 0 &&
-          [...whole().definitions.values()].some((one) => one.away > 0)
+          [...whole().definitions.values()].some((one) => one.reached > 0)
         }
         ripples={ripples()}
         furthest={whole().ripples}
@@ -202,7 +202,7 @@ export function App(props: { raw: Raw; said: string[] }) {
         onWorries={() => toggle("worries")}
         onCost={() => toggle("cost")}
         onShowNext={() => setShowNext((was) => !was)}
-        onRipples={further}
+        onRipples={ripple}
       />
 
       <main class={showing() ? `has-sheet ${facing()}` : ""}>

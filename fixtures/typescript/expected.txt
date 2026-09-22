@@ -1,8 +1,8 @@
-5 definitions, 4 to read (3 changed, 3 affected)
+5 definitions, 4 to read (3 changed, 3 reached)
 + new   - gone   ! type changed   ~ body   " docs   . untouched
 at most 2 held in mind at once, 0 read early, 1 jumps between files
 
   1. ! src::money::Currency                         src/money.ts
-  2. ! src::money::Money                            src/money.ts (affected)
-  3. ~ src::money::addMoney                         src/money.ts (affected)
-  4. = src::cart::cartTotal                         src/cart.ts (affected)
+  2. ! src::money::Money                            src/money.ts (reached)
+  3. ~ src::money::addMoney                         src/money.ts (reached)
+  4. = src::cart::cartTotal                         src/cart.ts (reached)

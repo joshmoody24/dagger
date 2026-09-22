@@ -17,7 +17,7 @@ export const MARK = {
   type: "!",
   body: "~",
   docs: '"',
-  affected: "≈",
+  reached: "≈",
   still: "·",
 };
 export const TINT = {
@@ -26,8 +26,8 @@ export const TINT = {
   type: "chg",
   body: "chg",
   docs: "chg",
-  affected: "aff",
-  still: "aff",
+  reached: "reached",
+  still: "reached",
 };
 
 export function digest(raw: Raw): Review {
@@ -74,7 +74,7 @@ function digested(id: Identity, one: RawDefinition): Definition {
     before,
     after,
     mark: marking(one),
-    away: one.reached ?? 0,
+    reached: one.reached ?? 0,
     parent: one.parent,
   };
 }
@@ -90,7 +90,7 @@ function marking(one: RawDefinition): Mark {
   if (edits.parts.includes("body") || edits.parts.includes("type"))
     return "body";
   if (edits.parts.includes("docs")) return "docs";
-  return one.reached !== null ? "affected" : "still";
+  return one.reached !== null ? "reached" : "still";
 }
 
 /** Whether a change to this one means its callers have to change too. */

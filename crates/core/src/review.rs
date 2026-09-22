@@ -8,7 +8,7 @@ use crate::diagnostic::Diagnostic;
 use crate::group::Grouping;
 use crate::model::{self, Identity, Locator, Role, Sides};
 use crate::order::{Cost, Step, order};
-use crate::propagate::affected;
+use crate::propagate::reached;
 use crate::reference::{Reference, Target};
 use crate::shape::{Group, Shape};
 use serde::{Deserialize, Serialize};
@@ -126,7 +126,7 @@ pub fn review(
         .map(|(def, change)| (def.identity, change.clone()))
         .collect();
 
-    let (reached, unbound) = affected(&changes, references, ripples);
+    let (reached, unbound) = reached(&changes, references, ripples);
     let findings: Vec<Diagnostic> = found
         .into_iter()
         .chain(lopsided.into_iter().flatten())

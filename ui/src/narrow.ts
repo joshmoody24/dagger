@@ -1,12 +1,12 @@
 import type { Review } from "./dagger.ts";
 
-/** The review with affected definitions further than `far` ripples out left off. */
-export function narrowed(whole: Review, far: number): Review {
-  if (far >= whole.ripples) return whole;
+/** The review with definitions reached further than `ripples` hops out left off. */
+export function narrowed(whole: Review, ripples: number): Review {
+  if (ripples >= whole.ripples) return whole;
 
   const gone = new Set(
     [...whole.definitions.values()]
-      .filter((one) => one.mark === "affected" && one.away > far)
+      .filter((one) => one.mark === "reached" && one.reached > ripples)
       .map((one) => one.id),
   );
   if (!gone.size) return whole;

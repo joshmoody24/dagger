@@ -483,7 +483,7 @@ const paged = (groups: Group[], read: string[], hidden: string[] = []) => {
           before: null,
           after: shown,
           mark: "added",
-          away: 0,
+          reached: 0,
           parent: null,
         },
       ]),

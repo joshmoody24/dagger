@@ -31,7 +31,7 @@ export type Raw = wire.Review;
 /* ---------------- what the page makes of it ---------------- */
 
 export type Mark =
-  "added" | "removed" | "type" | "body" | "docs" | "affected" | "still";
+  "added" | "removed" | "type" | "body" | "docs" | "reached" | "still";
 
 /* One definition in the shape the page wants: name flattened, a one-word mark, and both
  * sides pulled out of the wire shape. */
@@ -47,8 +47,8 @@ export interface Definition {
   before: Occurrence | null;
   after: Occurrence | null;
   mark: Mark;
-  /** How far out a change reached it, or nought for something no change reached. */
-  away: number;
+  /** How far out a change reached it, or nought for something none did. */
+  reached: number;
   /** What it's written inside, when that's on the page too. */
   parent: Identity | null;
 }

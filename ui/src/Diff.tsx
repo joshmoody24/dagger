@@ -244,7 +244,7 @@ function Code(props: {
   /* A change's tint says more than the grammar's colour, so it wins where there is one. */
   const colour = (part: Led) => {
     const mark = marked(part);
-    const tinted = mark && TINT[mark] !== "aff";
+    const tinted = mark && TINT[mark] !== "reached";
     return part.colour && !tinted ? { color: part.colour } : undefined;
   };
 
