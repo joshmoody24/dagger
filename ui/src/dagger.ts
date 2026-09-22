@@ -39,7 +39,7 @@ export interface Definition {
   id: Identity;
   name: string;
   scope: string[];
-  path: string;
+  locator: string;
   file: string;
   kind: string;
   /** What happened to it. */

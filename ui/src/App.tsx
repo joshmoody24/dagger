@@ -22,7 +22,7 @@ export function App(props: { raw: Raw; said: string[] }) {
 
   /* Read marks outlive the page, keyed by what was compared as the snapshot adapter named
    * it. The working tree is never the same twice, so it isn't kept. Identities are handed
-   * out afresh each run, so marks are stored by file and path instead. */
+   * out afresh each run, so marks are stored by file and locator instead. */
   const kept = createMemo(() => {
     const pair = compared(props.said);
     return pair && pair[1] !== "current"
@@ -31,7 +31,7 @@ export function App(props: { raw: Raw; said: string[] }) {
   });
   const marked = (id: Identity) => {
     const one = whole().definitions.get(id);
-    return one ? `${one.file}#${one.path}` : null;
+    return one ? `${one.file}#${one.locator}` : null;
   };
   const stored = (): Set<Identity> => {
     const at = kept();

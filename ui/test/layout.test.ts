@@ -42,7 +42,7 @@ test("everything to read is on the page, and the rest is modules", () => {
     assert.equal(
       definition.kind,
       "module",
-      `${definition.path} is on the page but never read`,
+      `${definition.locator} is on the page but never read`,
     );
   }
 });
@@ -208,7 +208,7 @@ test("every line says where it is in the file", () => {
 
     const numbered = lines.filter((line) => line.at !== null);
     for (const line of numbered)
-      assert.ok(line.at! >= 1, `${definition.path} has line ${line.at}`);
+      assert.ok(line.at! >= 1, `${definition.locator} has line ${line.at}`);
 
     /* Within one stretch they run consecutively; a gap is where they may jump. */
     for (let at = 1; at < lines.length; at++) {
@@ -218,7 +218,7 @@ test("every line says where it is in the file", () => {
       assert.equal(
         now.at,
         before.at + 1,
-        `${definition.path} jumps from ${before.at} to ${now.at}`,
+        `${definition.locator} jumps from ${before.at} to ${now.at}`,
       );
     }
   }
@@ -483,7 +483,7 @@ const paged = (groups: Group[], read: string[], hidden: string[] = []) => {
           id,
           name: `f${id}`,
           scope: [],
-          path: `f${id}`,
+          locator: `f${id}`,
           file: "one.rs",
           kind: "function",
           change: "added",

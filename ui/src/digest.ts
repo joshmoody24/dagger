@@ -67,7 +67,7 @@ function digested(id: Identity, one: RawDefinition): Definition {
     id,
     name: shown.locator.name,
     scope: shown.locator.scope,
-    path: [...shown.locator.scope, shown.locator.name].join("::"),
+    locator: [...shown.locator.scope, shown.locator.name].join("::"),
     file: shown.file,
     kind: shown.kind,
     change: one.change,

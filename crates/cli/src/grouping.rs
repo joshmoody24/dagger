@@ -3,7 +3,7 @@
 //! can't express would need an adapter; nothing needs one yet.
 
 use crate::config::GroupConfig;
-use dagger_core::group::{Grouping, Path as GroupPath};
+use dagger_core::group::{GroupPath, Grouping};
 use dagger_core::model::{Definition, segments};
 use std::collections::BTreeMap;
 use std::path::Path;

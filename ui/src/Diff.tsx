@@ -266,7 +266,7 @@ function Code(props: {
               tabindex="0"
               class={classes(part)}
               style={colour(part)}
-              title={`open ${props.review.definitions.get(goes())?.path ?? part.text}`}
+              title={`open ${props.review.definitions.get(goes())?.locator ?? part.text}`}
               onClick={() => props.onOpen(goes())}
               onKeyDown={(event) => {
                 if (event.key === "Enter") props.onOpen(goes());

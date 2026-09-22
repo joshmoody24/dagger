@@ -31,7 +31,7 @@ export interface Input {
 /* Case-insensitive substring on any of the names a reader might have in mind. */
 export const matches = (definition: Definition, query: string) => {
   const want = query.toLowerCase();
-  return [definition.name, definition.path, definition.file].some((it) =>
+  return [definition.name, definition.locator, definition.file].some((it) =>
     it.toLowerCase().includes(want),
   );
 };
@@ -167,7 +167,7 @@ function definition(
       nameX: TEXT_X + (mark.length + 1) * CHAR,
       mark,
       tint: TINT[definition.mark],
-      title: definition.path,
+      title: definition.locator,
       classes: Object.entries(states).flatMap(([name, on]) =>
         on ? [name] : [],
       ),

@@ -8,14 +8,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Where one definition sits, outermost group first. Empty means it's in no group.
-pub type Path = Vec<String>;
+pub type GroupPath = Vec<String>;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Grouping {
     /// What a reader would call this way of grouping: "package", "owner", "layer".
     pub name: String,
-    pub of: BTreeMap<Identity, Path>,
+    pub of: BTreeMap<Identity, GroupPath>,
 }
 
 impl Grouping {

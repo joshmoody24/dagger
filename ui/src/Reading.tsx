@@ -96,7 +96,7 @@ export function Reading(props: ReadingProps) {
           </Show>
           <div class="sheet-head">
             <b class={`mark ${TINT[one().mark]}`}>{MARK[one().mark]}</b>
-            <h2>{one().path}</h2>
+            <h2>{one().locator}</h2>
             <button
               class="icon-button grip"
               onClick={() => props.onExpand()}
