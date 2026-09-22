@@ -14,7 +14,7 @@ import type {
 export const MARK = {
   added: "+",
   removed: "−",
-  contract: "!",
+  type: "!",
   body: "~",
   docs: '"',
   affected: "≈",
@@ -23,7 +23,7 @@ export const MARK = {
 export const TINT = {
   added: "add",
   removed: "del",
-  contract: "chg",
+  type: "chg",
   body: "chg",
   docs: "chg",
   affected: "aff",
@@ -86,7 +86,7 @@ function marking(one: RawDefinition): Mark {
   if (change === "removed") return "removed";
 
   const edits = change.kept;
-  if (edits.contract) return "contract";
+  if (edits.type_changed) return "type";
   if (edits.parts.includes("body") || edits.parts.includes("type"))
     return "body";
   if (edits.parts.includes("docs")) return "docs";
@@ -96,5 +96,5 @@ function marking(one: RawDefinition): Mark {
 /** Whether a change to this one means its callers have to change too. */
 export function broke(review: Review, id: Identity) {
   const mark = review.definitions.get(id)?.mark;
-  return mark === "removed" || mark === "contract";
+  return mark === "removed" || mark === "type";
 }

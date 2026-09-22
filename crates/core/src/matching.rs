@@ -425,7 +425,7 @@ mod tests {
         let [Change::Kept(edits)] = changes.as_slice() else {
             panic!("expected one kept definition, got {changes:?}");
         };
-        assert!(edits.contract);
+        assert!(edits.type_changed);
         assert!(!edits.changed(Part::Body));
     }
 
@@ -460,7 +460,7 @@ mod tests {
             panic!("expected the rename to be paired up, got {changed:?}");
         };
 
-        assert!(edits.contract, "a new name is a new contract");
+        assert!(edits.type_changed, "a new name is a new type");
         assert!(edits.changed(Part::Body));
     }
 

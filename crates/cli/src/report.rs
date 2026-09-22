@@ -3,12 +3,12 @@ use dagger_core::model::Part;
 use dagger_core::review::{Definition, Impact, Review};
 use std::io::Write;
 
-/// One-character summary of a change. A contract change is louder than a body change.
+/// One-character summary of a change. A type change is louder than a body change.
 pub fn glyph(change: &Change) -> char {
     match change {
         Change::Added => '+',
         Change::Removed => '-',
-        Change::Kept(edits) if edits.contract => '!',
+        Change::Kept(edits) if edits.type_changed => '!',
         // Signature rewritten without changing meaning: reformatted, or a type spelled differently.
         Change::Kept(edits) if edits.changed(Part::Type) => '~',
         Change::Kept(edits) if edits.changed(Part::Body) => '~',
@@ -48,7 +48,7 @@ pub fn print(review: &Review) {
     );
     let _ = writeln!(
         out,
-        "+ new   - gone   ! callers affected   ~ body   \" docs   . untouched\n\
+        "+ new   - gone   ! type changed   ~ body   \" docs   . untouched\n\
          at most {} held in mind at once, {} read early, {} jumps between files\n",
         review.cost.peak_open, review.cost.taken_on_faith, review.cost.jumps
     );

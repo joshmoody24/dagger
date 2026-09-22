@@ -137,12 +137,12 @@ fn extract(
         source,
         seen,
         mentions,
-        contracts,
+        types,
         mut notes,
     } = walk.finish();
     notes.extend(source.notes);
 
-    let occurrences = definitions(&seen, &contracts);
+    let occurrences = definitions(&seen, &types);
     eprintln!(
         "{}",
         Progress::Finished {
@@ -160,7 +160,7 @@ fn extract(
     ))
 }
 
-/// Finds a file's definitions with `documentSymbol` and reads a contract out of hover.
+/// Finds a file's definitions with `documentSymbol` and reads a type out of hover.
 #[derive(Default)]
 struct LspSource {
     /// What was left out of a file and why.
@@ -180,7 +180,7 @@ impl Source for LspSource {
         Ok((lines, items))
     }
 
-    fn contract(&self, hover: &Value) -> Option<String> {
+    fn type_text(&self, hover: &Value) -> Option<String> {
         lsp::fenced(hover, None)
     }
 }
@@ -304,7 +304,7 @@ fn path_scope(path: &str) -> Vec<String> {
 
 fn definitions(
     seen: &BTreeMap<String, File>,
-    contracts: &BTreeMap<Locator, String>,
+    types: &BTreeMap<Locator, String>,
 ) -> Vec<Occurrence> {
     seen.values()
         .flat_map(|file| {
@@ -333,7 +333,7 @@ fn definitions(
 
                 let locator = symbol.locator.clone();
                 Occurrence {
-                    contract: contracts.get(&locator).cloned(),
+                    type_from_compiler: types.get(&locator).cloned(),
                     locator,
                     role: match symbols::holds(symbol.kind) {
                         true => Role::Container,
@@ -369,7 +369,7 @@ fn module(file: &File) -> Option<Occurrence> {
         kind: "module".to_string(),
         file: file.path.clone(),
         parts: BTreeMap::from([(Part::Body, pieces(file, &leftovers))]),
-        contract: None,
+        type_from_compiler: None,
     })
 }
 

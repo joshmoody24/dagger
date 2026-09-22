@@ -5,7 +5,7 @@ use crate::reference::{Reference, Target};
 use std::collections::{BTreeMap, VecDeque};
 use std::num::NonZeroU32;
 
-/// Unchanged definitions downstream of a contract break, each with how many hops away it
+/// Unchanged definitions downstream of a type break, each with how many hops away it
 /// is. Only type parts are followed: a body can call anything without its callers caring.
 /// `depth` is how far to follow; zero means not at all.
 pub fn affected(
@@ -19,7 +19,7 @@ pub fn affected(
     for reference in references.iter().filter(|r| mentioned_in_type(r)) {
         match &reference.to {
             Target::Known(to) => callers.entry(*to).or_default().push(reference.from),
-            Target::Unknown { symbol } => diagnostics.push(Diagnostic::UnboundInContract {
+            Target::Unknown { symbol } => diagnostics.push(Diagnostic::UnboundInType {
                 definition: reference.from,
                 symbol: symbol.clone(),
             }),
@@ -64,12 +64,12 @@ mod tests {
     use crate::testing::reference;
     use std::collections::BTreeSet;
 
-    /// A contract break at `0`, and nothing else changed.
+    /// A type break at `0`, and nothing else changed.
     fn broken_at_zero() -> BTreeMap<Identity, Change> {
         BTreeMap::from([(
             Identity(0),
             Change::Kept(Edits {
-                contract: true,
+                type_changed: true,
                 ..Edits::default()
             }),
         )])
@@ -204,7 +204,7 @@ mod tests {
         let (_, diagnostics) = affected(&broken_at_zero(), &[unbound], u32::MAX);
         assert_eq!(
             diagnostics,
-            vec![Diagnostic::UnboundInContract {
+            vec![Diagnostic::UnboundInType {
                 definition: Identity(1),
                 symbol: "Money".to_string()
             }]

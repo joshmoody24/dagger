@@ -9,17 +9,17 @@ use serde::{Deserialize, Serialize};
 pub enum Diagnostic {
     /// One snapshot had a compiler's view of this definition and the other didn't, so we
     /// fell back to comparing the signature as written.
-    LopsidedContract { definition: Identity },
+    LopsidedType { definition: Identity },
     /// A name in this definition's type part that no binder could place. If it turns
     /// out to be something that changed, we missed telling the reader about it.
-    UnboundInContract {
+    UnboundInType {
         definition: Identity,
         symbol: String,
     },
     /// An extractor reported a mention coming from a definition it never reported.
     MentionFromNowhere { from: Locator },
     /// A definition whose own pieces overlap, or run backwards. Overlapping pieces show
-    /// the same line twice, and across parts make one line both contract and prose.
+    /// the same line twice, and across parts make one line both type and prose.
     Tangled {
         definition: Locator,
         /// Where the trouble starts, in bytes.
@@ -42,8 +42,8 @@ impl Diagnostic {
     /// Which definition this is about, when it's about one with an identity.
     pub fn about(&self) -> Option<Identity> {
         match self {
-            Diagnostic::LopsidedContract { definition }
-            | Diagnostic::UnboundInContract { definition, .. } => Some(*definition),
+            Diagnostic::LopsidedType { definition }
+            | Diagnostic::UnboundInType { definition, .. } => Some(*definition),
             Diagnostic::MentionFromNowhere { .. }
             | Diagnostic::Tangled { .. }
             | Diagnostic::TwoOfOneName { .. }
@@ -51,9 +51,9 @@ impl Diagnostic {
         }
     }
 
-    /// Whether this could mean the review is missing a change. A lopsided contract can't:
+    /// Whether this could mean the review is missing a change. A lopsided type can't:
     /// the change is shown, just worked out from the text rather than the compiler.
     pub fn hides(&self) -> bool {
-        !matches!(self, Diagnostic::LopsidedContract { .. })
+        !matches!(self, Diagnostic::LopsidedType { .. })
     }
 }

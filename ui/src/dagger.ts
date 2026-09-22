@@ -31,7 +31,7 @@ export type Raw = wire.Review;
 /* ---------------- what the page makes of it ---------------- */
 
 export type Mark =
-  "added" | "removed" | "contract" | "body" | "docs" | "affected" | "still";
+  "added" | "removed" | "type" | "body" | "docs" | "affected" | "still";
 
 /* One definition in the shape the page wants: name flattened, a one-word mark, and both
  * sides pulled out of the wire shape. */

@@ -56,7 +56,7 @@ parts: { [key in Part]?: Array<Piece> },
  * apart from the parts. When present it overrides the type part for deciding whether
  * callers broke, so an inferred return type change can't pass as a body change.
  */
-contract: string | null, };
+type_from_compiler: string | null, };
 
 export type Sides = { "added": Occurrence } | { "removed": Occurrence } | { "kept": { before: Occurrence, after: Occurrence, } };
 
@@ -109,7 +109,7 @@ export type Edits = {
 /**
  * How it looks to callers, including its name.
  */
-contract: boolean, 
+type_changed: boolean, 
 /**
  * Landed in a different file or scope. Nobody breaks over this, so on its own
  * it isn't worth reviewing.
@@ -124,7 +124,7 @@ export type Change = "added" | "removed" | { "kept": Edits };
 
 export type Edge = { from: Identity, to: Identity, };
 
-export type Diagnostic = { "lopsided_contract": { definition: Identity, } } | { "unbound_in_contract": { definition: Identity, symbol: string, } } | { "mention_from_nowhere": { from: Locator, } } | { "tangled": { definition: Locator, 
+export type Diagnostic = { "lopsided_type": { definition: Identity, } } | { "unbound_in_type": { definition: Identity, symbol: string, } } | { "mention_from_nowhere": { from: Locator, } } | { "tangled": { definition: Locator, 
 /**
  * Where the trouble starts, in bytes.
  */

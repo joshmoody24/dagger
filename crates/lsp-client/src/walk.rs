@@ -46,7 +46,7 @@ pub trait Source {
 
     /// What a hover response says the definition looks like from outside. Every server
     /// writes this differently.
-    fn contract(&self, hover: &Value) -> Option<String>;
+    fn type_text(&self, hover: &Value) -> Option<String>;
 }
 
 /// How far a walk may go, and who it's walking for.
@@ -86,7 +86,7 @@ pub struct Walk<S: Source> {
     source: S,
     seen: BTreeMap<String, Opened<S::Item>>,
     mentions: Vec<Mention>,
-    contracts: BTreeMap<Locator, String>,
+    types: BTreeMap<Locator, String>,
     notes: Vec<Note>,
     walk_limit: usize,
     open_limit: usize,
@@ -98,7 +98,7 @@ pub struct Walked<S: Source> {
     pub source: S,
     pub seen: BTreeMap<String, Opened<S::Item>>,
     pub mentions: Vec<Mention>,
-    pub contracts: BTreeMap<Locator, String>,
+    pub types: BTreeMap<Locator, String>,
     pub notes: Vec<Note>,
 }
 
@@ -112,7 +112,7 @@ impl<S: Source> Walk<S> {
             source,
             seen: BTreeMap::new(),
             mentions: Vec::new(),
-            contracts: BTreeMap::new(),
+            types: BTreeMap::new(),
             notes: Vec::new(),
             walk_limit: reach.walk_limit,
             open_limit: reach.open_limit,
@@ -237,9 +237,9 @@ impl<S: Source> Walk<S> {
         for (at, to, name) in questions {
             // Hover is written for a person, so the source decides how far to trust it.
             if let Ok(hover) = self.server.request("textDocument/hover", at.clone())
-                && let Some(contract) = self.source.contract(&hover)
+                && let Some(type_text) = self.source.type_text(&hover)
             {
-                self.contracts.insert(to.clone(), contract);
+                self.types.insert(to.clone(), type_text);
             }
 
             let mut question = at;
@@ -336,7 +336,7 @@ impl<S: Source> Walk<S> {
             source: self.source,
             seen: self.seen,
             mentions: self.mentions,
-            contracts: self.contracts,
+            types: self.types,
             notes: self.notes,
         }
     }

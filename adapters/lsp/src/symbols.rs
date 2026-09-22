@@ -1,6 +1,6 @@
 //! Turns a language server's document symbols into definitions.
 //!
-//! A server doesn't say which part of a symbol is contract and which is body; that is
+//! A server doesn't say which part of a symbol is type and which is body; that is
 //! guessed from the symbol's kind.
 
 use dagger_core::model::{Locator, Part};
@@ -204,7 +204,7 @@ fn nameable(name: &str) -> bool {
 }
 
 /// The signature ends at the brace that opens the body. For languages without one the
-/// whole definition stays contract, which over-reports rather than under-reports.
+/// whole definition stays type, which over-reports rather than under-reports.
 fn signature(whole: &Range<usize>, name_at: &Range<usize>, lines: &Lines) -> Option<Range<usize>> {
     let text = lines.slice(whole);
     let after_name = name_at.end.saturating_sub(whole.start);
@@ -213,13 +213,13 @@ fn signature(whole: &Range<usize>, name_at: &Range<usize>, lines: &Lines) -> Opt
 }
 
 /// Only things that are called have workings to hide. A type, a field or a constant is
-/// all contract, so a change anywhere in one can break a caller.
+/// all type, so a change anywhere in one can break a caller.
 fn splits(kind: &str) -> bool {
     matches!(kind, "function" | "method" | "constructor")
 }
 
 /// Whether a server's children of this kind are definitions of their own. A class's methods
-/// are; an interface's fields are part of its contract, and listing them separately hides
+/// are; an interface's fields are part of its type, and listing them separately hides
 /// the callers a change broke. Variables are out so an arrow function's returned keys aren't listed.
 fn holds_definitions(kind: &str) -> bool {
     matches!(kind, "class" | "namespace" | "module" | "package" | "file")
@@ -344,7 +344,7 @@ export function addMoney(a: Money, b: Money): Money {
         );
     }
 
-    /// A type is contract all the way through, so there's nothing to split off.
+    /// A type is all type part, so there's nothing to split off.
     #[test]
     fn an_interface_is_all_declaration() {
         let lines = Lines::new(SOURCE);

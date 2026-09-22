@@ -225,7 +225,7 @@ fn told(found: &Diagnostic, definitions: &[model::Definition]) -> Warning {
                 at.iter().map(u32::to_string).collect::<Vec<_>>().join(", ")
             ),
         ),
-        Diagnostic::UnboundInContract { definition, symbol } => (
+        Diagnostic::UnboundInType { definition, symbol } => (
             Impact::Incomplete,
             format!(
                 "{symbol} appears where callers of {} can see it, but nothing could say \
@@ -252,7 +252,7 @@ fn told(found: &Diagnostic, definitions: &[model::Definition]) -> Warning {
                  followed from one side to the other"
             ),
         ),
-        Diagnostic::LopsidedContract { definition } => (
+        Diagnostic::LopsidedType { definition } => (
             Impact::Degraded,
             format!(
                 "{}: the compiler described one side of this and not the other, so the \

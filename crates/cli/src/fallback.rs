@@ -43,6 +43,6 @@ fn occurrence(dir: &Path, file: &str) -> Option<Occurrence> {
                 file: file.to_string(),
             }],
         )]),
-        contract: None,
+        type_from_compiler: None,
     })
 }

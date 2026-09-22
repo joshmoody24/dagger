@@ -138,7 +138,7 @@ fn extract(
         source,
         seen,
         mentions,
-        contracts,
+        types,
         mut notes,
     } = walk.finish();
 
@@ -147,7 +147,7 @@ fn extract(
         .flat_map(|file| {
             file.items
                 .iter()
-                .map(|found| occurrence(file, found, &contracts))
+                .map(|found| occurrence(file, found, &types))
         })
         .collect();
 
@@ -169,7 +169,7 @@ fn extract(
     ))
 }
 
-/// Discovers a Rust file's definitions by parsing it, and reads a contract back out of
+/// Discovers a Rust file's definitions by parsing it, and reads a type back out of
 /// what rust-analyzer says on hover.
 #[derive(Default)]
 struct RustSource {
@@ -189,10 +189,10 @@ impl Source for RustSource {
         Ok((parsed.lines, parsed.items))
     }
 
-    /// The contract is the last fenced rust block before the `---` rule: the first block only
+    /// The type is the last fenced rust block before the `---` rule: the first block only
     /// names the module, and past the rule doc examples are fenced rust too, so reading one
     /// would make editing an example a breaking change.
-    fn contract(&self, hover: &serde_json::Value) -> Option<String> {
+    fn type_text(&self, hover: &serde_json::Value) -> Option<String> {
         fenced(hover, Some("rust"))
     }
 }
@@ -251,7 +251,7 @@ fn told(source: &str, found: &mut [items::Found]) {
 fn occurrence(
     file: &Parsed,
     found: &items::Found,
-    contracts: &BTreeMap<Locator, String>,
+    types: &BTreeMap<Locator, String>,
 ) -> Occurrence {
     let parts = found
         .parts
@@ -267,7 +267,7 @@ fn occurrence(
 
     let locator = locator(found);
     Occurrence {
-        contract: contracts.get(&locator).cloned(),
+        type_from_compiler: types.get(&locator).cloned(),
         locator,
         role: role_of(found.kind),
         parent: holding(file, found).map(self::locator),

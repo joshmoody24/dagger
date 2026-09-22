@@ -141,7 +141,7 @@ fn merged(found: Vec<Found>) -> Vec<Found> {
 }
 
 /// The module as a definition, so its imports and `//!` docs belong to something. `use` is
-/// body; `pub use` is contract, since removing one breaks everyone importing through it.
+/// body; `pub use` is type, since removing one breaks everyone importing through it.
 pub fn module(
     attrs: &[Attribute],
     items: &[Item],
@@ -150,11 +150,11 @@ pub fn module(
     braced: bool,
 ) -> Option<Found> {
     let (name, scope) = path.split_last()?;
-    let (contract, workings) = imports(items);
+    let (exposed, workings) = imports(items);
 
     // Prose reaches whatever it introduces, so the blank line under it isn't a hole.
     let told = docs(attrs);
-    let first = contract
+    let first = exposed
         .iter()
         .chain(workings.iter())
         .map(|span| span.start)
@@ -166,13 +166,13 @@ pub fn module(
 
     // A braced module's closing brace is alone on its line, so claim it or the review
     // can't account for that line.
-    let contract = match braced {
+    let exposed = match braced {
         true => {
-            let mut ranges = contract;
+            let mut ranges = exposed;
             ranges.push(extent.end.saturating_sub(1)..extent.end);
             ranges
         }
-        false => contract,
+        false => exposed,
     };
 
     Some(Found {
@@ -182,7 +182,7 @@ pub fn module(
         name_at: extent.start..extent.start,
         kind: "module",
         parts: parts([
-            (Part::Type, contract),
+            (Part::Type, exposed),
             (Part::Body, workings),
             (Part::Docs, told),
         ]),
@@ -577,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn prose_is_docs_and_the_signature_is_the_contract() {
+    fn prose_is_docs_and_the_signature_is_the_type() {
         let source = "/// Adds them up.\npub fn add(a: u8) -> u8 {\n    a\n}\n";
         let found = read(source);
         let add = named(&found, "add");
@@ -621,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn a_public_import_is_contract_and_a_private_one_is_not() {
+    fn a_public_import_is_type_and_a_private_one_is_not() {
         let source = "pub use one::Thing;\nuse two::Other;\n";
         let found = read(source);
         let module = named(&found, "thing");

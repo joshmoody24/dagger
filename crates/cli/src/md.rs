@@ -60,7 +60,7 @@ pub fn render(review: &Review) -> String {
         if !because.is_empty() {
             let _ = writeln!(
                 out,
-                "Depends on contracts that changed: {}.\n",
+                "Depends on types that changed: {}.\n",
                 because.join(", ")
             );
         }

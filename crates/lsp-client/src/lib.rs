@@ -292,7 +292,7 @@ mod tests {
     const SOURCE: &str = "export function zero() {\n  return 0;\n}\n";
 
     #[test]
-    fn a_contract_stops_at_the_documentation() {
+    fn a_type_stops_at_the_documentation() {
         let hover = json!({
             "contents": { "value": "```ts\nfunction add(a: number): number\n```\n---\nAdds.\n\n```ts\nadd(1)\n```" }
         });

@@ -15,7 +15,7 @@ pub fn segments(path: &Path) -> Vec<String> {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum Part {
-    /// The contract. Changing it can break callers.
+    /// What callers can see. Changing it can break them.
     Type,
     /// Internal. Changing it can't break callers.
     Body,
@@ -103,7 +103,7 @@ pub struct Occurrence {
     /// The compiler's view of the definition from outside; not in the source, so kept
     /// apart from the parts. When present it overrides the type part for deciding whether
     /// callers broke, so an inferred return type change can't pass as a body change.
-    pub contract: Option<String>,
+    pub type_from_compiler: Option<String>,
 }
 
 impl Occurrence {
@@ -236,7 +236,7 @@ mod tests {
             kind: "function".to_string(),
             file: "own.c".to_string(),
             parts: BTreeMap::from([(Part::Type, pieces)]),
-            contract: None,
+            type_from_compiler: None,
         }
     }
 
