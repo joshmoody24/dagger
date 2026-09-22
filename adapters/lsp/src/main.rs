@@ -151,7 +151,7 @@ fn extract(
     let mut walk = Walk::new(
         server,
         root,
-        LspSource,
+        LspSource::default(),
         Reach {
             binder,
             ours,
@@ -163,12 +163,13 @@ fn extract(
     walk.spread(changed);
 
     let Walked {
+        source,
         seen,
         mentions,
         contracts,
-        notes,
-        ..
+        mut notes,
     } = walk.finish();
+    notes.extend(source.notes);
     let seen: BTreeMap<String, Opened> = seen
         .into_iter()
         .map(|(path, (lines, symbols))| {
@@ -203,7 +204,11 @@ fn extract(
 
 /// Discovers a TypeScript-or-whatever file's definitions by asking the language server
 /// about it, and reads a contract back out of what it says on hover.
-struct LspSource;
+#[derive(Default)]
+struct LspSource {
+    /// What was left out of a file and why, for whoever reads the review.
+    notes: Vec<Note>,
+}
 
 impl Source for LspSource {
     type Item = symbols::Symbol;
@@ -218,7 +223,7 @@ impl Source for LspSource {
             path: _,
             lines,
             symbols,
-        } = open(server, root, path)?;
+        } = open(server, root, path, &mut self.notes)?;
         Ok((lines, symbols))
     }
 
@@ -230,29 +235,26 @@ impl Source for LspSource {
 /// symbol like any other, but it's a mention of a definition rather than one itself, and
 /// counting it would put the same thing in the review twice under two names.
 ///
-/// Asking where the name is defined settles it: a real definition points at itself.
-fn borrowed(server: &mut Server, at: &Value, file: &Opened, symbol: &symbols::Symbol) -> bool {
-    /* An import says what it is without being asked. Asking anyway is how an import of
-     * something never built — a package's compiled output, missing from the tree — came back
-     * with no definition anywhere, and no definition anywhere was read as "defined here":
-     * every name in the import a definition of its own, one line each, and the import's
-     * first line taken as the prose above the first of them. */
-    let (row, _) = file.lines.position(symbol.name_at.start);
-    if imported(file.lines.text(), row as usize) {
-        return true;
-    }
-
-    let Ok(defined) = server.request("textDocument/definition", at.clone()) else {
-        return false;
-    };
+/// Asking where the name is defined settles it: a real definition points at itself. `None`
+/// when the server has no answer at all, which is an import of something never built — a
+/// package's compiled output missing from the tree — as often as it's anything else. Read
+/// as "defined here", every name in such an import became a definition of its own, one line
+/// each; so no answer is no definition, and the caller says so.
+fn borrowed(
+    server: &mut Server,
+    at: &Value,
+    file: &Opened,
+    symbol: &symbols::Symbol,
+) -> Option<bool> {
+    let defined = server.request("textDocument/definition", at.clone()).ok()?;
 
     let places = match &defined {
-        Value::Array(places) => places.clone(),
-        Value::Null => return false,
-        place => vec![place.clone()],
+        Value::Array(places) if !places.is_empty() => places.clone(),
+        Value::Object(_) => vec![defined.clone()],
+        _ => return None,
     };
 
-    places.iter().any(|place| {
+    let borrowed = places.iter().any(|place| {
         let elsewhere = place["uri"]
             .as_str()
             .or_else(|| place["targetUri"].as_str())
@@ -267,53 +269,11 @@ fn borrowed(server: &mut Server, at: &Value, file: &Opened, symbol: &symbols::Sy
         });
 
         elsewhere || away
-    })
+    });
+    Some(borrowed)
 }
 
-/// Whether the name on this line was brought in from somewhere else rather than defined
-/// here, read off the text: the line itself, or — for a name in a list spread over several
-/// lines — the nearest line above that says which statement the list belongs to.
-fn imported(text: &str, row: usize) -> bool {
-    let lines: Vec<&str> = text.lines().collect();
-    if row >= lines.len() {
-        return false;
-    }
-    let mut at = row;
-    loop {
-        let line = lines[at].trim();
-        if !listed(line) || at == 0 {
-            return line.starts_with("import ")
-                || line.starts_with("import{")
-                || line.starts_with("from ");
-        }
-        at -= 1;
-    }
-}
-
-/// One name of a list spread over several lines — `Foo,`, `Foo as Bar,`, `type Foo` — which
-/// says nothing about what the list is, so the answer lies on the line above.
-fn listed(line: &str) -> bool {
-    let line = line.split("//").next().unwrap_or("").trim();
-    let line = line.trim_end_matches(',').trim();
-    if line == "{" {
-        return true;
-    }
-    let name = |word: &str| {
-        !word.is_empty()
-            && word
-                .chars()
-                .all(|c| c.is_alphanumeric() || c == '_' || c == '$')
-    };
-    match line.split_whitespace().collect::<Vec<_>>().as_slice() {
-        [one] => name(one),
-        [one, "as", other] => name(one) && name(other),
-        ["type", one] => name(one),
-        ["type", one, "as", other] => name(one) && name(other),
-        _ => false,
-    }
-}
-
-fn open(server: &mut Server, root: &Path, path: &str) -> Result<Opened> {
+fn open(server: &mut Server, root: &Path, path: &str, notes: &mut Vec<Note>) -> Result<Opened> {
     let full = root.join(path);
     let text = std::fs::read_to_string(&full).with_context(|| format!("couldn't read {path}"))?;
     let lines = Lines::new(&text);
@@ -330,13 +290,34 @@ fn open(server: &mut Server, root: &Path, path: &str) -> Result<Opened> {
         lines,
     };
 
-    let ours: Vec<bool> = file
+    let asked: Vec<Option<bool>> = file
         .symbols
         .iter()
-        .map(|symbol| !borrowed(server, &position(root, &file, symbol), &file, symbol))
+        .map(|symbol| borrowed(server, &position(root, &file, symbol), &file, symbol))
         .collect();
-    let mut keep = ours.iter();
-    file.symbols.retain(|_| *keep.next().unwrap_or(&true));
+    let unplaced: Vec<&str> = file
+        .symbols
+        .iter()
+        .zip(&asked)
+        .filter(|(_, answer)| answer.is_none())
+        .map(|(symbol, _)| symbol.locator.name.as_str())
+        .collect();
+    if !unplaced.is_empty() {
+        notes.push(Note {
+            message: format!(
+                "{path}: {} could not be traced to a definition, so left out: {}",
+                if unplaced.len() == 1 {
+                    "a name"
+                } else {
+                    "names"
+                },
+                unplaced.join(", ")
+            ),
+            file: Some(path.to_string()),
+        });
+    }
+    let mut keep = asked.iter();
+    file.symbols.retain(|_| keep.next() == Some(&Some(false)));
 
     // A definition has to be addressable by name. Two answering to the same one can't be
     // told apart between snapshots, so the first keeps the name and the rest are dropped
@@ -805,37 +786,5 @@ mod tests {
         assert_eq!(language_of("src/App.tsx"), "typescriptreact");
         assert_eq!(language_of("main.rs"), "rust");
         assert_eq!(language_of("Makefile"), "plaintext");
-    }
-
-    /* The bug: an import of something never built came back from the server with no
-     * definition anywhere, and that was read as "defined here". The text says otherwise
-     * without asking. */
-    #[test]
-    fn a_name_in_a_multi_line_import_is_borrowed() {
-        let source = "import {\n  ProductMonitors,\n  productMonitors,\n} from \"x\";\n";
-        assert!(imported(source, 1));
-        assert!(imported(source, 2));
-    }
-
-    #[test]
-    fn a_one_line_import_is_borrowed() {
-        assert!(imported("import { A } from \"x\";\nconst b = 1;\n", 0));
-        assert!(imported("import A from \"x\";\n", 0));
-        assert!(imported("import type { A } from \"x\";\n", 0));
-    }
-
-    /* The same shape as a list of imports — a name a line, commas — that isn't one. The
-     * statement it belongs to is the line above, and that line has to be the one asked. */
-    #[test]
-    fn a_shorthand_property_is_not_an_import() {
-        let source = "import { a } from \"x\";\n\nconst o = {\n  a,\n  b,\n};\n";
-        assert!(!imported(source, 3));
-        assert!(!imported(source, 4));
-    }
-
-    #[test]
-    fn a_definition_of_its_own_is_not_an_import() {
-        assert!(!imported("export const x = 1;\n", 0));
-        assert!(!imported("function f(a, b) {\n  return a;\n}\n", 0));
     }
 }
