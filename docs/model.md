@@ -19,19 +19,19 @@ produces the thing it names.
    **body**, which callers cannot see, and the **docs**. Beside the occurrences, the
    extractor adapters report **mentions**. A mention is a place where one occurrence names
    another.
-3. The core matches the occurrences of the two snapshots. An occurrence in the before
+3. The occurrences of the two snapshots are matched. An occurrence in the before
    snapshot and one in the after snapshot that are the same named thing become one
    **definition** with one **identity**. A definition's **change** is what differs between
    its two occurrences, or that it has only one.
-4. Mentions become **references** between definitions. The core follows references outward
+4. Mentions become **references** between definitions. References are followed outward
    from what changed, as many steps as the **ripples** setting allows, to find what a change
    **reached**. The references among the definitions shown become **edges**. An edge says
    what depends on what.
-5. The core decides the **reading**, which is a list of **steps**. Each step is one
+5. The **reading** is a list of **steps**. Each step is one
    definition. The order never reads a definition before what it depends on.
-6. The core shapes the definitions into **groups**, the boxes on the page. Each group has a
+6. The definitions are shaped into **groups**, the boxes on the page. Each group has a
    **tier**, which is how many rows down from what it depends on it sits.
-7. The page in the browser, or the terminal, renders the review and decides nothing else.
+7. The page in the browser, or the terminal, renders the review.
 
 ## The core model
 
