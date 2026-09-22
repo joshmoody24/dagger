@@ -91,8 +91,9 @@ test("nothing escapes the box that holds it", () => {
       assert.ok(within(child, box), `${child.key} escapes ${box.key}`);
       walk(child);
     }
-    for (const row of box.rows) {
-      for (const node of row) {
+    for (const layer of box.stack) {
+      if (!("row" in layer)) continue;
+      for (const node of layer.row) {
         const spot = laid.at.get(node.id);
         assert.ok(
           within({ ...spot, h: NODE_H }, box),
@@ -423,64 +424,77 @@ test("a long file of repeated lines is compared without weighing every pair", ()
   );
 });
 
-/* A file is not always one module. Where a language lets a file be a place to put things
- * rather than a thing in itself, several containers can sit at the top of one — and the
- * page used to keep whichever it saw last, drawing that one and silently losing the rest
- * along with every box inside them. */
-test("a file holding several containers draws all of them", () => {
-  const one = (
-    id: number,
-    name: string,
-    role: "item" | "container",
-    parent: number | null,
-  ) => {
-    const kind = role === "container" ? "class" : "function";
-    const shown = {
-      locator: { scope: [], name },
-      role,
-      parent: null,
-      kind,
-      file: "one.ts",
-      parts: {},
-      contract: null,
-    };
-    return [
-      id,
-      {
-        id,
-        name,
-        scope: [],
-        path: name,
-        file: "one.ts",
-        kind,
-        role,
-        change: "added" as const,
-        before: null,
-        after: shown,
-        mark: "added" as const,
-        away: 0,
-        parent,
-        group: [],
-      },
-    ] as const;
+/* A definition as the page would have digested it, for shapes the saved review doesn't
+ * hold. Only what laying out reads: which file it's in, what it's inside, and whether it's
+ * a box. */
+const one = (
+  id: string,
+  name: string,
+  role: "item" | "container",
+  parent: string | null,
+) => {
+  const kind = role === "container" ? "module" : "function";
+  const shown = {
+    locator: { scope: [], name },
+    role,
+    parent: null,
+    kind,
+    file: "one.rs",
+    parts: {},
+    contract: null,
   };
+  return [
+    id,
+    {
+      id,
+      name,
+      scope: [],
+      path: name,
+      file: "one.rs",
+      kind,
+      role,
+      change: "added" as const,
+      before: null,
+      after: shown,
+      mark: "added" as const,
+      away: 0,
+      parent,
+      group: [],
+    },
+  ] as const;
+};
 
-  const definitions = new Map([
-    one(1, "Alpha", "container", null),
-    one(2, "Beta", "container", null),
-    one(3, "aMethod", "item", 1),
-    one(4, "bMethod", "item", 2),
-  ] as never);
-
-  const laid = layout({
-    definitions,
-    steps: [1, 2, 3, 4].map((definition) => ({ definition, on_faith: [] })),
-    edges: [],
+/* Laid out with the reading in the order given, and nothing else a review carries. */
+const laidOut = (
+  definitions: ReturnType<typeof one>[],
+  steps: string[],
+  edges: { from: string; to: string }[],
+) =>
+  layout({
+    definitions: new Map(definitions as never),
+    steps: steps.map((definition) => ({ definition, on_faith: [] })),
+    edges,
     ripples: 1,
     cost: { peak_open: 0, total_open: 0, taken_on_faith: 0, jumps: 0 },
     bands: new Map(),
     warnings: [],
   } as never);
+
+/* A file is not always one module. Where a language lets a file be a place to put things
+ * rather than a thing in itself, several containers can sit at the top of one — and the
+ * page used to keep whichever it saw last, drawing that one and silently losing the rest
+ * along with every box inside them. */
+test("a file holding several containers draws all of them", () => {
+  const laid = laidOut(
+    [
+      one("1", "Alpha", "container", null),
+      one("2", "Beta", "container", null),
+      one("3", "aMethod", "item", "1"),
+      one("4", "bMethod", "item", "2"),
+    ],
+    ["1", "2", "3", "4"],
+    [],
+  );
 
   const boxes: string[] = [];
   const walk = (box: { label: string; boxes: unknown[] }) => {
@@ -495,4 +509,109 @@ test("a file holding several containers draws all of them", () => {
   );
   assert.ok(boxes.includes("Beta"), `Beta was not drawn: ${boxes.join(", ")}`);
   assert.equal(laid.at.size, 2, "both methods keep a place");
+});
+
+/* A box inside a box was always drawn at the top of it, above the box's own definitions,
+ * whatever leaned on what — so a module's tests sat above the code they test, and every
+ * line from a test to what it tests ran downwards, in the style kept for lines a reader has
+ * to take on faith. Nothing here needs faith: a test leans on a helper, so the helper holds
+ * it up, so the helper goes above. */
+test("what leans on the code around it is drawn below it, inside a box or not", () => {
+  const laid = laidOut(
+    [
+      one("1", "one", "container", null),
+      one("2", "helper", "item", "1"),
+      one("3", "tests", "container", "1"),
+      one("4", "checks_helper", "item", "3"),
+    ],
+    ["2", "4"],
+    [{ from: "4", to: "2" }],
+  );
+
+  const helper = laid.at.get("2")!;
+  const checks = laid.at.get("4")!;
+  assert.ok(
+    checks.y > helper.y,
+    `the test (y ${checks.y}) should sit below the helper it leans on (y ${helper.y})`,
+  );
+});
+
+/* At one depth nothing holds anything else up, so which comes first is the reading's to
+ * say — a box of definitions no more than a row of them. It used to be "boxes first", which
+ * drew a module's tests above a function the reading reached before them. Run both ways
+ * round, so it's the reading deciding and not a rule that happens to agree with it. */
+test("at one depth, the reading decides whether a box comes before a row", () => {
+  const definitions = [
+    one("1", "one", "container", null),
+    one("2", "helper", "item", "1"),
+    one("3", "used", "item", "1"),
+    one("4", "tests", "container", "1"),
+    one("5", "checks_helper", "item", "4"),
+  ];
+  const edges = [
+    { from: "3", to: "2" },
+    { from: "5", to: "2" },
+  ];
+
+  const usedFirst = laidOut(definitions, ["2", "3", "5"], edges);
+  assert.ok(
+    usedFirst.at.get("3")!.y < usedFirst.at.get("5")!.y,
+    "read first, drawn first",
+  );
+
+  const testsFirst = laidOut(definitions, ["2", "5", "3"], edges);
+  assert.ok(
+    testsFirst.at.get("5")!.y < testsFirst.at.get("3")!.y,
+    "read first, drawn first, the other way round",
+  );
+});
+
+/* Where a box sits: its top edge, found by its label. */
+const boxY = (laid: ReturnType<typeof layout>, label: string) => {
+  let found: number | undefined;
+  const walk = (box: Box) => {
+    if (box.label === label) found = box.y;
+    box.boxes.forEach(walk);
+  };
+  laid.boxes.forEach(walk);
+  return found!;
+};
+
+/* A container is a definition too — a type carried in a signature, say — and something
+ * leaning on it holds it up like anything else. Keyed over nodes alone, the edge into the
+ * box was lost, and the box sank below the very thing that depended on it. */
+test("a box that something leans on is drawn above it, like any dependency", () => {
+  const laid = laidOut(
+    [
+      one("1", "one", "container", null),
+      one("2", "field", "item", "1"),
+      one("3", "Unit", "container", "1"),
+    ],
+    ["3", "2"],
+    [{ from: "2", to: "3" }],
+  );
+  assert.ok(
+    boxY(laid, "Unit") < laid.at.get("2")!.y,
+    "the box goes above what leans on it",
+  );
+});
+
+/* A box with nothing in it is still a thing in the reading, and takes its turn by its own
+ * step rather than sinking to the bottom for want of contents. */
+test("an empty box takes its place in the reading", () => {
+  const definitions = [
+    one("1", "one", "container", null),
+    one("2", "field", "item", "1"),
+    one("3", "Unit", "container", "1"),
+  ];
+  const unitFirst = laidOut(definitions, ["3", "2"], []);
+  assert.ok(
+    boxY(unitFirst, "Unit") < unitFirst.at.get("2")!.y,
+    "read first, drawn first",
+  );
+  const fieldFirst = laidOut(definitions, ["2", "3"], []);
+  assert.ok(
+    boxY(fieldFirst, "Unit") > fieldFirst.at.get("2")!.y,
+    "read after, drawn after",
+  );
 });

@@ -155,8 +155,13 @@ impl Frontier {
         self.queue.iter().cloned().collect()
     }
 
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> Option<(String, Wanted, u32)> {
+    /// The next file to walk, taken off the queue and marked as asked for what it was
+    /// wanted for, so it can come round again only for something new.
+    ///
+    /// Not an iterator, though it looks like one: walking a file is what turns up the next
+    /// files worth walking, so the queue grows while it's being drained — a second borrow
+    /// that no `for` loop allows.
+    pub fn take(&mut self) -> Option<(String, Wanted, u32)> {
         let path = self.queue.pop_front()?;
         let work = self.files.get_mut(&path)?;
         let wanted = std::mem::take(&mut work.pending);
@@ -268,7 +273,7 @@ mod tests {
         }
 
         let mut walked = Vec::new();
-        while let Some((path, _, _)) = front.next() {
+        while let Some((path, _, _)) = front.take() {
             walked.push(path);
         }
         assert_eq!(walked, vec!["a.ts", "b.ts"]);
@@ -283,7 +288,7 @@ mod tests {
         front.want("a.ts", just(&["one"]), 0);
 
         for step in 0..5 {
-            front.next();
+            front.take();
             let more = format!("more{step}");
             front.want("a.ts", just(&[&more]), 0);
             assert!(
@@ -303,7 +308,7 @@ mod tests {
         let mut front = Frontier::default();
         front.want("b.ts", just(&["carries"]), 0);
 
-        let (path, wanted, _) = front.next().expect("something to walk");
+        let (path, wanted, _) = front.take().expect("something to walk");
         assert_eq!(path, "b.ts");
         assert_eq!(wanted, just(&["carries"]));
     }
@@ -315,8 +320,8 @@ mod tests {
         front.want("b.ts", just(&["one"]), 0);
         front.want("b.ts", just(&["two"]), 0);
 
-        assert_eq!(front.next().unwrap().1, just(&["one", "two"]));
-        assert_eq!(front.next(), None, "one file, one visit");
+        assert_eq!(front.take().unwrap().1, just(&["one", "two"]));
+        assert_eq!(front.take(), None, "one file, one visit");
     }
 
     /* A changed file is read whole, and a name arriving after says nothing new — every
@@ -328,18 +333,18 @@ mod tests {
         let mut front = Frontier::default();
         front.want("a.ts", Wanted::everything(), 0);
         front.want("a.ts", just(&["one"]), 0);
-        assert_eq!(front.next().unwrap().1, Wanted::everything());
+        assert_eq!(front.take().unwrap().1, Wanted::everything());
     }
 
     #[test]
     fn a_file_already_walked_is_never_asked_the_same_thing_twice() {
         let mut front = Frontier::default();
         front.want("a.ts", just(&["one"]), 0);
-        assert_eq!(front.next().unwrap().1, just(&["one"]));
+        assert_eq!(front.take().unwrap().1, just(&["one"]));
 
         front.want("a.ts", just(&["one"]), 0);
         assert_eq!(
-            front.next(),
+            front.take(),
             None,
             "asked again for what it already answered"
         );
@@ -350,11 +355,11 @@ mod tests {
     fn a_file_already_walked_is_revisited_for_something_new() {
         let mut front = Frontier::default();
         front.want("a.ts", just(&["one"]), 0);
-        front.next();
+        front.take();
 
         front.want("a.ts", just(&["one", "two"]), 0);
         assert_eq!(
-            front.next().unwrap().1,
+            front.take().unwrap().1,
             just(&["two"]),
             "should ask only for the part it hasn't"
         );
@@ -368,16 +373,16 @@ mod tests {
         front.want("a.ts", just(&["one"]), 3);
         front.want("a.ts", just(&["two"]), 1);
 
-        assert_eq!(front.next().unwrap().2, 1);
+        assert_eq!(front.take().unwrap().2, 1);
     }
 
     #[test]
     fn nothing_more_is_wanted_of_a_file_read_whole() {
         let mut front = Frontier::default();
         front.want("a.ts", Wanted::everything(), 0);
-        front.next();
+        front.take();
 
         front.want("a.ts", just(&["anything"]), 0);
-        assert_eq!(front.next(), None);
+        assert_eq!(front.take(), None);
     }
 }

@@ -19,7 +19,7 @@ use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
 use dagger_core::prose::{line_end, line_start, preamble};
 use dagger_core::reference::BinderId;
-use dagger_lsp_client::walk::{Source, Walk};
+use dagger_lsp_client::walk::{Reach, Source, Walk, Walked};
 use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Changed, Note, Progress, Request, Response};
 use serde::Deserialize;
@@ -57,11 +57,11 @@ struct Settings {
 }
 
 fn files_to_walk() -> usize {
-    100_000
+    Reach::WALK
 }
 
 fn files_to_open() -> usize {
-    500_000
+    Reach::OPEN
 }
 
 fn main() -> Result<()> {
@@ -151,16 +151,24 @@ fn extract(
     let mut walk = Walk::new(
         server,
         root,
-        binder,
-        ours,
         LspSource,
-        settings.max_walk,
-        settings.max_open,
-        ripples,
+        Reach {
+            binder,
+            ours,
+            ripples,
+            walk_limit: settings.max_walk,
+            open_limit: settings.max_open,
+        },
     );
     walk.spread(changed);
 
-    let (_source, seen, mentions, contracts, notes) = walk.finish();
+    let Walked {
+        seen,
+        mentions,
+        contracts,
+        notes,
+        ..
+    } = walk.finish();
     let seen: BTreeMap<String, Opened> = seen
         .into_iter()
         .map(|(path, (lines, symbols))| {

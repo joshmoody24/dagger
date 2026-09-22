@@ -1,9 +1,9 @@
 import type {
   Box,
   Definition,
-  Edge,
   Identity,
   Laid,
+  Layer,
   Review,
   Spot,
 } from "./dagger.ts";
@@ -112,7 +112,11 @@ export function layout(review: Review): Laid {
     ),
   );
 
-  const leansOn = new Map<Identity, Identity[]>(nodes.map((n) => [n.id, []]));
+  /* Over every definition, boxes included. A container is a definition too, and something
+   * leaning on it — a type carried in a signature — holds it up the same as anything else.
+   * Keyed over nodes alone, an edge into a box was dropped, and the box sank below the very
+   * thing that depended on it. */
+  const leansOn = new Map<Identity, Identity[]>(all.map((one) => [one.id, []]));
   for (const edge of review.edges) {
     if (leansOn.has(edge.to)) leansOn.get(edge.from)?.push(edge.to);
   }
@@ -124,8 +128,6 @@ export function layout(review: Review): Laid {
   const reading = new Map(
     review.steps.map((step, at) => [step.definition, at]),
   );
-  const soonest = (held: Definition[]) =>
-    Math.min(...held.map((one) => reading.get(one.id) ?? Infinity));
 
   const byPlace = collect(nodes, (node) => node.file);
   /* A file whose only changed definition is its own module still needs a box: the module is
@@ -139,38 +141,23 @@ export function layout(review: Review): Laid {
     return ((first ?? modules.get(place))?.group ?? []).join("/");
   };
   const byGroup = collect([...byPlace.keys()], groupOf);
-  const laning = stacking(byPlace, review.edges);
-
   const boxes = [...byGroup].map(([groupPath, everything]) => {
     /* A group is a module when one of its own modules sits at the top of it. Drawing that
      * module a box inside the box would be saying the same thing twice — the same reason a
      * module never takes a node inside its own file. */
     const root = rootOf(everything, byPlace, modules);
-    const under = everything.filter(
-      (path: string) => !root || path !== root.file,
-    );
-    const stacked = laning(under);
-
-    const inner = [...under]
-      .sort(
-        (a, b) =>
-          stacked(a) - stacked(b) ||
-          soonest(byPlace.get(a) ?? []) - soonest(byPlace.get(b) ?? []),
-      )
+    const inner = everything
+      .filter((path: string) => !root || path !== root.file)
       .map((path) => nested(path, modules.get(path) || null));
 
-    /* Boxes that hold each other up stack; boxes with nothing between them sit side by
-     * side. Stacking those anyway made a group a single tall column with the page empty
-     * either side of it. */
-    const lanes: Box[][] = [];
-    for (const box of inner) (lanes[stacked(box.key)] ||= []).push(box);
-
+    /* Files stack in a group the same way nodes stack in a file: whatever holds another
+     * file up sits above it, and files with nothing between them sit side by side. A file
+     * is a box, so it's the same arranging, with no definitions of the group's own. */
     return sized({
       key: groupPath,
       module: root,
       label: root ? root.name : groupPath || MISC,
-      rows: [],
-      lanes: lanes.filter(Boolean),
+      stack: arranged([], inner, leansOn, reading),
     });
   });
 
@@ -208,8 +195,7 @@ export function layout(review: Review): Laid {
         key,
         module: one,
         label,
-        rows: layer([...shown, ...left], leansOn, reading),
-        lanes: boxes.length ? [boxes] : [],
+        stack: arranged([...shown, ...left], boxes, leansOn, reading),
       });
     };
 
@@ -225,8 +211,7 @@ export function layout(review: Review): Laid {
       key: path,
       module: null,
       label: guessed(path),
-      rows: layer(loose, leansOn, reading),
-      lanes: [inside],
+      stack: arranged(loose, inside, leansOn, reading),
     });
   }
 
@@ -266,82 +251,114 @@ function rootOf(
   return roots.length === 1 ? roots[0]! : null;
 }
 
-/* Room for whatever a box holds — boxes in lanes, nodes in rows — and never narrower than
- * its own name. A box with a module wears its mark too, which is two more characters. */
+/* Room for whatever a box holds, a tier at a time, and never narrower than its own name. A
+ * box with a module wears its mark too, which is two more characters. */
 function sized(box: Omit<Box, "boxes" | "w" | "h">): Box {
-  const across = Math.max(
-    box.lanes.length ? Math.max(...box.lanes.map(laneWidth)) : 0,
-    box.rows.length ? Math.max(...box.rows.map(rowWidth)) : 0,
+  const across = box.stack.length ? Math.max(...box.stack.map(tierWidth)) : 0;
+  const deep = box.stack.reduce(
+    (sum, tier, at) =>
+      sum + tierHeight(tier) + (at ? gapAbove(box.stack[at - 1], tier) : 0),
+    0,
   );
-  const lanesDeep = box.lanes.length
-    ? box.lanes.reduce((sum, lane) => sum + laneHeight(lane), 0) +
-      BOX_GAP * (box.lanes.length - 1)
-    : 0;
-  const rowsDeep = box.rows.length
-    ? box.rows.length * NODE_H + ROW_GAP * (box.rows.length - 1)
-    : 0;
-  const between = box.lanes.length && box.rows.length ? BOX_GAP : 0;
 
   /* A box with nothing in it is its own name and no more. The padding above content and
    * the padding below it are both for content, and taking them anyway leaves a box with a
    * label sitting in the top of a space nothing fills. */
-  const hollow = !box.lanes.length && !box.rows.length;
+  const hollow = !box.stack.length;
 
   return {
     ...box,
-    boxes: box.lanes.flat(),
+    boxes: box.stack.flatMap((tier) => ("lane" in tier ? tier.lane : [])),
     w: Math.max(
       across + 2 * PAD_X,
       labelWidth(box.module ? `${box.label}xx` : box.label),
     ),
-    h: hollow ? LABEL : PAD_TOP + lanesDeep + between + rowsDeep + PAD_BOTTOM,
+    h: hollow ? LABEL : PAD_TOP + deep + PAD_BOTTOM,
   };
 }
 
-/* Placing a box is placing what it holds, which is boxes and nodes, which is the same job
- * one level in. */
+/* Placing a box is placing what it holds, a tier at a time: the same job one level in for
+ * the boxes, and the end of it for the nodes. */
 function place(box: Box, x: number, y: number, at: Map<Identity, Spot>) {
   box.x = x;
   box.y = y;
   let down = y + PAD_TOP;
 
-  for (const lane of box.lanes) {
-    let across = x + PAD_X;
-    for (const child of lane) {
-      place(child, across, down, at);
-      across += child.w + BOX_GAP;
+  for (const [index, tier] of box.stack.entries()) {
+    if (index) down += gapAbove(box.stack[index - 1], tier);
+    if ("lane" in tier) {
+      let across = x + PAD_X;
+      for (const child of tier.lane) {
+        place(child, across, down, at);
+        across += child.w + BOX_GAP;
+      }
+    } else {
+      let across = x + PAD_X + (box.w - 2 * PAD_X - rowWidth(tier.row)) / 2;
+      for (const node of tier.row) {
+        at.set(node.id, { x: across, y: down, w: widthOf(node.name) });
+        across += widthOf(node.name) + NODE_GAP;
+      }
     }
-    down += laneHeight(lane) + BOX_GAP;
-  }
-
-  for (const row of box.rows) {
-    let across = x + PAD_X + (box.w - 2 * PAD_X - rowWidth(row)) / 2;
-    for (const node of row) {
-      at.set(node.id, { x: across, y: down, w: widthOf(node.name) });
-      across += widthOf(node.name) + NODE_GAP;
-    }
-    down += NODE_H + ROW_GAP;
+    down += tierHeight(tier);
   }
 }
 
 /** Every node a box holds, however deep. */
 export function* inside(box: Box): Generator<Definition> {
-  for (const row of box.rows) yield* row;
-  for (const child of box.boxes) yield* inside(child);
+  for (const tier of box.stack) {
+    if ("row" in tier) yield* tier.row;
+    else for (const child of tier.lane) yield* inside(child);
+  }
 }
 
-/* Rows within a box: something sits below everything it leans on. */
-function layer(
+/* What a box stands for and holds: its own definition, when it has one, then everything
+ * inside it. A box with nothing in it is still a thing — in the reading, and in what leans
+ * on what — and without its own definition counted it had no place in either. */
+const stands = (box: Box): Definition[] =>
+  box.module ? [box.module, ...inside(box)] : [...inside(box)];
+
+/* One stack of what a box holds — its own definitions and the boxes inside it — with
+ * whatever holds something up above it, whichever kind of thing either is.
+ *
+ * A box inside counts as one thing: it leans on whatever its contents lean on outside
+ * itself, and is leaned on by whatever leans on its contents. Laying every inner box above
+ * every node regardless drew a module's tests above the code they test, and every line from
+ * a test to what it tested ran the wrong way — in the style kept for lines a reader has to
+ * take on faith, for a change that needed none. */
+function arranged(
   nodes: Definition[],
+  boxes: Box[],
   leansOn: Map<Identity, Identity[]>,
   reading: Map<Identity, number>,
-) {
-  const here = new Set(nodes.map((n) => n.id));
-  const rows: Definition[][] = [];
-  for (const node of nodes) {
-    const row = depth(node.id, here, leansOn, new Map());
-    (rows[row] ||= []).push(node);
+): Layer[] {
+  /* Which thing here each definition belongs to: itself, the box it's inside — or the box
+   * it is, since a container is a definition too and can be leaned on as one. */
+  const unit = new Map<Identity, string>();
+  for (const node of nodes) unit.set(node.id, node.id);
+  for (const box of boxes)
+    for (const one of stands(box)) unit.set(one.id, box.key);
+
+  const between = new Map<string, string[]>(
+    [...nodes.map((n) => n.id), ...boxes.map((b) => b.key)].map((key) => [
+      key,
+      [],
+    ]),
+  );
+  for (const [id, from] of unit) {
+    for (const to of leansOn.get(id) ?? []) {
+      const onto = unit.get(to);
+      if (onto !== undefined && onto !== from) between.get(from)?.push(onto);
+    }
   }
+  const within = new Set(between.keys());
+  const seen = new Map<string, number>();
+  const tier = (key: string) => depth(key, within, between, seen);
+
+  const rows: Definition[][] = [];
+  for (const node of nodes) (rows[tier(node.id)] ||= []).push(node);
+  const lanes: Box[][] = [];
+  for (const box of boxes) (lanes[tier(box.key)] ||= []).push(box);
+
   /* Nothing in a row leans on anything else in it, so their order is free — and free means
    * it should go to the reading rather than to how loud each one is. Sorting by loudness
    * put the noisiest first and sent the reader back and forth across a file they were
@@ -350,9 +367,22 @@ function layer(
   const at = (one: Definition) => reading.get(one.id) ?? Infinity;
   for (const row of rows)
     if (row) row.sort((a, b) => at(a) - at(b) || byLoudness(a, b));
-  /* Row nought is whatever leans on nothing, and it goes at the top: a reader meets what
-   * holds things up before the things it holds. */
-  return rows.filter(Boolean).flatMap(folded);
+
+  /* Tier nought is whatever leans on nothing, and it goes at the top: a reader meets what
+   * holds things up before the things it holds. Within a level nothing holds anything else
+   * up, so the order is free — and free means it goes to the reading, a box of things and a
+   * row of things alike. Boxes always first put a module's tests above a function the
+   * reading reached before them, for no reason the reading knew about. */
+  const first = (tier: Layer) =>
+    Math.min(...("row" in tier ? tier.row : tier.lane.flatMap(stands)).map(at));
+  const layers: Layer[] = [];
+  for (let level = 0; level < Math.max(rows.length, lanes.length); level++) {
+    const here: Layer[] = [];
+    if (lanes[level]) here.push({ lane: lanes[level] });
+    if (rows[level]) for (const row of folded(rows[level])) here.push({ row });
+    layers.push(...here.sort((a, b) => first(a) - first(b)));
+  }
+  return layers;
 }
 
 /* A row of peers folded into a block about as wide as it is tall, so a file with a dozen
@@ -365,35 +395,6 @@ function folded(row: Definition[]) {
   for (let at = 0; at < row.length; at += across)
     lines.push(row.slice(at, at + across));
   return lines;
-}
-
-/* Files stack in a group the same way nodes stack in a file and groups stack on the page:
- * whatever holds another file up sits above it. Without this the files in a group land in
- * whatever order they turned up in, and half the lines between them run the wrong way. */
-function stacking(byPlace: Map<string, Definition[]>, edges: Edge[]) {
-  const placeOf = new Map<Identity, string>();
-  for (const [path, held] of byPlace)
-    for (const node of held) placeOf.set(node.id, path);
-
-  const leansOn = new Map<string, string[]>(
-    [...byPlace.keys()].map((path) => [path, []]),
-  );
-  for (const edge of edges) {
-    const from = placeOf.get(edge.from);
-    const to = placeOf.get(edge.to);
-    if (from && to && from !== to) leansOn.get(from)?.push(to);
-  }
-
-  /* Depth is worked out one group at a time, counting only what that group holds. A file
-   * leaning on something in another group says nothing about where it belongs in this one —
-   * which lane it lands in is a question about its neighbours — and letting those outside
-   * edges count pushed files below others that weren't holding them up at all. Where the
-   * groups themselves go is bands()' job. */
-  return (paths: string[]) => {
-    const within = new Set(paths);
-    const seen = new Map<string, number>();
-    return (path: string) => depth(path, within, leansOn, seen);
-  };
 }
 
 /* Bands of boxes: whatever holds another box up is drawn in an earlier band.
@@ -417,7 +418,7 @@ function bands(boxes: Box[], review: Review) {
     review.steps.map((step, at) => [step.definition, at]),
   );
   const soonest = (box: Box) =>
-    Math.min(...[...inside(box)].map((one) => reading.get(one.id) ?? Infinity));
+    Math.min(...stands(box).map((one) => reading.get(one.id) ?? Infinity));
   for (const band of found)
     if (band) band.sort((a, b) => soonest(a) - soonest(b));
 
@@ -454,6 +455,13 @@ const rowWidth = (row: Definition[]) =>
 const laneWidth = (lane: Box[]) =>
   lane.reduce((sum, f) => sum + f.w, 0) + BOX_GAP * (lane.length - 1);
 const laneHeight = (lane: Box[]) => Math.max(...lane.map((f) => f.h));
+const tierWidth = (tier: Layer) =>
+  "lane" in tier ? laneWidth(tier.lane) : rowWidth(tier.row);
+const tierHeight = (tier: Layer) =>
+  "lane" in tier ? laneHeight(tier.lane) : NODE_H;
+/* Rows sit closer to each other than a box sits to anything. */
+const gapAbove = (above: Layer, tier: Layer) =>
+  "row" in above && "row" in tier ? ROW_GAP : BOX_GAP;
 
 function collect<T, K>(items: T[], by: (item: T) => K) {
   const out = new Map<K, T[]>();

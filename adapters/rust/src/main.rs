@@ -16,7 +16,7 @@ use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
 use dagger_core::prose::preamble;
 use dagger_core::reference::BinderId;
-use dagger_lsp_client::walk::{Source, Walk};
+use dagger_lsp_client::walk::{Reach, Source, Walk, Walked};
 use dagger_lsp_client::{Lines, Server};
 use dagger_protocol::{Changed, Note, Progress, Request, Response};
 use serde::Deserialize;
@@ -92,7 +92,7 @@ struct Settings {
 }
 
 fn files_to_walk() -> usize {
-    100_000
+    Reach::WALK
 }
 
 /// What the repository told this adapter, refused if it isn't something this adapter
@@ -158,12 +158,14 @@ fn extract(
     let mut walk = Walk::new(
         server,
         root,
-        BinderId("rust-analyzer".to_string()),
-        ours.clone(),
         RustSource::default(),
-        settings.max_walk,
-        usize::MAX,
-        ripples,
+        Reach {
+            binder: BinderId("rust-analyzer".to_string()),
+            ours: ours.clone(),
+            ripples,
+            walk_limit: settings.max_walk,
+            open_limit: Reach::OPEN,
+        },
     );
 
     // `syn` costs nothing over the wire, so every claimed file is parsed up front rather
@@ -174,7 +176,13 @@ fn extract(
     }
     walk.spread(changed);
 
-    let (source, seen, mentions, contracts, mut notes) = walk.finish();
+    let Walked {
+        source,
+        seen,
+        mentions,
+        contracts,
+        mut notes,
+    } = walk.finish();
     let parsed: BTreeMap<String, Parsed> = seen
         .into_iter()
         .map(|(path, (lines, found))| (path.clone(), Parsed { path, lines, found }))

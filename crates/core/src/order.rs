@@ -82,7 +82,8 @@ pub fn order(
         .map(|definition| (definition.identity, &definition.sides.latest().file))
         .collect();
 
-    let homes = homes(&members, definitions);
+    let enclosing = enclosing(definitions);
+    let homes = homes(&members, definitions, &enclosing);
     /* Whatever holds others says what it is before the things it holds: a module's prose
      * and imports, an impl's header. Read afterwards, it arrives once nobody needs it. */
     let headers: Vec<bool> = {
@@ -115,7 +116,7 @@ pub fn order(
             .collect()
     };
 
-    let (leans_on, holds_up) = relations(edges, &places, members.len());
+    let (leans_on, holds_up) = relations(edges, &places, members.len(), &enclosing);
     /* Worked out once, by whoever knows how the groups sit, and read here. The page reads
      * the same numbers, which is what keeps a reading running down it. */
     let bands: Vec<u32> = members
@@ -190,38 +191,56 @@ pub fn order(
 }
 
 /// Which members lean on which, and the same the other way round.
+///
+/// A container leans on whatever its contents lean on outside it. Its own definition is its
+/// prose and imports — what it brings in is exactly what it stands on — but nothing ever
+/// says so as an edge, so it stood on nothing. "Never before what it leans on" then let a
+/// module through the moment the reader arrived, while everything it holds was still
+/// waiting on other modules: its header read seven steps ahead of the first line it holds,
+/// introducing nothing.
 fn relations(
     edges: &[Edge],
     places: &BTreeMap<Identity, usize>,
     count: usize,
+    enclosing: &BTreeMap<Identity, Vec<Identity>>,
 ) -> (Vec<BTreeSet<usize>>, Vec<BTreeSet<usize>>) {
     let mut leans_on = vec![BTreeSet::new(); count];
     let mut holds_up = vec![BTreeSet::new(); count];
-
-    for edge in edges {
-        if let (Some(&from), Some(&to)) = (places.get(&edge.from), places.get(&edge.to))
+    let mut lean = |from: Identity, to: Identity| {
+        if let (Some(&from), Some(&to)) = (places.get(&from), places.get(&to))
             && from != to
         {
             leans_on[from].insert(to);
             holds_up[to].insert(from);
+        }
+    };
+    let around = |identity: &Identity| {
+        enclosing
+            .get(identity)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    };
+
+    for edge in edges {
+        lean(edge.from, edge.to);
+        /* Outward from the leaner, stopping at the first container that holds what it
+         * leans on too — everything further out holds both, and a thing doesn't stand on
+         * what's inside it. */
+        for &container in around(&edge.from) {
+            if container == edge.to || around(&edge.to).contains(&container) {
+                break;
+            }
+            lean(container, edge.to);
         }
     }
 
     (leans_on, holds_up)
 }
 
-/// The module each member belongs to, named so two can be told apart.
-///
-/// A module, not a file. They line up most of the time, which is why the file alone would
-/// nearly work — but a file holding two modules holds two trains of thought, and the reader
-/// knows it even when the filesystem doesn't.
-///
-/// Found by walking up what each thing is written inside, as far as that stays in the same
-/// file. The outermost container a file holds is that file's module, whatever the language
-/// calls it, so this needs to know nothing about modules to find one. Stopping at the first
-/// container instead would make a method and a plain function in one module two places,
-/// and a reader moving between them has not gone anywhere.
-fn homes(members: &[Identity], definitions: &[model::Definition]) -> Vec<String> {
+/// What each definition is written inside, nearest first, as far as that stays in the same
+/// file. A parent is said as a name, so it's resolved by name — within the file, since a
+/// name means nothing outside the one that holds it.
+fn enclosing(definitions: &[model::Definition]) -> BTreeMap<Identity, Vec<Identity>> {
     let shown: BTreeMap<Identity, (&str, &Locator, Option<&Locator>)> = definitions
         .iter()
         .map(|definition| {
@@ -237,6 +256,43 @@ fn homes(members: &[Identity], definitions: &[model::Definition]) -> Vec<String>
         .map(|(identity, (file, locator, _))| ((*file, *locator), *identity))
         .collect();
 
+    shown
+        .iter()
+        .map(|(identity, (file, _, parent))| {
+            let mut above = Vec::new();
+            let mut held = *parent;
+            while let Some(&up) = held.and_then(|name| by_name.get(&(*file, name))) {
+                above.push(up);
+                held = shown.get(&up).and_then(|(_, _, parent)| *parent);
+            }
+            (*identity, above)
+        })
+        .collect()
+}
+
+/// The module each member belongs to, named so two can be told apart.
+///
+/// A module, not a file. They line up most of the time, which is why the file alone would
+/// nearly work — but a file holding two modules holds two trains of thought, and the reader
+/// knows it even when the filesystem doesn't.
+///
+/// The outermost container a file holds is that file's module, whatever the language calls
+/// it, so this needs to know nothing about modules to find one. Stopping at the first
+/// container instead would make a method and a plain function in one module two places,
+/// and a reader moving between them has not gone anywhere.
+fn homes(
+    members: &[Identity],
+    definitions: &[model::Definition],
+    enclosing: &BTreeMap<Identity, Vec<Identity>>,
+) -> Vec<String> {
+    let shown: BTreeMap<Identity, (&str, &Locator)> = definitions
+        .iter()
+        .map(|definition| {
+            let it = definition.sides.latest();
+            (definition.identity, (it.file.as_str(), &it.locator))
+        })
+        .collect();
+
     // A file can't hold a null and neither can a name, so the two can't be confused.
     let named = |file: &str, locator: &Locator| {
         let mut path = locator.scope.clone();
@@ -247,19 +303,14 @@ fn homes(members: &[Identity], definitions: &[model::Definition]) -> Vec<String>
     members
         .iter()
         .map(|identity| {
-            let Some(&(file, locator, parent)) = shown.get(identity) else {
-                return String::new();
-            };
-
-            let (mut at, mut held) = (locator, parent);
-            while let Some(above) = held
-                .and_then(|above| by_name.get(&(file, above)))
-                .and_then(|above| shown.get(above))
-            {
-                at = above.1;
-                held = above.2;
+            let outermost = enclosing
+                .get(identity)
+                .and_then(|above| above.last())
+                .unwrap_or(identity);
+            match shown.get(outermost) {
+                Some((file, locator)) => named(file, locator),
+                None => String::new(),
             }
-            named(file, at)
         })
         .collect()
 }
@@ -481,5 +532,38 @@ mod tests {
                 .peak_open,
             0
         );
+    }
+
+    /// A module's header — its own prose and imports — is read on arriving at the module,
+    /// and not before: not ahead of what its contents lean on, which put the introduction
+    /// steps before the thing it introduces. 1 sits inside 0 and leans on 2, which is
+    /// elsewhere — so 0 has to wait for 2 just as 1 does, and then comes right before 1.
+    #[test]
+    fn a_containers_header_is_read_right_before_what_it_holds() {
+        let (read, edges, mut definitions) = built(3, &[(1, 2)], &["a.rs", "a.rs", "b.rs"]);
+        for definition in &mut definitions {
+            let identity = definition.identity;
+            let Sides::Kept { before, after } = &mut definition.sides else {
+                unreachable!("built() keeps everything");
+            };
+            for side in [before, after] {
+                if identity == Identity(0) {
+                    side.role = Role::Container;
+                }
+                if identity == Identity(1) {
+                    side.parent = Some(Locator {
+                        scope: Vec::new(),
+                        name: "d0".to_string(),
+                    });
+                }
+            }
+        }
+
+        let reading: Vec<u32> = order(&read, &edges, &definitions, &Grouping::default())
+            .steps
+            .iter()
+            .map(|step| step.definition.0)
+            .collect();
+        assert_eq!(reading, vec![2, 0, 1]);
     }
 }

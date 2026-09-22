@@ -56,6 +56,28 @@ pub trait Source {
     fn contract(&self, hover: &Value) -> Option<String>;
 }
 
+/// How far a walk may go, and who it's walking for.
+pub struct Reach {
+    /// Whose adapter this is, for the mentions it records.
+    pub binder: BinderId,
+    /// The files this adapter speaks for. A mention anywhere else is dropped.
+    pub ours: BTreeSet<String>,
+    /// How far past a changed file to carry on. Walking a file at one remove is what turns
+    /// up what sits at two, so the walk stops one short of what's asked for.
+    pub ripples: u32,
+    /// Files whose users are chased, and files opened at all. Two budgets because they cost
+    /// wildly different amounts for a source that opens a file over the wire; for one that
+    /// parses, opening is free and the second never binds. Backstops rather than settings
+    /// anybody should reach for: how far a reading goes is `ripples`.
+    pub walk_limit: usize,
+    pub open_limit: usize,
+}
+
+impl Reach {
+    pub const WALK: usize = 100_000;
+    pub const OPEN: usize = 500_000;
+}
+
 /// Which files are worth reading, worked outward from what changed, and what's been asked
 /// about each so far.
 pub struct Walk<S: Source> {
@@ -68,41 +90,37 @@ pub struct Walk<S: Source> {
     mentions: Vec<Mention>,
     contracts: BTreeMap<Locator, String>,
     notes: Vec<Note>,
-    /// Files whose users are chased, and files opened at all. Two budgets because they cost
-    /// wildly different amounts for a source that has to open a file over the wire — for one
-    /// that doesn't, `open_limit` is simply set high enough never to matter.
     walk_limit: usize,
     open_limit: usize,
-    /// How far past a changed file to carry on. Walking a file at one remove is what turns
-    /// up what sits at two, so the walk stops one short of what's asked for.
     ripples: u32,
 }
 
+/// What a walk found, and the source it found it with — an adapter that opened files of
+/// its own to build a full structural picture, rather than only what the walk touched,
+/// gets its source's own state back to read out of.
+pub struct Walked<S: Source> {
+    pub source: S,
+    pub seen: BTreeMap<String, (Lines, Vec<S::Item>)>,
+    pub mentions: Vec<Mention>,
+    pub contracts: BTreeMap<Locator, String>,
+    pub notes: Vec<Note>,
+}
+
 impl<S: Source> Walk<S> {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        server: Server,
-        root: PathBuf,
-        binder: BinderId,
-        ours: BTreeSet<String>,
-        source: S,
-        walk_limit: usize,
-        open_limit: usize,
-        ripples: u32,
-    ) -> Self {
+    pub fn new(server: Server, root: PathBuf, source: S, reach: Reach) -> Self {
         Walk {
             server,
             root,
-            binder,
-            ours,
+            binder: reach.binder,
+            ours: reach.ours,
             source,
             seen: BTreeMap::new(),
             mentions: Vec::new(),
             contracts: BTreeMap::new(),
             notes: Vec::new(),
-            walk_limit,
-            open_limit,
-            ripples,
+            walk_limit: reach.walk_limit,
+            open_limit: reach.open_limit,
+            ripples: reach.ripples,
         }
     }
 
@@ -159,7 +177,7 @@ impl<S: Source> Walk<S> {
             self.look(path);
         }
 
-        while let Some((path, wanted, away)) = front.next() {
+        while let Some((path, wanted, away)) = front.take() {
             eprintln!(
                 "{}",
                 Progress::Walked {
@@ -325,26 +343,14 @@ impl<S: Source> Walk<S> {
         onward
     }
 
-    /// What the walk found, and the source it found it with — an adapter that opened files
-    /// of its own to build a full structural picture (rather than only what the walk
-    /// touched) gets its source's own state back to read out of.
-    #[allow(clippy::type_complexity)]
-    pub fn finish(
-        self,
-    ) -> (
-        S,
-        BTreeMap<String, (Lines, Vec<S::Item>)>,
-        Vec<Mention>,
-        BTreeMap<Locator, String>,
-        Vec<Note>,
-    ) {
-        (
-            self.source,
-            self.seen,
-            self.mentions,
-            self.contracts,
-            self.notes,
-        )
+    pub fn finish(self) -> Walked<S> {
+        Walked {
+            source: self.source,
+            seen: self.seen,
+            mentions: self.mentions,
+            contracts: self.contracts,
+            notes: self.notes,
+        }
     }
 }
 
@@ -372,4 +378,45 @@ pub fn relative(uri: &str, root: &Path) -> Option<String> {
             .to_string_lossy()
             .into_owned(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The least an item can be: a name, and where it's written.
+    struct Spot(&'static str, Range<usize>);
+
+    impl Item for Spot {
+        fn locator(&self) -> Locator {
+            Locator {
+                scope: Vec::new(),
+                name: self.0.to_string(),
+            }
+        }
+        fn name(&self) -> &str {
+            self.0
+        }
+        fn whole(&self) -> Range<usize> {
+            self.1.clone()
+        }
+        fn name_at(&self) -> Range<usize> {
+            self.1.start..self.1.start
+        }
+        fn part_at(&self, _: usize) -> Option<Part> {
+            Some(Part::Body)
+        }
+    }
+
+    /* A mention lands on the tightest thing written around it: inside a container, the item
+     * it sits in; in the container's own text between its items, the container. That takes
+     * `whole` to be everything a thing is written across, contents included. A span cut down
+     * to a container's own parts left those spots belonging to nothing, and lost the mention. */
+    #[test]
+    fn a_mention_lands_on_the_tightest_thing_around_it() {
+        let found = [Spot("module", 0..100), Spot("inner", 40..60)];
+        assert_eq!(innermost(&found, 50).map(|item| item.0), Some("inner"));
+        assert_eq!(innermost(&found, 20).map(|item| item.0), Some("module"));
+        assert_eq!(innermost(&found, 150).map(|item| item.0), None);
+    }
 }

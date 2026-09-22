@@ -103,12 +103,17 @@ export interface Spot {
 }
 
 /** A place holding definitions, and other places. */
+/* One tier of what a box holds: its own definitions side by side, or the boxes inside it
+ * side by side. A box is a stack of these with whatever holds something up above it — so a
+ * tier of inner boxes sits below a tier of definitions when what's inside leans on them. */
+export type Layer = { row: Definition[] } | { lane: Box[] };
+
 export interface Box {
   key: string;
   label: string;
   module: Definition | null;
-  rows: Definition[][];
-  lanes: Box[][];
+  stack: Layer[];
+  /** The boxes directly inside, whichever tier each sits in. */
   boxes: Box[];
   w: number;
   h: number;

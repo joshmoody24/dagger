@@ -19,7 +19,7 @@ use dagger_core::group::Grouping;
 use dagger_core::matching::{Extraction, match_snapshots};
 use dagger_core::model::Span;
 use dagger_core::review::{Impact, Warning, review};
-use dagger_protocol::{Changed, Note};
+use dagger_protocol::{Changed, Note, Revisions};
 use std::io::{IsTerminal, Write};
 use std::path::Path;
 
@@ -142,11 +142,14 @@ fn main() -> Result<()> {
     }
 
     let claims = claims(&repo, &config)?;
-    let (before_rev, after_rev, title) = revisions(&repo, &config, &args)?;
-    status(&format!("comparing {before_rev} to {after_rev}"));
+    let revisions = revisions(&repo, &config, &args)?;
+    status(&format!(
+        "comparing {} to {}",
+        revisions.before, revisions.after
+    ));
 
-    let before = lay_out(&repo, &config, &before_rev)?;
-    let after = lay_out(&repo, &config, &after_rev)?;
+    let before = lay_out(&repo, &config, &revisions.before)?;
+    let after = lay_out(&repo, &config, &revisions.after)?;
 
     // The snapshots take themselves away when they go out of scope here, whichever way
     // this ends.
@@ -157,29 +160,28 @@ fn main() -> Result<()> {
             &repo,
             &config,
             &claims,
-            (&before_rev, &before),
-            (&after_rev, &after),
+            (&revisions.before, &before),
+            (&revisions.after, &after),
             &args,
-            title,
+            revisions.title,
         )
     }
 }
 
 /// What to compare. The user's word first, then whatever the snapshot adapter thinks is
 /// worth looking at, and failing both, the last commit.
-fn revisions(
-    repo: &Path,
-    config: &Config,
-    args: &Args,
-) -> Result<(String, String, Option<String>)> {
+fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<Revisions> {
     match (args.asked.as_slice(), &config.snapshots) {
         ([], _) => {}
-        (asked, Some(snapshots)) => {
-            let found = adapter::revisions(repo, snapshots, asked)?;
-            return Ok((found.before, found.after, found.title));
-        }
+        (asked, Some(snapshots)) => return adapter::revisions(repo, snapshots, asked),
         // Without an adapter there's nobody to ask, so two directories is all this can be.
-        ([before, after], None) => return Ok((before.clone(), after.clone(), None)),
+        ([before, after], None) => {
+            return Ok(Revisions {
+                before: before.clone(),
+                after: after.clone(),
+                title: None,
+            });
+        }
         (_, None) => bail!(
             "no snapshot adapter is configured in {}, so name two directories",
             config::FILE
@@ -199,10 +201,11 @@ fn revisions(
         None => None,
     };
 
-    Ok(match suggested {
-        Some(revisions) => (revisions.before, revisions.after, revisions.title),
-        None => ("HEAD~1".to_string(), "HEAD".to_string(), None),
-    })
+    Ok(suggested.unwrap_or_else(|| Revisions {
+        before: "HEAD~1".to_string(),
+        after: "HEAD".to_string(),
+        title: None,
+    }))
 }
 
 /// What each extractor will be given: what the repo asked for, or failing that, what
