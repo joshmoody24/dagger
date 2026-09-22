@@ -20,7 +20,8 @@ defined where the tool first produces the thing it names.
 3. The core matches the occurrences of the two snapshots. An occurrence in the before
    snapshot and one in the after snapshot that are the same named thing become one
    **definition**, given an **identity**. A definition with an occurrence in only one snapshot
-   is added or removed; one with both is kept, and its **change** says which parts differ.
+   is inferred to be "added" or "removed". One with both is "kept", and its **change** says
+   which parts differ.
 4. Mentions become **references** between definitions, and the core follows them outward
    from what changed, as many steps as the **ripples** setting allows, to find what a change
    **reached**. The references among the definitions shown become **edges**: what depends
