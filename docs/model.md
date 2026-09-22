@@ -21,9 +21,8 @@ produces the thing it names.
    another.
 3. The core matches the occurrences of the two snapshots. An occurrence in the before
    snapshot and one in the after snapshot that are the same named thing become one
-   **definition** with one **identity**. A definition with an occurrence in only one snapshot
-   is inferred to be "added" or "removed". One with both is "kept", and its **change** says
-   which parts differ.
+   **definition** with one **identity**. A definition's **change** is what differs between
+   its two occurrences, or that it has only one.
 4. Mentions become **references** between definitions. The core follows references outward
    from what changed, as many steps as the **ripples** setting allows, to find what a change
    **reached**. The references among the definitions shown become **edges**. An edge says
