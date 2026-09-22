@@ -9,11 +9,11 @@ import {
   Show,
 } from "solid-js";
 import {
-  ArrowRight,
   ChartColumn,
   Info,
   TriangleAlert,
   Waves,
+  Workflow,
 } from "lucide-solid";
 import { Graph } from "./Graph.tsx";
 import { Reading } from "./Reading.tsx";
@@ -281,9 +281,12 @@ export function App(props: { raw: Raw }) {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const pressed = keys[event.key as keyof typeof keys];
     if (!pressed) return;
-    /* The keyboard repeating a held key says nothing new: whatever it asked for is
-     * already happening, and doing it again is what made scrolling stutter. */
-    if (!event.repeat) void pressed();
+    /* j and k are driven by holding — started on the press, stopped on the lift — so a
+     * repeat of either says nothing new, and acting on one is what made scrolling stutter.
+     * Everything else is a step, and a held key should keep stepping: that's how you get
+     * through a dozen files without a dozen presses. */
+    const held = event.key === "j" || event.key === "k";
+    if (!(held && event.repeat)) void pressed();
     event.preventDefault();
   };
 
@@ -360,7 +363,7 @@ export function App(props: { raw: Raw }) {
             aria-label="Show where the reading goes next"
             aria-pressed={showNext()}
           >
-            <ArrowRight size={17} />
+            <Workflow size={17} />
           </button>
 
           {/* How far out what the change reached is shown. The number is the point — a
