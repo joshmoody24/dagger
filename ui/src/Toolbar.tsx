@@ -28,7 +28,7 @@ interface ToolbarProps {
   search: (input: HTMLInputElement) => void;
   onQuery: (query: string) => void;
   onFind: () => void;
-  onWorries: () => void;
+  onWarnings: () => void;
   onCost: () => void;
   onShowNext: () => void;
   onRipples: () => void;
@@ -78,7 +78,7 @@ export function Toolbar(props: ToolbarProps) {
         <Show when={props.hiding.length + props.weaker.length}>
           <button
             class={`tool${props.hiding.length ? " bad" : ""}`}
-            onClick={() => props.onWorries()}
+            onClick={() => props.onWarnings()}
             title={said()}
             aria-label={said()}
           >

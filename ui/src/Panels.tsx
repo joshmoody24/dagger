@@ -8,7 +8,7 @@ import {
 import type { Review, Warning } from "./dagger.ts";
 import "./Panels.css";
 
-export type Opened = "worries" | "cost" | null;
+export type Opened = "warnings" | "cost" | null;
 
 export function CostPanel(props: {
   open: boolean;

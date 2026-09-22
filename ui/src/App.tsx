@@ -199,7 +199,7 @@ export function App(props: { raw: Raw; said: string[] }) {
         search={(input) => (search = input)}
         onQuery={setQuery}
         onFind={find}
-        onWorries={() => toggle("worries")}
+        onWarnings={() => toggle("warnings")}
         onCost={() => toggle("cost")}
         onShowNext={() => setShowNext((was) => !was)}
         onRipples={ripple}
@@ -240,7 +240,7 @@ export function App(props: { raw: Raw; said: string[] }) {
         review={review()}
       />
       <WarningsPanel
-        open={panel() === "worries"}
+        open={panel() === "warnings"}
         onClose={() => setPanel(null)}
         hiding={hiding()}
         weaker={weaker()}
