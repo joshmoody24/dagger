@@ -29,22 +29,22 @@
   gap: 4px;
 }
 
-/* Boxes are outline-only so nested boxes don't stack into ever-paler fills. The rect
- * still takes the pointer so the innermost box under it lights up. */
-.box rect {
+/* Groups are outline-only so nested groups don't stack into ever-paler fills. The rect
+ * still takes the pointer so the innermost group under it lights up. */
+.group rect {
   fill: none;
   stroke: var(--rule);
   stroke-width: 1;
   pointer-events: all;
 }
-.box.nested rect {
+.group.nested rect {
   stroke-dasharray: 3 3;
 }
-.box.lit rect {
+.group.lit rect {
   stroke: var(--muted);
   stroke-width: 1.4;
 }
-.box text {
+.group text {
   font: 12.5px var(--mono);
   fill: var(--muted);
   pointer-events: none;
@@ -84,67 +84,67 @@
   fill: var(--path);
 }
 
-/* Outline and name share a colour; read nodes fade via opacity so both dim together. */
-.node {
+/* Outline and name share a colour; read definitions fade via opacity so both dim together. */
+.definition {
   --own: var(--muted);
   --tone: var(--own);
   cursor: pointer;
   outline: none;
 }
-.node.add {
+.definition.add {
   --own: var(--add);
 }
-.node.del {
+.definition.del {
   --own: var(--del);
 }
-.node.chg {
+.definition.chg {
   --own: var(--chg);
 }
-.node.read {
+.definition.read {
   opacity: 0.6;
 }
-.node.dim {
+.definition.dim {
   opacity: 0.55;
 }
-.node.read.dim {
+.definition.read.dim {
   opacity: 0.42;
 }
-.node.under,
-.node.soon,
-.node.here {
+.definition.under,
+.definition.soon,
+.definition.here {
   opacity: 1;
 }
 /* Filled with the page colour so edges drawn behind don't cross the name. */
-.node rect {
+.definition rect {
   fill: var(--paper);
   stroke: var(--tone);
   stroke-width: 1.2;
 }
-.node.under rect {
+.definition.under rect {
   stroke-width: 2;
 }
-.node.soon {
+.definition.soon {
   --tone: var(--path);
 }
-.node.soon rect {
+.definition.soon rect {
   stroke-width: 1.8;
   stroke-dasharray: 5 3;
 }
-.node.here {
+.definition.here {
   --tone: var(--lean);
 }
-.node.here rect {
+.definition.here rect {
   stroke-width: 2;
 }
-.node:focus-visible rect {
+.definition:focus-visible rect {
   stroke-width: 2;
   stroke: var(--ink);
 }
-.node text {
+.definition text {
   font: 14px var(--mono);
   fill: var(--tone);
   pointer-events: none;
 }
-.node .mark {
+.definition .mark {
   fill: var(--own);
 }

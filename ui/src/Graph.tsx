@@ -108,23 +108,23 @@ export function Graph(props: GraphProps) {
         aria-label="The definitions this change touches, and what depends on what"
       >
         <g transform={`translate(${seen().x} ${seen().y}) scale(${seen().k})`}>
-          <For each={shown().boxes}>
-            {(box) => (
+          <For each={shown().groups}>
+            {(group) => (
               <g
-                class="box"
-                classList={{ nested: box.depth > 0, lit: box.lit }}
+                class="group"
+                classList={{ nested: group.depth > 0, lit: group.lit }}
               >
                 <rect
-                  x={box.x}
-                  y={box.y}
-                  width={box.w}
-                  height={box.h}
-                  rx={box.radius}
-                  onPointerEnter={() => setOver(box.key)}
+                  x={group.x}
+                  y={group.y}
+                  width={group.w}
+                  height={group.h}
+                  rx={group.radius}
+                  onPointerEnter={() => setOver(group.key)}
                   onPointerLeave={() => setOver(null)}
                 />
-                <text x={box.x + 10} y={box.y + BOX_TEXT_Y}>
-                  {box.label}
+                <text x={group.x + 10} y={group.y + BOX_TEXT_Y}>
+                  {group.label}
                 </text>
               </g>
             )}
@@ -146,35 +146,43 @@ export function Graph(props: GraphProps) {
               </g>
             )}
           </Show>
-          <For each={shown().nodes}>
-            {(node) => (
+          <For each={shown().definitions}>
+            {(definition) => (
               <g
-                class={["node", node.tint, ...node.classes].join(" ")}
+                class={[
+                  "definition",
+                  definition.tint,
+                  ...definition.classes,
+                ].join(" ")}
                 tabindex="0"
-                onPointerEnter={() => setTouching(node.id)}
+                onPointerEnter={() => setTouching(definition.id)}
                 onPointerLeave={() => setTouching(null)}
-                onClick={() => props.onOpen(node.id)}
+                onClick={() => props.onOpen(definition.id)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") props.onOpen(node.id);
+                  if (event.key === "Enter") props.onOpen(definition.id);
                 }}
               >
-                <title>{node.title}</title>
+                <title>{definition.title}</title>
                 <rect
-                  x={node.x}
-                  y={node.y}
-                  width={node.w}
-                  height={node.h}
-                  rx={RADIUS.node}
+                  x={definition.x}
+                  y={definition.y}
+                  width={definition.w}
+                  height={definition.h}
+                  rx={RADIUS.definition}
                 />
-                <text class="mark" x={node.x + 10} y={node.y + NODE_TEXT_Y}>
-                  {node.mark}
+                <text
+                  class="mark"
+                  x={definition.x + 10}
+                  y={definition.y + NODE_TEXT_Y}
+                >
+                  {definition.mark}
                 </text>
                 <text
                   class="name"
-                  x={node.x + node.nameX}
-                  y={node.y + NODE_TEXT_Y}
+                  x={definition.x + definition.nameX}
+                  y={definition.y + NODE_TEXT_Y}
                 >
-                  {node.name}
+                  {definition.name}
                 </text>
               </g>
             )}

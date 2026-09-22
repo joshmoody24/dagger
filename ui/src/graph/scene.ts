@@ -1,5 +1,5 @@
 import type {
-  Box,
+  Placed,
   Definition,
   Edge,
   Identity,
@@ -20,9 +20,9 @@ export interface Input {
   here: Identity | null;
   next: Identity | null;
   read: Set<Identity>;
-  /** The hovered box's key, if any. */
+  /** The hovered group's key, if any. */
   over: string | null;
-  /** The hovered node, if any. */
+  /** The hovered definition, if any. */
   touching: Identity | null;
   /** The toolbar filter; empty means nothing is filtered. */
   query: string;
@@ -36,7 +36,7 @@ export const matches = (definition: Definition, query: string) => {
   );
 };
 
-export interface SceneBox {
+export interface SceneGroup {
   key: string;
   label: string;
   x: number;
@@ -61,7 +61,7 @@ export interface SceneEdge {
   faith: boolean;
 }
 
-export interface SceneNode {
+export interface SceneDefinition {
   id: Identity;
   x: number;
   y: number;
@@ -76,9 +76,9 @@ export interface SceneNode {
 }
 
 export interface Scene {
-  boxes: SceneBox[];
+  groups: SceneGroup[];
   edges: SceneEdge[];
-  nodes: SceneNode[];
+  definitions: SceneDefinition[];
   /** Arrow from the current definition to the next one in reading order. */
   ahead: { path: string; tip: string } | null;
 }
@@ -88,7 +88,7 @@ interface Point {
   y: number;
 }
 
-/* Where text sits inside its box. The name follows the mark and a space, measured at the
+/* Where text sits inside its rectangle. The name follows the mark and a space, measured at the
  * layout's 0.6em per character rather than the page's actual font. */
 const TEXT_X = 10;
 export const NODE_TEXT_Y = 18.5;
@@ -101,12 +101,12 @@ export function scene(input: Input): Scene {
     ? new Set<Identity>()
     : neighbours(input.review, input.here);
   return {
-    boxes: input.laid.boxes.flatMap((box) => placed(box, 0, input.over)),
+    groups: input.laid.groups.flatMap((group) => placed(group, 0, input.over)),
     edges: input.review.edges.flatMap((edge, index) =>
       leans(input, edge, index, near),
     ),
-    nodes: [...input.laid.at].flatMap(([id, spot]) =>
-      node(input, id, spot, near),
+    definitions: [...input.laid.at].flatMap(([id, spot]) =>
+      definition(input, id, spot, near),
     ),
     ahead: ahead(input),
   };
@@ -115,31 +115,35 @@ export function scene(input: Input): Scene {
 const spotOf = (laid: Laid, id: Identity | null): Spot | null =>
   id === null ? null : (laid.at.get(id) ?? null);
 
-function placed(box: Box, depth: number, over: string | null): SceneBox[] {
+function placed(
+  group: Placed,
+  depth: number,
+  over: string | null,
+): SceneGroup[] {
   return [
     {
-      key: box.key,
-      label: box.label,
-      x: box.x,
-      y: box.y,
-      w: box.w,
-      h: box.h,
-      radius: Math.max(RADIUS.node, RADIUS.box - depth * RADIUS.step),
+      key: group.key,
+      label: group.label,
+      x: group.x,
+      y: group.y,
+      w: group.w,
+      h: group.h,
+      radius: Math.max(RADIUS.definition, RADIUS.group - depth * RADIUS.step),
       depth,
-      /* Only the innermost hovered box; lighting ancestors or the current node's box was
+      /* Only the innermost hovered group; lighting ancestors or the current definition's group was
        * too visually noisy. */
-      lit: box.key === over,
+      lit: group.key === over,
     },
-    ...box.boxes.flatMap((child) => placed(child, depth + 1, over)),
+    ...group.groups.flatMap((child) => placed(child, depth + 1, over)),
   ];
 }
 
-function node(
+function definition(
   input: Input,
   id: Identity,
   spot: Spot,
   near: Set<Identity>,
-): SceneNode[] {
+): SceneDefinition[] {
   const definition = input.review.definitions.get(id);
   if (!definition) return [];
   const here = id === input.here;
@@ -249,9 +253,9 @@ function closest(from: Spot, to: Spot): [Point, Point] {
   return [best.a, best.b];
 }
 
-const faces = (box: Spot): Point[] => [
-  { x: box.x + box.w / 2, y: box.y },
-  { x: box.x + box.w / 2, y: box.y + box.h },
-  { x: box.x, y: box.y + box.h / 2 },
-  { x: box.x + box.w, y: box.y + box.h / 2 },
+const faces = (group: Spot): Point[] => [
+  { x: group.x + group.w / 2, y: group.y },
+  { x: group.x + group.w / 2, y: group.y + group.h },
+  { x: group.x, y: group.y + group.h / 2 },
+  { x: group.x + group.w, y: group.y + group.h / 2 },
 ];

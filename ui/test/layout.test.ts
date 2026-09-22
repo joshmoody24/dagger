@@ -9,7 +9,14 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import type { Box, Edge, Group, Identity, Line, Raw } from "../src/dagger.ts";
+import type {
+  Edge,
+  Group,
+  Identity,
+  Line,
+  Placed,
+  Raw,
+} from "../src/dagger.ts";
 import { digest } from "../src/digest.ts";
 import { compare, focused, paired } from "../src/diff.ts";
 import { NODE_H, layout, shorten, widthOf } from "../src/layout.ts";
@@ -21,7 +28,7 @@ const raw: Raw = JSON.parse(
 );
 const review = digest(raw);
 const laid = layout(review);
-const nodes = [...review.definitions.values()].filter(
+const definitions = [...review.definitions.values()].filter(
   (d) => d.kind !== "module",
 );
 
@@ -40,7 +47,7 @@ test("everything to read is on the page, and the rest is modules", () => {
   }
 });
 
-/* A module that's read is a node; one that isn't is only a box. */
+/* A module that's read is a definition; one that isn't is only a group. */
 test("everything to read gets a place, and nothing else", () => {
   assert.equal(laid.at.size, review.steps.length);
   for (const [, spot] of laid.at) {
@@ -56,37 +63,37 @@ test("nothing is drawn on top of anything else", () => {
       const [a, b] = [spots[i], spots[j]];
       const across = a.x < b.x + b.w && b.x < a.x + a.w;
       const down = a.y < b.y + NODE_H && b.y < a.y + NODE_H;
-      assert.ok(!(across && down), `two nodes overlap at ${a.x},${a.y}`);
+      assert.ok(!(across && down), `two definitions overlap at ${a.x},${a.y}`);
     }
   }
 });
 
-/* Boxes nest to any depth, so this checks the rule at every level. */
-test("nothing escapes the box that holds it", () => {
+/* Groups nest to any depth, so this checks the rule at every level. */
+test("nothing escapes the group that holds it", () => {
   const within = (
     child: { x: number; y: number; w: number; h: number },
-    box: Box,
+    group: Placed,
   ) =>
-    child.x >= box.x &&
-    child.x + child.w <= box.x + box.w &&
-    child.y >= box.y &&
-    child.y + child.h <= box.y + box.h;
+    child.x >= group.x &&
+    child.x + child.w <= group.x + group.w &&
+    child.y >= group.y &&
+    child.y + child.h <= group.y + group.h;
 
-  const walk = (box: Box) => {
-    for (const child of box.boxes) {
-      assert.ok(within(child, box), `${child.key} escapes ${box.key}`);
+  const walk = (group: Placed) => {
+    for (const child of group.groups) {
+      assert.ok(within(child, group), `${child.key} escapes ${group.key}`);
       walk(child);
     }
-    for (const id of box.nodes) {
+    for (const id of group.definitions) {
       const spot = laid.at.get(id)!;
       assert.ok(
-        within({ ...spot, h: NODE_H }, box),
-        `${name(id)} escapes ${box.key}`,
+        within({ ...spot, h: NODE_H }, group),
+        `${name(id)} escapes ${group.key}`,
       );
     }
   };
 
-  laid.boxes.forEach(walk);
+  laid.groups.forEach(walk);
 });
 
 /* Downward edges are only allowed inside a cycle, where something has to come first. */
@@ -146,14 +153,14 @@ function cycles(edges: Edge[]) {
 }
 
 /* These numbers mirror where Node puts its text. */
-test("a name stays inside its node", () => {
+test("a name stays inside its definition", () => {
   const CHAR = 13 * 0.6;
-  for (const node of nodes) {
-    const shown = shorten(node.name);
+  for (const one of definitions) {
+    const shown = shorten(one.name);
     const needs = 10 + CHAR + 6 + shown.length * CHAR + 10;
     assert.ok(
-      widthOf(node.name) >= needs,
-      `${shown} needs ${needs}, box is ${widthOf(node.name)}`,
+      widthOf(one.name) >= needs,
+      `${shown} needs ${needs}, width is ${widthOf(one.name)}`,
     );
   }
 });
@@ -446,7 +453,7 @@ test("a long file of repeated lines is compared without weighing every pair", ()
 
 /* Layouts from hand-written trees, for shapes the saved review doesn't have. */
 const node = (id: string, tier: number): Group => ({ type: "node", id, tier });
-const box = (name: string, tier: number, children: Group[]): Group => ({
+const grouped = (name: string, tier: number, children: Group[]): Group => ({
   type: "group",
   name,
   tier,
@@ -497,24 +504,24 @@ const paged = (groups: Group[], read: string[], hidden: string[] = []) => {
   } as never);
 };
 
-/* Where a box sits, found by its label. */
+/* Where a group sits, found by its label. */
 const boxAt = (laid: ReturnType<typeof layout>, label: string) => {
-  let found: Box | undefined;
-  const walk = (box: Box) => {
-    if (box.label === label) found = box;
-    box.boxes.forEach(walk);
+  let found: Placed | undefined;
+  const walk = (group: Placed) => {
+    if (group.label === label) found = group;
+    group.groups.forEach(walk);
   };
-  laid.boxes.forEach(walk);
+  laid.groups.forEach(walk);
   return found!;
 };
 
 test("tiers go down the page and the order along one goes across", () => {
   const laid = paged(
     [
-      box("lib", 0, [
+      grouped("lib", 0, [
         node("1", 0),
         node("2", 0),
-        box("tests", 1, [node("3", 0)]),
+        grouped("tests", 1, [node("3", 0)]),
         node("4", 1),
       ]),
     ],
@@ -524,19 +531,19 @@ test("tiers go down the page and the order along one goes across", () => {
   assert.ok(at("1").x < at("2").x, "read first, drawn first");
   assert.ok(
     at("2").y < boxAt(laid, "tests").y,
-    "a box sits below the tier above it",
+    "a group sits below the tier above it",
   );
   assert.equal(boxAt(laid, "tests").y, at("4").y, "one tier shares a row");
   assert.ok(
     boxAt(laid, "tests").x < at("4").x,
-    "a box takes its place along the row",
+    "a group takes its place along the row",
   );
 });
 
-test("a box with nothing left in it is not drawn", () => {
+test("a group with nothing left in it is not drawn", () => {
   const tree = [
-    box("lib", 0, [node("1", 0)]),
-    box("far", 1, [node("2", 0), node("3", 0)]),
+    grouped("lib", 0, [node("1", 0)]),
+    grouped("far", 1, [node("2", 0), node("3", 0)]),
   ];
   const whole = paged(tree, ["1", "2", "3"]);
   assert.ok(boxAt(whole, "far"), "something in it, so drawn");

@@ -88,21 +88,21 @@ export interface Spot {
   h: number;
 }
 
-/** A box on the page: where it is, and what's directly inside it. */
-export interface Box {
+/** A group on the page: where it is, and what is directly inside it. */
+export interface Placed {
   key: string;
   label: string;
   x: number;
   y: number;
   w: number;
   h: number;
-  boxes: Box[];
-  nodes: Identity[];
+  groups: Placed[];
+  definitions: Identity[];
 }
 
 export interface Laid {
   at: Map<Identity, Spot>;
-  boxes: Box[];
+  groups: Placed[];
   w: number;
   h: number;
 }

@@ -1,5 +1,5 @@
 import type {
-  Box,
+  Placed,
   Definition,
   Group,
   Identity,
@@ -26,19 +26,19 @@ const PAD_X = 12,
  * rather than measured so tests can run without a page. */
 export const FONT = 14;
 const CHAR = FONT * 0.6;
-/* Test names are sentences with underscores; one can be as wide as a dozen ordinary nodes. */
+/* Test names are sentences with underscores; one can be as wide as a dozen ordinary definitions. */
 const LONGEST = 22;
 
-/* Each nested box is slightly tighter, down to the node radius. Concentric corners (padding
+/* Each nested group is slightly tighter, down to the definition radius. Concentric corners (padding
  * added at every level) come out far too round at this size. */
-export const RADIUS = { node: 5, box: 9, step: 2 };
+export const RADIUS = { definition: 5, group: 9, step: 2 };
 
-/* A box can't be narrower than its label. Must agree with style.css. */
+/* A group can't be narrower than its label. Must agree with style.css. */
 export const BOX_FONT = 12.5;
 const labelWidth = (text: string) =>
   Math.ceil(text.length * BOX_FONT * 0.6) + 22;
 
-/** A name as the graph shows it: long ones lose their tail rather than their box. */
+/** A name as the graph shows it: long ones lose their tail rather than their width. */
 export const shorten = (name: string) =>
   name.length > LONGEST ? `${name.slice(0, LONGEST - 1)}…` : name;
 
@@ -47,9 +47,9 @@ export const shorten = (name: string) =>
 export const widthOf = (text: string) =>
   Math.ceil(shorten(text).length * CHAR) + 34;
 
-/* One band of a box. A run of nodes is folded into one block; a nested box is a cell of its
+/* One band of a group. A run of definitions is folded into one block; a nested group is a cell of its
  * own. */
-type Cell = { box: Sized } | { lines: Definition[][] };
+type Cell = { group: Sized } | { lines: Definition[][] };
 interface Sized {
   label: string;
   bands: Cell[][];
@@ -71,11 +71,11 @@ export function layout(review: Review): Laid {
   const shown = review.groups.flatMap((group) => kept(group) ?? []);
   const top = sized({ type: "group", name: "", tier: 0, children: shown });
 
-  const { boxes } = stacked(top.bands, MARGIN, MARGIN, "", at, null);
+  const { groups } = stacked(top.bands, MARGIN, MARGIN, "", at, null);
   const { across, deep } = extent(top.bands);
   return {
     at,
-    boxes,
+    groups,
     w: top.bands.length ? across + 2 * MARGIN : 0,
     h: deep + 2 * MARGIN,
   };
@@ -83,7 +83,7 @@ export function layout(review: Review): Laid {
   function sized(group: Group & { type: "group" }): Sized {
     const cell = (child: Group): Cell =>
       child.type === "group"
-        ? { box: sized(child) }
+        ? { group: sized(child) }
         : { lines: [[review.definitions.get(child.id)!]] };
     const bands = runs(group.children, (a, b) => a.tier === b.tier).map(
       (band) =>
@@ -95,7 +95,7 @@ export function layout(review: Review): Laid {
     );
 
     const { across, deep } = extent(bands);
-    /* An empty box is just its label. */
+    /* An empty group is just its label. */
     return {
       label: group.name,
       bands,
@@ -125,8 +125,8 @@ function stacked(
   at: Map<Identity, Spot>,
   width: number | null,
 ) {
-  const boxes: Box[] = [];
-  const nodes: Identity[] = [];
+  const groups: Placed[] = [];
+  const definitions: Identity[] = [];
   let down = y;
 
   for (const [index, band] of bands.entries()) {
@@ -134,33 +134,43 @@ function stacked(
     // Centred, so a lone definition under a wide band sits beneath it, not in a corner.
     let across = width === null ? x : x + (width - bandWidth(band)) / 2;
     for (const cell of band) {
-      if ("box" in cell) boxes.push(placed(cell.box, across, down, key, at));
-      else nodes.push(...spots(cell.lines, across, down, at));
+      if ("group" in cell)
+        groups.push(placed(cell.group, across, down, key, at));
+      else definitions.push(...spots(cell.lines, across, down, at));
       across += cellWidth(cell) + BOX_GAP;
     }
     down += bandHeight(band);
   }
 
-  return { boxes, nodes };
+  return { groups, definitions };
 }
 
 function placed(
-  box: Sized,
+  group: Sized,
   x: number,
   y: number,
   above: string,
   at: Map<Identity, Spot>,
-): Box {
-  const key = `${above}/${box.label}`;
-  const { boxes, nodes } = stacked(
-    box.bands,
+): Placed {
+  const key = `${above}/${group.label}`;
+  const { groups, definitions } = stacked(
+    group.bands,
     x + PAD_X,
     y + PAD_TOP,
     key,
     at,
-    box.w - 2 * PAD_X,
+    group.w - 2 * PAD_X,
   );
-  return { key, label: box.label, x, y, w: box.w, h: box.h, boxes, nodes };
+  return {
+    key,
+    label: group.label,
+    x,
+    y,
+    w: group.w,
+    h: group.h,
+    groups,
+    definitions,
+  };
 }
 
 function spots(
@@ -170,15 +180,20 @@ function spots(
   at: Map<Identity, Spot>,
 ): Identity[] {
   let line = y;
-  for (const nodes of lines) {
+  for (const definitions of lines) {
     let along = x;
-    for (const node of nodes) {
-      at.set(node.id, { x: along, y: line, w: widthOf(node.name), h: NODE_H });
-      along += widthOf(node.name) + NODE_GAP;
+    for (const definition of definitions) {
+      at.set(definition.id, {
+        x: along,
+        y: line,
+        w: widthOf(definition.name),
+        h: NODE_H,
+      });
+      along += widthOf(definition.name) + NODE_GAP;
     }
     line += NODE_H + ROW_GAP;
   }
-  return lines.flat().map((node) => node.id);
+  return lines.flat().map((definition) => definition.id);
 }
 
 /* Fold a row into a roughly square block so a file with a dozen tests grows down, not
@@ -195,16 +210,16 @@ const rowWidth = (row: Definition[]) =>
   row.reduce((sum, n) => sum + widthOf(n.name), 0) +
   NODE_GAP * (row.length - 1);
 const cellWidth = (cell: Cell) =>
-  "box" in cell ? cell.box.w : Math.max(...cell.lines.map(rowWidth));
+  "group" in cell ? cell.group.w : Math.max(...cell.lines.map(rowWidth));
 const cellHeight = (cell: Cell) =>
-  "box" in cell
-    ? cell.box.h
+  "group" in cell
+    ? cell.group.h
     : cell.lines.length * NODE_H + ROW_GAP * (cell.lines.length - 1);
 const bandWidth = (band: Cell[]) =>
   band.reduce((sum, cell) => sum + cellWidth(cell), 0) +
   BOX_GAP * (band.length - 1);
 const bandHeight = (band: Cell[]) => Math.max(...band.map(cellHeight));
-/* Rows of nodes sit closer together than anything sits to a box. */
+/* Rows of definitions sit closer together than anything sits to a group. */
 const gapAbove = (above: Cell[], band: Cell[]) =>
   [above, band].every((one) => one.every((cell) => "lines" in cell))
     ? ROW_GAP

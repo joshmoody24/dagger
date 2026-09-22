@@ -25,7 +25,7 @@ export function CostPanel(props: {
         <li>{props.review.cost.peak_open} definitions in mind at once</li>
         <li>{props.review.cost.taken_on_faith} definitions out of order</li>
         <li>
-          {props.review.cost.jumps} {props.review.grouping || "module"} jumps
+          {props.review.cost.jumps} {props.review.grouping || "file"} jumps
         </li>
         <li>{props.review.steps.length} definitions to read</li>
       </ul>

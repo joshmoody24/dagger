@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import type { Box, Raw } from "../src/dagger.ts";
+import type { Placed, Raw } from "../src/dagger.ts";
 import { digest } from "../src/digest.ts";
 import { matches, scene, type Input } from "../src/graph/scene.ts";
 import { layout } from "../src/layout.ts";
@@ -28,32 +28,38 @@ const input = (over: Partial<Input> = {}): Input => ({
   ...over,
 });
 
-const every = (boxes: Box[]): Box[] =>
-  boxes.flatMap((box) => [box, ...every(box.boxes)]);
+const every = (groups: Placed[]): Placed[] =>
+  groups.flatMap((group) => [group, ...every(group.groups)]);
 
-test("every placed node appears once, with finite coordinates", () => {
-  const nodes = scene(input()).nodes;
+test("every placed definition appears once, with finite coordinates", () => {
+  const definitions = scene(input()).definitions;
   assert.deepEqual(
-    nodes.map((node) => node.id).sort(),
+    definitions.map((definition) => definition.id).sort(),
     [...laid.at.keys()].sort(),
   );
-  for (const node of nodes) {
-    for (const measure of [node.x, node.y, node.w, node.h, node.nameX])
-      assert.ok(Number.isFinite(measure), `${node.id} at ${measure}`);
-    assert.ok(node.name.length > 0);
+  for (const definition of definitions) {
+    for (const measure of [
+      definition.x,
+      definition.y,
+      definition.w,
+      definition.h,
+      definition.nameX,
+    ])
+      assert.ok(Number.isFinite(measure), `${definition.id} at ${measure}`);
+    assert.ok(definition.name.length > 0);
   }
 });
 
-test("every box appears once", () => {
-  const boxes = scene(input()).boxes;
+test("every group appears once", () => {
+  const groups = scene(input()).groups;
   assert.deepEqual(
-    boxes.map((box) => box.key).sort(),
-    every(laid.boxes)
-      .map((box) => box.key)
+    groups.map((group) => group.key).sort(),
+    every(laid.groups)
+      .map((group) => group.key)
       .sort(),
   );
-  assert.ok(laid.boxes.every((box) => box.boxes.length));
-  assert.ok(boxes.some((box) => box.depth > 0));
+  assert.ok(laid.groups.every((group) => group.groups.length));
+  assert.ok(groups.some((group) => group.depth > 0));
 });
 
 test("every edge with both ends placed appears once", () => {
@@ -66,51 +72,56 @@ test("every edge with both ends placed appears once", () => {
   for (const edge of edges) assert.match(edge.path, /^M .* C .*$/);
 });
 
-test("the current node is here and the next is soon", () => {
-  const nodes = scene(input()).nodes;
-  const of = (id: string) => nodes.find((node) => node.id === id)!.classes;
+test("the current definition is here and the next is soon", () => {
+  const definitions = scene(input()).definitions;
+  const of = (id: string) =>
+    definitions.find((definition) => definition.id === id)!.classes;
   assert.ok(of(here).includes("here"));
   assert.ok(of(next).includes("soon"));
   assert.ok(!of(here).includes("dim"));
 });
 
-test("nodes away from the current one are dim, and none are without one", () => {
+test("definitions away from the current one are dim, and none are without one", () => {
   const near = new Set([
     here,
     ...review.edges.flatMap((edge) =>
       edge.from === here ? [edge.to] : edge.to === here ? [edge.from] : [],
     ),
   ]);
-  for (const node of scene(input()).nodes) {
-    const expected = !near.has(node.id) && node.id !== next;
-    assert.equal(node.classes.includes("dim"), expected, node.id);
+  for (const definition of scene(input()).definitions) {
+    const expected = !near.has(definition.id) && definition.id !== next;
+    assert.equal(definition.classes.includes("dim"), expected, definition.id);
   }
-  for (const node of scene(input({ here: null, next: null })).nodes)
-    assert.ok(!node.classes.includes("dim"), node.id);
+  for (const definition of scene(input({ here: null, next: null })).definitions)
+    assert.ok(!definition.classes.includes("dim"), definition.id);
 });
 
 test("a query dims what doesn't match and nothing that does", () => {
   const query = review.definitions.get(next)!.name.slice(0, 3).toUpperCase();
-  const nodes = scene(input({ query })).nodes;
-  const hits = nodes.filter((node) =>
-    matches(review.definitions.get(node.id)!, query),
+  const definitions = scene(input({ query })).definitions;
+  const hits = definitions.filter((definition) =>
+    matches(review.definitions.get(definition.id)!, query),
   );
-  assert.ok(hits.length > 0 && hits.length < nodes.length);
-  for (const node of nodes) {
-    const hit = matches(review.definitions.get(node.id)!, query);
-    assert.equal(node.classes.includes("dim"), !hit, node.id);
+  assert.ok(hits.length > 0 && hits.length < definitions.length);
+  for (const definition of definitions) {
+    const hit = matches(review.definitions.get(definition.id)!, query);
+    assert.equal(definition.classes.includes("dim"), !hit, definition.id);
   }
 });
 
 test("an empty query changes nothing: neighbours still dim, and the current never does", () => {
-  const nodes = scene(input({ query: "" })).nodes;
+  const definitions = scene(input({ query: "" })).definitions;
   const dim = (id: string) =>
-    nodes.find((node) => node.id === id)!.classes.includes("dim");
+    definitions
+      .find((definition) => definition.id === id)!
+      .classes.includes("dim");
   assert.ok(!dim(here));
-  assert.ok(nodes.some((node) => dim(node.id)));
+  assert.ok(definitions.some((definition) => dim(definition.id)));
   assert.equal(
-    nodes.filter((node) => dim(node.id)).length,
-    scene(input()).nodes.filter((node) => node.classes.includes("dim")).length,
+    definitions.filter((definition) => dim(definition.id)).length,
+    scene(input()).definitions.filter((definition) =>
+      definition.classes.includes("dim"),
+    ).length,
   );
 });
 
@@ -123,12 +134,12 @@ test("the arrow ahead points at the next step, or nowhere", () => {
   assert.equal(scene(input({ here: null })).ahead, null);
 });
 
-test("hovering a box lights exactly that box", () => {
-  const key = every(laid.boxes).at(-1)!.key;
-  const lit = scene(input({ over: key })).boxes.filter((box) => box.lit);
+test("hovering a group lights exactly that group", () => {
+  const key = every(laid.groups).at(-1)!.key;
+  const lit = scene(input({ over: key })).groups.filter((group) => group.lit);
   assert.deepEqual(
-    lit.map((box) => box.key),
+    lit.map((group) => group.key),
     [key],
   );
-  assert.ok(scene(input()).boxes.every((box) => !box.lit));
+  assert.ok(scene(input()).groups.every((group) => !group.lit));
 });
