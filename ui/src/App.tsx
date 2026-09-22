@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal } from "solid-js";
 import { Graph } from "./Graph.tsx";
 import { Reading, type Facing } from "./Reading.tsx";
 import { Toolbar } from "./Toolbar.tsx";
@@ -10,14 +10,46 @@ import { useReviewKeys } from "./keys.ts";
 import { layout } from "./layout.ts";
 import { createMediaQuery, WIDE } from "./media.ts";
 import { narrowed } from "./narrow.ts";
+import { compared } from "./progress.ts";
 import { namesIn } from "./text.ts";
 import { next as another, wear, wearing } from "./theme.ts";
 
 /** Where the reader wants the sheet: a column or a drawer, as the screen allows. */
 type Pane = "away" | "beside" | "half" | "full";
 
-export function App(props: { raw: Raw }) {
+export function App(props: { raw: Raw; said: string[] }) {
   const whole = createMemo(() => digest(props.raw));
+
+  /* Read marks outlive the page, keyed by what was compared as the snapshot adapter named
+   * it. The working tree is never the same twice, so it isn't kept. Identities are handed
+   * out afresh each run, so marks are stored by file and path instead. */
+  const kept = createMemo(() => {
+    const pair = compared(props.said);
+    return pair && pair[1] !== "current"
+      ? `dagger:read:${pair[0]}..${pair[1]}`
+      : null;
+  });
+  const marked = (id: Identity) => {
+    const one = whole().definitions.get(id);
+    return one ? `${one.file}#${one.path}` : null;
+  };
+  const stored = (): Set<Identity> => {
+    const at = kept();
+    if (!at) return new Set();
+    try {
+      const names = new Set<string>(
+        JSON.parse(localStorage.getItem(at) ?? "[]"),
+      );
+      return new Set(
+        [...whole().definitions.keys()].filter((id) => {
+          const name = marked(id);
+          return name !== null && names.has(name);
+        }),
+      );
+    } catch {
+      return new Set();
+    }
+  };
 
   /* Starts at 0 so affected-only definitions are opt-in. Capped at what dagger was run
    * with (--ripples), since nothing beyond that exists in the data. */
@@ -29,7 +61,19 @@ export function App(props: { raw: Raw }) {
   const laid = createMemo(() => layout(review()));
   const names = createMemo(() => namesIn(review()));
 
-  const [read, setRead] = createSignal<Set<Identity>>(new Set());
+  const [read, setRead] = createSignal<Set<Identity>>(stored());
+  createEffect(() => {
+    const at = kept();
+    if (!at) return;
+    try {
+      localStorage.setItem(
+        at,
+        JSON.stringify([...read()].flatMap((id) => marked(id) ?? [])),
+      );
+    } catch {
+      /* Storage refused; the marks still last as long as the page. */
+    }
+  });
   const [panel, setPanel] = createSignal<Opened>(null);
   const toggle = (which: Opened) =>
     setPanel((was) => (was === which ? null : which));

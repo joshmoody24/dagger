@@ -59,7 +59,7 @@ function Root() {
         <p class="waiting">{String(review.error)}</p>
       </Match>
       <Match when={review()}>
-        <App raw={review()} />
+        <App raw={review()} said={said()} />
       </Match>
     </Switch>
   );

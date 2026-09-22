@@ -13,7 +13,7 @@ import type { Box, Edge, Group, Identity, Line, Raw } from "../src/dagger.ts";
 import { digest } from "../src/digest.ts";
 import { compare, focused, paired } from "../src/diff.ts";
 import { NODE_H, layout, shorten, widthOf } from "../src/layout.ts";
-import { phases, standing } from "../src/progress.ts";
+import { compared, phases, standing } from "../src/progress.ts";
 import { stitch } from "../src/text.ts";
 
 const raw: Raw = JSON.parse(
@@ -548,4 +548,13 @@ test("a box with nothing left in it is not drawn", () => {
   const pruned = paged(tree, ["1", "2", "3"], ["2", "3"]);
   assert.ok(boxAt(pruned, "far") === undefined, "nothing left in it");
   assert.equal(pruned.at.size, 1);
+});
+
+/* The pair the page keys its read marks by comes from what the adapter said it compared. */
+test("what was compared is read off the first progress line", () => {
+  assert.deepEqual(compared(["comparing aaa to bbb", "3 files differ"]), [
+    "aaa",
+    "bbb",
+  ]);
+  assert.equal(compared(["3 files differ"]), null);
 });

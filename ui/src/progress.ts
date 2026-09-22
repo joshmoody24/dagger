@@ -18,13 +18,19 @@ export function standing(phases: Phase[], at: number) {
 /* All three phases are shown from the start so the reader can see how much is left. Which
  * side a line belongs to comes from the line itself, never from what came before it, since
  * the two readings interleave. */
-export function phases(said: string[]): Phase[] {
+/** The two things being compared, as the snapshot adapter named them. */
+export function compared(said: string[]): [string, string] | null {
   const pair = said
     .map((line) => line.match(/^comparing (\S+) to (\S+)/))
     .find(Boolean);
-  const [before, after] = pair
-    ? [pair[1], pair[2]]
-    : ["the first snapshot", "the second"];
+  return pair ? [pair[1], pair[2]] : null;
+}
+
+export function phases(said: string[]): Phase[] {
+  const [before, after] = compared(said) ?? [
+    "the first snapshot",
+    "the second",
+  ];
 
   const found: Phase[] = [
     { said: "laying out both snapshots", done: false, going: true },
