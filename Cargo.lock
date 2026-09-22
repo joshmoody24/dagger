@@ -106,6 +106,7 @@ name = "dagger-lsp-client"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "dagger-core",
  "serde_json",
 ]
 

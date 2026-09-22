@@ -9,6 +9,7 @@
 //! the imports next door.
 
 use dagger_core::matching::Extraction;
+use dagger_core::model::Span;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,12 +54,18 @@ pub enum Request {
     Extract {
         dir: String,
         files: Vec<String>,
-        /// Files whose contents differ between the two snapshots. A hint, not a filter:
-        /// an adapter may still report anything it likes, and one that ignores this is
-        /// merely slow rather than wrong. It lets an adapter work outward from a change
-        /// rather than reading a whole repository to describe a few lines.
+        /// Files that differ between the two snapshots, and where in each. A hint, not a
+        /// filter: an adapter may still report anything it likes, and one that ignores
+        /// this is merely slow rather than wrong. It lets an adapter work outward from a
+        /// change, and ask about only the definitions a change actually touches, rather
+        /// than reading a whole repository — or a whole changed file — to describe a few
+        /// lines.
+        ///
+        /// The ranges are for this side of the comparison: `dir` is one snapshot, and a
+        /// definition unchanged here can still be worth asking about because the other
+        /// snapshot moved it. What moved on the other side isn't this request's to say.
         #[serde(default)]
-        changed: Vec<String>,
+        changed: Vec<Changed>,
         /// How far past a changed file to follow what uses it. Nought means not at all.
         ///
         /// A hint like `changed`, and the one that decides what a reading costs: each hop
@@ -76,6 +83,21 @@ pub enum Request {
 pub struct Revisions {
     pub before: String,
     pub after: String,
+}
+
+/// One file that differs, and the byte ranges inside it that do.
+///
+/// A whole file used to count as changed the moment one line in it did, which made a
+/// changed file and a rewritten one look the same request: an adapter had no way to tell
+/// "ask about everything here" from "ask about the four lines somebody touched", so it
+/// asked about everything either way. Redo's own self-review asked after 494 definitions
+/// in files that between them had a few dozen lines actually differ.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Changed {
+    pub file: String,
+    /// Where, in this file, on this side. Empty means the whole file counts — there's
+    /// nothing narrower to say about a file that only exists on one side of the change.
+    pub at: Vec<Span>,
 }
 
 /// Something an adapter wants the reader to know: a file it couldn't parse, a project

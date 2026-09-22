@@ -17,8 +17,9 @@ use anyhow::{Context, Result, bail};
 use config::Config;
 use dagger_core::group::Grouping;
 use dagger_core::matching::{Extraction, match_snapshots};
+use dagger_core::model::Span;
 use dagger_core::review::{Impact, Warning, review};
-use dagger_protocol::Note;
+use dagger_protocol::{Changed, Note};
 use std::io::{IsTerminal, Write};
 use std::path::Path;
 
@@ -272,6 +273,11 @@ fn compare(
 
     let (before_dir, after_dir) = (before.1.dir.clone(), after.1.dir.clone());
 
+    /* Where, in each differing file, the bytes actually differ — worked out once, on
+     * disk, before anything is asked of an adapter. Each side keeps only its own half:
+     * an adapter reading `before_dir` has no use for where a line landed in `after_dir`. */
+    let (changed_before, changed_after) = changed_ranges(&before_dir, &after_dir, &changed);
+
     /* One after the other, though neither reading looks at the other and both together are
      * nearly the whole of what a run costs.
      *
@@ -280,8 +286,24 @@ fn compare(
      * anything, so two of them is two of everything, and on a sixty gigabyte machine it
      * came within a fifth of a percent of what the out-of-memory killer watches for. A
      * review that might be killed partway is worse than a review that takes longer. */
-    let (before, mut notes) = read(repo, config, claims, before, &changed, ripples, "before")?;
-    let (after, mut later) = read(repo, config, claims, after, &changed, ripples, "after")?;
+    let (before, mut notes) = read(
+        repo,
+        config,
+        claims,
+        before,
+        &changed_before,
+        ripples,
+        "before",
+    )?;
+    let (after, mut later) = read(
+        repo,
+        config,
+        claims,
+        after,
+        &changed_after,
+        ripples,
+        "after",
+    )?;
     notes.append(&mut later);
 
     let matched = match_snapshots(before, after);
@@ -366,6 +388,103 @@ fn differing(before: &adapter::Snapshot, after: &adapter::Snapshot) -> Result<Ve
         .collect())
 }
 
+/// Where, in each differing file, the bytes actually differ — for the before side and the
+/// after side in turn.
+///
+/// Whole files used to be handed to an adapter as "this one changed", which left it no way
+/// to tell a four-line edit from a rewrite: it asked after every definition in the file
+/// either way. On redo's own self-review that meant 494 definitions asked about across
+/// files that between them had a few dozen lines actually differ.
+///
+/// A file the line diff finds nothing to narrow — its bytes differ, or it wouldn't be here,
+/// but not in a way lines can say, a binary file being the usual reason — gets no ranges,
+/// which an adapter reads as "the whole file", the same as before this existed.
+fn changed_ranges(before: &Path, after: &Path, files: &[String]) -> (Vec<Changed>, Vec<Changed>) {
+    let mut on_before = Vec::with_capacity(files.len());
+    let mut on_after = Vec::with_capacity(files.len());
+
+    for file in files {
+        let was = std::fs::read_to_string(before.join(file)).unwrap_or_default();
+        let now = std::fs::read_to_string(after.join(file)).unwrap_or_default();
+        let (at_before, at_after) = ranges(&was, &now);
+        on_before.push(Changed {
+            file: file.clone(),
+            at: at_before,
+        });
+        on_after.push(Changed {
+            file: file.clone(),
+            at: at_after,
+        });
+    }
+
+    (on_before, on_after)
+}
+
+/// The stretches of each side a line diff didn't find equal, as byte spans rather than
+/// line numbers — which is what a definition's own span is written in, and the only
+/// currency the two can be compared in.
+fn ranges(before: &str, after: &str) -> (Vec<Span>, Vec<Span>) {
+    let starts = |text: &str| -> Vec<u32> {
+        let mut at = vec![0u32];
+        at.extend(text.match_indices('\n').map(|(pos, _)| pos as u32 + 1));
+        at
+    };
+    let (was, is) = (starts(before), starts(after));
+    let span = |starts: &[u32], text: &str, from: usize, to: usize| -> Span {
+        Span {
+            start: starts[from],
+            end: starts.get(to).copied().unwrap_or(text.len() as u32),
+        }
+    };
+    /* Where an insertion or a deletion sits on the side that has no lines to show for
+     * it — a point, not a stretch, since nothing there differs. It still falls inside
+     * whatever definition encloses it: an interface gaining a field is a changed
+     * interface on both sides, even though only one side has a line to point at. Left
+     * unmarked, that side never asks after the interface's contract, the other side
+     * does, and the two readings disagree about something neither of them got wrong. */
+    let seam = |starts: &[u32], text: &str, at: usize| -> Span {
+        let point = starts.get(at).copied().unwrap_or(text.len() as u32);
+        Span {
+            start: point,
+            end: point,
+        }
+    };
+
+    let (mut at_before, mut at_after) = (Vec::new(), Vec::new());
+    for op in similar::TextDiff::from_lines(before, after).ops() {
+        use similar::DiffOp::*;
+        match *op {
+            Equal { .. } => {}
+            Delete {
+                old_index,
+                old_len,
+                new_index,
+            } => {
+                at_before.push(span(&was, before, old_index, old_index + old_len));
+                at_after.push(seam(&is, after, new_index));
+            }
+            Insert {
+                old_index,
+                new_index,
+                new_len,
+            } => {
+                at_before.push(seam(&was, before, old_index));
+                at_after.push(span(&is, after, new_index, new_index + new_len));
+            }
+            Replace {
+                old_index,
+                old_len,
+                new_index,
+                new_len,
+            } => {
+                at_before.push(span(&was, before, old_index, old_index + old_len));
+                at_after.push(span(&is, after, new_index, new_index + new_len));
+            }
+        }
+    }
+    (at_before, at_after)
+}
+
 /// Every extractor's answer for one snapshot, plus the leftovers, merged into the one
 /// pile of facts the core expects.
 fn read(
@@ -373,7 +492,7 @@ fn read(
     config: &Config,
     claims: &[Vec<String>],
     (rev, snapshot): (&str, &adapter::Snapshot),
-    changed: &[String],
+    changed: &[Changed],
     ripples: u32,
     // Which of the two this is. Both are read at once, so everything said on the way has
     // to say whose it is or the two reports become one nobody can follow.
@@ -390,7 +509,8 @@ fn read(
      * file that didn't change buys nothing: both sides come out identical, so it's kept,
      * unchanged, and never worth reading. On a repository of any size that's the whole cost
      * of the run — a hundred thousand files read off disk twice to say nothing. */
-    let differs: std::collections::BTreeSet<&str> = changed.iter().map(String::as_str).collect();
+    let differs: std::collections::BTreeSet<&str> =
+        changed.iter().map(|one| one.file.as_str()).collect();
     let fallen: Vec<String> = assignment
         .fallback
         .iter()
@@ -438,5 +558,81 @@ fn lay_out(repo: &Path, config: &Config, rev: &str) -> Result<adapter::Snapshot>
                 files: None,
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Whether any span covers this byte position — what an adapter does with a seam to
+    /// decide whether the definition sitting there is worth asking about.
+    fn covered(spans: &[Span], at: u32) -> bool {
+        spans
+            .iter()
+            .any(|span| span.start <= at && at < span.end.max(span.start + 1))
+    }
+
+    #[test]
+    fn identical_text_has_nothing_to_say() {
+        let (before, after) = ranges("fn one() {}\n", "fn one() {}\n");
+        assert!(before.is_empty() && after.is_empty());
+    }
+
+    #[test]
+    fn a_changed_line_is_marked_on_both_sides() {
+        let (before, after) = ranges("let a = 1;\n", "let a = 2;\n");
+        assert_eq!(before.len(), 1);
+        assert_eq!(after.len(), 1);
+        assert!(covered(&before, 4)); // somewhere inside "let a = 1;"
+        assert!(covered(&after, 4));
+    }
+
+    /* The case that used to go missing: a line arrives with nothing removed to pair it
+     * with, so the side that lost nothing got no range at all — and a definition whose
+     * braces span the insertion point never learned it had changed. */
+    #[test]
+    fn a_pure_insertion_still_marks_a_seam_on_the_other_side() {
+        let before = "interface Money {\n  amount: number;\n}\n";
+        let after = "interface Money {\n  amount: number;\n  precise: boolean;\n}\n";
+        let (before_at, after_at) = ranges(before, after);
+
+        assert!(
+            !before_at.is_empty(),
+            "the side with nothing removed still needs a seam"
+        );
+        assert!(!after_at.is_empty());
+
+        // The seam sits between "amount: number;" and the closing brace — inside the
+        // interface's own span either way it's measured.
+        let whole = 0..before.len() as u32;
+        assert!(before_at.iter().all(|span| whole.contains(&span.start)));
+    }
+
+    #[test]
+    fn a_pure_deletion_mirrors_the_same_seam() {
+        let before = "interface Money {\n  amount: number;\n  precise: boolean;\n}\n";
+        let after = "interface Money {\n  amount: number;\n}\n";
+        let (before_at, after_at) = ranges(before, after);
+
+        assert!(!before_at.is_empty());
+        assert!(
+            !after_at.is_empty(),
+            "the side with nothing added still needs a seam"
+        );
+    }
+
+    /* Two separate hunks, apart in the file, stay apart rather than merging into one
+     * span that would claim everything between them as changed too. */
+    #[test]
+    fn separate_hunks_are_reported_separately() {
+        let before = "fn a() { 1 }\nfn mid() { 0 }\nfn b() { 2 }\n";
+        let after = "fn a() { 10 }\nfn mid() { 0 }\nfn b() { 20 }\n";
+        let (before_at, _) = ranges(before, after);
+        assert_eq!(
+            before_at.len(),
+            2,
+            "the untouched middle line shouldn't join them"
+        );
     }
 }

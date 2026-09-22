@@ -16,8 +16,9 @@ use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
 use dagger_core::prose::preamble;
 use dagger_core::reference::{BinderId, Mention, Site, Target};
+use dagger_lsp_client::frontier::{Frontier, Wanted};
 use dagger_lsp_client::{self as lsp, Lines, Server};
-use dagger_protocol::{Note, Request, Response};
+use dagger_protocol::{Changed, Note, Request, Response};
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -54,11 +55,13 @@ fn answer(request: Request) -> Result<Response> {
         Request::Extract {
             dir,
             files,
+            changed,
+            ripples,
             settings,
-            ..
         } => {
             let settings = settings_of(settings)?;
-            let (extraction, notes) = extract(Path::new(&dir), &files, &settings)?;
+            let (extraction, notes) =
+                extract(Path::new(&dir), &files, &changed, ripples, &settings)?;
             Ok(Response::Extracted { extraction, notes })
         }
         Request::Materialize { .. } | Request::Resolve { .. } => {
@@ -67,8 +70,8 @@ fn answer(request: Request) -> Result<Response> {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Settings {
     /// Cargo manifests to load besides the one at the root.
     ///
@@ -76,16 +79,31 @@ struct Settings {
     /// so a build of the tool doesn't drag a webview in with it — and rust-analyzer then
     /// knows nothing about the files in it. Every definition there comes back with no
     /// contract and no callers, which is worse than slow.
+    #[serde(default)]
     linked: Vec<String>,
+    /// How many files to chase users of before giving up and saying so.
+    ///
+    /// A backstop, not a setting anybody should have to reach for: how far a reading goes
+    /// is `--ripples`, and someone who asks for ten steps and gets six because of a number
+    /// they never chose has been told something untrue about their own change. So this
+    /// sits high enough to catch a runaway and nothing else.
+    #[serde(default = "files_to_walk")]
+    max_walk: usize,
+}
+
+fn files_to_walk() -> usize {
+    100_000
 }
 
 /// What the repository told this adapter, refused if it isn't something this adapter
 /// knows. A setting quietly ignored is worse than one rejected: the run carries on and
 /// answers a question nobody asked.
 fn settings_of(settings: serde_json::Value) -> Result<Settings> {
-    if settings.is_null() {
-        return Ok(Settings::default());
-    }
+    let settings = if settings.is_null() {
+        json!({})
+    } else {
+        settings
+    };
     serde_json::from_value(settings)
         .context("dagger-rust was told something under settings that it doesn't know")
 }
@@ -96,7 +114,13 @@ struct Parsed {
     found: Vec<items::Found>,
 }
 
-fn extract(dir: &Path, files: &[String], settings: &Settings) -> Result<(Extraction, Vec<Note>)> {
+fn extract(
+    dir: &Path,
+    files: &[String],
+    changed: &[Changed],
+    ripples: u32,
+    settings: &Settings,
+) -> Result<(Extraction, Vec<Note>)> {
     let mut modules = modules::Modules::default();
     let mut notes = Vec::new();
 
@@ -120,7 +144,15 @@ fn extract(dir: &Path, files: &[String], settings: &Settings) -> Result<(Extract
         .flat_map(|file| file.found.iter().map(|found| occurrence(file, found)))
         .collect();
 
-    let mentions = bind(dir, &parsed, &mut occurrences, &mut notes, settings)?;
+    let mentions = bind(
+        dir,
+        &parsed,
+        changed,
+        ripples,
+        &mut occurrences,
+        &mut notes,
+        settings,
+    )?;
     notes.append(&mut modules.notes);
 
     Ok((
@@ -256,12 +288,23 @@ fn locator(found: &items::Found) -> Locator {
     }
 }
 
-/// Asks rust-analyzer who refers to each definition, and what each one looks like from
-/// outside. One question per definition rather than per name mentioned, which keeps the
-/// conversation short enough to be worth having.
+/// Turns what dagger said a changed file differs in into what's worth asking about.
+fn wanted_of(changed: &Changed) -> Wanted {
+    Wanted::from_spans(&changed.at)
+}
+
+/// Asks rust-analyzer who refers to each definition worth asking about, and what each
+/// looks like from outside — starting at what changed and following whatever a break can
+/// travel through, the same walk the LSP adapter does.
+///
+/// Parsing every claimed file stays eager: `syn` costs nothing over the wire, and it's
+/// what tells a definition what holds it. Only the rust-analyzer conversation — one
+/// round trip per question — is worth being lazy about.
 fn bind(
     dir: &Path,
     parsed: &[Parsed],
+    changed: &[Changed],
+    ripples: u32,
     occurrences: &mut [Occurrence],
     notes: &mut Vec<Note>,
     settings: &Settings,
@@ -292,19 +335,41 @@ fn bind(
     let mut mentions = Vec::new();
     let mut contracts: BTreeMap<Locator, String> = BTreeMap::new();
 
-    /* Said every so often rather than every time: this is the slow half of a reading and a
-     * reader deserves to know it's moving, but a line per file on a large tree is noise
-     * rather than news. Anything watching can take the two numbers as a fraction. */
-    let files = parsed.len();
-    let every = (files / 20).max(1);
+    let mut front = Frontier::default();
+    for one in changed
+        .iter()
+        .filter(|one| by_path.contains_key(one.file.as_str()))
+    {
+        front.want(&one.file, wanted_of(one), 0);
+    }
 
-    for (done, file) in parsed.iter().enumerate() {
-        if done % every == 0 {
-            eprintln!("  walked {done} of {files} files");
+    while let Some((path, wanted, away)) = front.next() {
+        eprintln!("  walked {} of {} files", front.walked(), front.known());
+        if front.walked() > settings.max_walk {
+            notes.push(Note {
+                message: format!(
+                    "stopped after chasing users of {} files. This change reaches further \
+                     than that, so some of what it affects is missing",
+                    settings.max_walk
+                ),
+                file: None,
+            });
+            break;
         }
+
+        let Some(file) = by_path.get(path.as_str()) else {
+            continue;
+        };
         let uri = lsp::uri(&root.join(&file.path));
 
-        for found in file.found.iter().filter(|found| found.referenceable()) {
+        let questions: Vec<&items::Found> = file
+            .found
+            .iter()
+            .filter(|found| found.referenceable())
+            .filter(|found| wanted.covers(&found.covers, &locator(found)))
+            .collect();
+
+        for found in questions {
             let (line, column) = file.lines.position(found.name_at.start);
             let at = json!({
                 "textDocument": { "uri": uri },
@@ -336,7 +401,13 @@ fn bind(
                 }
             };
 
-            mentions.extend(referring(&referrers, &root, &by_path, found));
+            let (found_mentions, onward) = referring(&referrers, &root, &by_path, found);
+            mentions.extend(found_mentions);
+            if away + 1 < ripples {
+                for (path, from) in onward {
+                    front.want(&path, Wanted::named(from), away + 1);
+                }
+            }
         }
     }
 
@@ -353,21 +424,24 @@ fn bind(
 }
 
 /// Each place rust-analyzer found, turned into a mention from whichever definition
-/// encloses it. A reference from outside any definition we know about is dropped: there
-/// is nothing to hang it on.
+/// encloses it, alongside which of those places can carry a break onward — the file, and
+/// the one definition in it that does. A reference from outside any definition we know
+/// about is dropped: there is nothing to hang it on.
 fn referring(
     referrers: &serde_json::Value,
     root: &Path,
     by_path: &BTreeMap<&str, &Parsed>,
     to: &items::Found,
-) -> Vec<Mention> {
+) -> (Vec<Mention>, Vec<(String, Locator)>) {
     let Some(places) = referrers.as_array() else {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     };
 
-    places
-        .iter()
-        .filter_map(|place| {
+    let mut mentions = Vec::new();
+    let mut onward = Vec::new();
+
+    for place in places {
+        let found = (|| {
             let path = relative(place["uri"].as_str()?, root)?;
             let file = by_path.get(path.as_str())?;
             let line = place["range"]["start"]["line"].as_u64()? as u32;
@@ -376,21 +450,35 @@ fn referring(
 
             let from = innermost(file, at)?;
             let part = from.part_at(at)?;
+            Some((path, from, part, at))
+        })();
 
-            Some(Mention {
-                from: locator(from),
-                to: Target::Known(locator(to)),
-                site: Site {
-                    part,
-                    span: Span {
-                        start: at as u32,
-                        end: (at + to.name.len()) as u32,
-                    },
-                    found_by: BinderId("rust-analyzer".to_string()),
+        let Some((path, from, part, at)) = found else {
+            continue;
+        };
+
+        mentions.push(Mention {
+            from: locator(from),
+            to: Target::Known(locator(to)),
+            site: Site {
+                part,
+                span: Span {
+                    start: at as u32,
+                    end: (at + to.name.len()) as u32,
                 },
-            })
-        })
-        .collect()
+                found_by: BinderId("rust-analyzer".to_string()),
+            },
+        });
+
+        // Callers of this one can be broken by what broke it, so the trail carries on
+        // through this definition, and not through everything else sharing its file. A
+        // mention inside a body stops here: nobody outside can tell it changed.
+        if part == Part::Type {
+            onward.push((path, locator(from)));
+        }
+    }
+
+    (mentions, onward)
 }
 
 fn relative(uri: &str, root: &Path) -> Option<String> {

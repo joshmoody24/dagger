@@ -3,6 +3,8 @@
 //! Hand-rolled rather than pulled in, because only a handful of messages are needed and
 //! the shapes are stable. Framing is a Content-Length header, then a JSON body.
 
+pub mod frontier;
+
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};

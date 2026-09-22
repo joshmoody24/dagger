@@ -1,7 +1,7 @@
 use crate::config::{Adapter, Extractor};
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_protocol::{Note, Request, Response, Revisions};
+use dagger_protocol::{Changed, Note, Request, Response, Revisions};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -188,7 +188,7 @@ pub fn extract(
     extractor: &Extractor,
     dir: &Path,
     files: &[String],
-    changed: &[String],
+    changed: &[Changed],
     ripples: u32,
     saying: &str,
 ) -> Result<(Extraction, Vec<Note>)> {
