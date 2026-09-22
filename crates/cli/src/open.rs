@@ -13,7 +13,8 @@ static PAGE: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../ui/dist");
 
 /// Always the same port when it's free, so the address can be bookmarked and browser
 /// extensions can be told about it. Only when it's taken does any free port do.
-const PORT: u16 = 4207;
+/// DAGR on a phone keypad.
+const PORT: u16 = 3247;
 
 pub fn serve(repo: &Path, asked: Vec<String>) -> Result<()> {
     let server = Server::http(("127.0.0.1", PORT))
