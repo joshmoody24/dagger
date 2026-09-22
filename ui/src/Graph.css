@@ -64,7 +64,7 @@
 .edge.dim {
   opacity: 0.3;
 }
-.edge.lean {
+.edge.lit {
   stroke: var(--lean);
   stroke-width: 1.5;
   opacity: 1;

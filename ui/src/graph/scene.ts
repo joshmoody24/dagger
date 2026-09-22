@@ -48,8 +48,8 @@ export interface SceneBox {
   lit: boolean;
 }
 
-/** `lean` touches the current definition; `dim` is any other while one is current. */
-export type EdgeKind = "lean" | "dim" | "plain";
+/** `lit` touches the current definition; `dim` is any other while one is current. */
+export type EdgeKind = "lit" | "dim" | "plain";
 
 export interface SceneEdge {
   key: string;
@@ -190,7 +190,7 @@ function leans(
       path: upwards ? bend(to, from) : aside(from, to),
       from: edge.from,
       to: edge.to,
-      kind: touching ? "lean" : near.size ? "dim" : "plain",
+      kind: touching ? "lit" : near.size ? "dim" : "plain",
       faith: !upwards,
     },
   ];

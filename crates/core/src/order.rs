@@ -90,11 +90,11 @@ pub fn order(
             .collect()
     };
 
-    let (leans_on, holds_up) = relations(edges, &places, members.len(), &enclosing);
+    let (depends_on, dependents) = relations(edges, &places, members.len(), &enclosing);
 
     let mut read = vec![false; members.len()];
-    let mut unread_leans: Vec<usize> = leans_on.iter().map(BTreeSet::len).collect();
-    let mut unread_holds: Vec<usize> = holds_up.iter().map(BTreeSet::len).collect();
+    let mut unread_depends_on: Vec<usize> = depends_on.iter().map(BTreeSet::len).collect();
+    let mut unread_dependents: Vec<usize> = dependents.iter().map(BTreeSet::len).collect();
 
     let mut steps = Vec::with_capacity(members.len());
     let mut cost = Cost::default();
@@ -105,9 +105,9 @@ pub fn order(
     for _ in 0..members.len() {
         let Some(next) = pick(
             &read,
-            &unread_leans,
-            &unread_holds,
-            &leans_on,
+            &unread_depends_on,
+            &unread_dependents,
+            &depends_on,
             &headers,
             Where {
                 groups: &wheres,
@@ -119,24 +119,24 @@ pub fn order(
             break;
         };
 
-        let on_faith: Vec<Identity> = leans_on[next]
+        let on_faith: Vec<Identity> = depends_on[next]
             .iter()
-            .filter(|&&leaned| !read[leaned])
-            .map(|&leaned| members[leaned])
+            .filter(|&&dependency| !read[dependency])
+            .map(|&dependency| members[dependency])
             .collect();
 
         read[next] = true;
-        if unread_holds[next] > 0 {
+        if unread_dependents[next] > 0 {
             open += 1;
         }
-        for &leaned in &leans_on[next] {
-            unread_holds[leaned] -= 1;
-            if read[leaned] && unread_holds[leaned] == 0 {
+        for &dependency in &depends_on[next] {
+            unread_dependents[dependency] -= 1;
+            if read[dependency] && unread_dependents[dependency] == 0 {
                 open -= 1;
             }
         }
-        for &holder in &holds_up[next] {
-            unread_leans[holder] -= 1;
+        for &dependent in &dependents[next] {
+            unread_depends_on[dependent] -= 1;
         }
 
         if last_where.is_some_and(|was| was != wheres[next]) {
@@ -167,12 +167,12 @@ fn relations(
     count: usize,
     enclosing: &BTreeMap<Identity, Vec<Identity>>,
 ) -> (Vec<BTreeSet<usize>>, Vec<BTreeSet<usize>>) {
-    let mut leans_on = vec![BTreeSet::new(); count];
-    let mut holds_up = vec![BTreeSet::new(); count];
-    let mut lean = |from: Identity, to: Identity| {
+    let mut depends_on = vec![BTreeSet::new(); count];
+    let mut dependents = vec![BTreeSet::new(); count];
+    let mut depend = |from: Identity, to: Identity| {
         if let Some((from, to)) = placed(places, from, to) {
-            leans_on[from].insert(to);
-            holds_up[to].insert(from);
+            depends_on[from].insert(to);
+            dependents[to].insert(from);
         }
     };
     let around = |identity: &Identity| {
@@ -183,18 +183,18 @@ fn relations(
     };
 
     for edge in edges {
-        lean(edge.from, edge.to);
+        depend(edge.from, edge.to);
         // Stop at the first container that also holds the target: nothing depends on
         // what's inside it.
         for &container in around(&edge.from) {
             if container == edge.to || around(&edge.to).contains(&container) {
                 break;
             }
-            lean(container, edge.to);
+            depend(container, edge.to);
         }
     }
 
-    (leans_on, holds_up)
+    (depends_on, dependents)
 }
 
 /// What each definition is written inside, nearest first, within the same file. Parents
@@ -269,22 +269,22 @@ impl Where<'_> {
 /// The next one to read, judged on each count in turn.
 fn pick(
     read: &[bool],
-    unread_leans: &[usize],
-    unread_holds: &[usize],
-    leans_on: &[BTreeSet<usize>],
+    unread_depends_on: &[usize],
+    unread_dependents: &[usize],
+    depends_on: &[BTreeSet<usize>],
     headers: &[bool],
     at: Where,
 ) -> Option<usize> {
     (0..read.len())
         .filter(|&candidate| !read[candidate])
         .min_by_key(|&candidate| {
-            let closes = leans_on[candidate]
+            let closes = depends_on[candidate]
                 .iter()
-                .filter(|&&leaned| read[leaned] && unread_holds[leaned] == 1)
+                .filter(|&&dependency| read[dependency] && unread_dependents[dependency] == 1)
                 .count();
             (
                 // Never before what it depends on.
-                unread_leans[candidate],
+                unread_depends_on[candidate],
                 // Stay in the current module; leaving means coming back to find the thread.
                 at.away(candidate),
                 // On arriving somewhere, read the container's header before its contents.
@@ -292,7 +292,7 @@ fn pick(
                 // Then finish a branch, when one can be finished.
                 -(closes as isize),
                 // Then whatever the most things are waiting on.
-                -(unread_holds[candidate] as isize),
+                -(unread_dependents[candidate] as isize),
                 // Position settles the rest, so the same change always reads the same.
                 candidate as isize,
             )
@@ -309,7 +309,7 @@ mod tests {
     /// `count` edited definitions, wired up by pairs of "the first depends on the second".
     fn built(
         count: u32,
-        leans: &[(u32, u32)],
+        edges: &[(u32, u32)],
         files: &[&str],
     ) -> (BTreeSet<Identity>, Vec<Edge>, Vec<model::Definition>) {
         let definitions: Vec<model::Definition> = (0..count)
@@ -326,7 +326,7 @@ mod tests {
             })
             .collect();
 
-        let edges = leans
+        let edges = edges
             .iter()
             .map(|(from, to)| Edge {
                 from: Identity(*from),
@@ -337,8 +337,8 @@ mod tests {
         ((0..count).map(Identity).collect(), edges, definitions)
     }
 
-    fn reading(count: u32, leans: &[(u32, u32)]) -> Vec<u32> {
-        let (read, edges, definitions) = built(count, leans, &[]);
+    fn reading(count: u32, edges: &[(u32, u32)]) -> Vec<u32> {
+        let (read, edges, definitions) = built(count, edges, &[]);
         order(&read, &edges, &definitions, &Grouping::default())
             .steps
             .iter()
@@ -347,8 +347,8 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_read_before_what_it_leans_on() {
-        // 0 leans on 1 leans on 2.
+    fn nothing_is_read_before_what_it_depends_on() {
+        // 0 depends on 1, which depends on 2.
         assert_eq!(reading(3, &[(0, 1), (1, 2)]), vec![2, 1, 0]);
     }
 
@@ -384,7 +384,7 @@ mod tests {
     /// it shouldn't interrupt a branch.
     #[test]
     fn a_foundation_is_read_first_and_what_stands_alone_last() {
-        // 0 leans on 2, and 1 stands alone.
+        // 0 depends on 2, and 1 stands alone.
         assert_eq!(reading(3, &[(0, 2)]), vec![2, 0, 1]);
     }
 

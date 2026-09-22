@@ -105,7 +105,7 @@ export function Graph(props: GraphProps) {
       <svg
         ref={paper}
         role="img"
-        aria-label="The definitions this change touches, and what holds up what"
+        aria-label="The definitions this change touches, and what depends on what"
       >
         <g transform={`translate(${seen().x} ${seen().y}) scale(${seen().k})`}>
           <For each={shown().boxes}>

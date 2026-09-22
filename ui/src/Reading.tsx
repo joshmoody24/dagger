@@ -35,20 +35,21 @@ interface ReadingProps {
 export function Reading(props: ReadingProps) {
   const definition = () =>
     props.here === null ? undefined : props.review.definitions.get(props.here);
-  const leans = () =>
+  const dependencies = () =>
     props.review.edges
       .filter((edge) => edge.from === definition()?.id)
       .map((edge) => edge.to);
 
-  const because = () => leans().filter((id) => broke(props.review, id));
-  const uses = () => leans().filter((id) => !broke(props.review, id));
+  const brokenBy = () => dependencies().filter((id) => broke(props.review, id));
+  const dependsOn = () =>
+    dependencies().filter((id) => !broke(props.review, id));
 
   /* Dragged width of the column; 0 leaves the stylesheet's default. */
   const [width, setWidth] = createSignal(0);
 
   let body: HTMLDivElement | undefined;
 
-  /* j/k scroll via rAF between keydown and keyup rather than per key repeat, because
+  /* j/k scroll via rAF between keydown and keyup rather than per key repeat, brokenBy
    * repeat timing (delay, then bursts) makes the scroll stutter. */
   let going = 0;
   let rolling = 0;
@@ -115,8 +116,8 @@ export function Reading(props: ReadingProps) {
           <div class="sheet-meta">
             <About
               definition={one()}
-              because={because()}
-              uses={uses()}
+              brokenBy={brokenBy()}
+              dependsOn={dependsOn()}
               step={props.step}
               review={props.review}
               onOpen={props.onOpen}
@@ -152,8 +153,8 @@ export function Reading(props: ReadingProps) {
 
 function About(props: {
   definition: Def;
-  because: Identity[];
-  uses: Identity[];
+  brokenBy: Identity[];
+  dependsOn: Identity[];
   review: Review;
   onOpen: (id: Identity) => void;
   step: Step | undefined;
@@ -165,22 +166,22 @@ function About(props: {
         <span class="kind">{props.definition.kind}</span>
       </p>
 
-      <Show when={props.because.length}>
+      <Show when={props.brokenBy.length}>
         <p class="why">
-          because:{" "}
+          broken by:{" "}
           <Names
-            ids={props.because}
+            ids={props.brokenBy}
             step={props.step}
             review={props.review}
             onOpen={props.onOpen}
           />
         </p>
       </Show>
-      <Show when={props.uses.length}>
+      <Show when={props.dependsOn.length}>
         <p class="why">
-          uses:{" "}
+          depends on:{" "}
           <Names
-            ids={props.uses}
+            ids={props.dependsOn}
             step={props.step}
             review={props.review}
             onOpen={props.onOpen}

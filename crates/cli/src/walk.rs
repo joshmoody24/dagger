@@ -74,28 +74,32 @@ fn show(
         paint.wrap(DIM, &definition.sides.latest().file),
     );
 
-    let unseen = |leaned: &Identity| step.on_faith.contains(leaned);
-    let named = |leaned: &Identity| names.get(leaned).map(|name| (short(name), unseen(leaned)));
+    let unseen = |dependency: &Identity| step.on_faith.contains(dependency);
+    let named = |dependency: &Identity| {
+        names
+            .get(dependency)
+            .map(|name| (short(name), unseen(dependency)))
+    };
 
-    let blamed = culprits(review, identity);
-    let because: Vec<(String, bool)> = blamed.iter().filter_map(named).collect();
-    if !because.is_empty() {
+    let blamed = broken_by(review, identity);
+    let broken_by: Vec<(String, bool)> = blamed.iter().filter_map(named).collect();
+    if !broken_by.is_empty() {
         println!(
             "  {} {}",
-            paint.wrap(DIM, "because:"),
-            paint.wrap(BOLD, &listed(&because))
+            paint.wrap(DIM, "broken by:"),
+            paint.wrap(BOLD, &listed(&broken_by))
         );
     }
 
-    let rest: Vec<(String, bool)> = leaned_on(review, identity)
+    let rest: Vec<(String, bool)> = depends_on(review, identity)
         .iter()
-        .filter(|leaned| !blamed.contains(leaned))
+        .filter(|dependency| !blamed.contains(dependency))
         .filter_map(named)
         .collect();
     if !rest.is_empty() {
         println!(
             "  {} {}",
-            paint.wrap(DIM, "uses:"),
+            paint.wrap(DIM, "depends on:"),
             paint.wrap(BOLD, &listed(&rest))
         );
     }
@@ -132,20 +136,20 @@ fn listed(names: &[(String, bool)]) -> String {
 
 /// Dependencies that changed shape underneath this one, which is the reason an unchanged
 /// definition is worth reading at all.
-pub fn culprits(review: &Review, identity: Identity) -> Vec<Identity> {
-    leaned_on(review, identity)
+pub fn broken_by(review: &Review, identity: Identity) -> Vec<Identity> {
+    depends_on(review, identity)
         .into_iter()
-        .filter(|leaned| {
+        .filter(|dependency| {
             review
                 .definitions
-                .get(leaned)
+                .get(dependency)
                 .is_some_and(|one| one.change.breaks_callers())
         })
         .collect()
 }
 
 /// Uses the review's edges so a chain through something the reader never sees still counts.
-pub fn leaned_on(review: &Review, identity: Identity) -> Vec<Identity> {
+pub fn depends_on(review: &Review, identity: Identity) -> Vec<Identity> {
     review
         .edges
         .iter()

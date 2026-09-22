@@ -274,7 +274,7 @@ mod tests {
 
     /// A box of tests counts as one thing that depends on whatever its contents do.
     #[test]
-    fn what_leans_on_the_code_around_it_sits_below_it_box_or_not() {
+    fn what_depends_on_the_code_around_it_sits_below_it_box_or_not() {
         let groups = shaped(
             &[
                 one(1, "lib", None),
@@ -306,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn a_box_that_something_leans_on_is_a_dependency_like_any_other() {
+    fn a_box_that_something_depends_on_is_a_dependency_like_any_other() {
         let groups = shaped(
             &[
                 one(1, "field", None),
@@ -339,7 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn a_group_sits_below_what_it_leans_on_and_the_ungrouped_beside_them() {
+    fn a_group_sits_below_what_it_depends_on_and_the_ungrouped_beside_them() {
         let definitions: BTreeMap<Identity, Definition> = [
             one(1, "main", None),
             one(2, "util", None),

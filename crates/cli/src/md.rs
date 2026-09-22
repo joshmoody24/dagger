@@ -48,24 +48,24 @@ pub fn render(review: &Review) -> String {
             latest.file
         );
 
-        let because: Vec<String> = walk::culprits(review, step.definition)
+        let broken_by: Vec<String> = walk::broken_by(review, step.definition)
             .iter()
             .map(named)
             .collect();
-        let uses: Vec<String> = walk::leaned_on(review, step.definition)
+        let depends_on: Vec<String> = walk::depends_on(review, step.definition)
             .iter()
-            .filter(|leaned| !walk::culprits(review, step.definition).contains(leaned))
+            .filter(|dependency| !walk::broken_by(review, step.definition).contains(dependency))
             .map(named)
             .collect();
-        if !because.is_empty() {
+        if !broken_by.is_empty() {
             let _ = writeln!(
                 out,
                 "Depends on types that changed: {}.\n",
-                because.join(", ")
+                broken_by.join(", ")
             );
         }
-        if !uses.is_empty() {
-            let _ = writeln!(out, "Uses: {}.\n", uses.join(", "));
+        if !depends_on.is_empty() {
+            let _ = writeln!(out, "Depends on: {}.\n", depends_on.join(", "));
         }
         if !step.on_faith.is_empty() {
             let on_faith: Vec<String> = step.on_faith.iter().map(named).collect();
