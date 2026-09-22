@@ -153,7 +153,7 @@ groups: Array<Group>,
  */
 grouping: string | null, 
 /**
- * How far this reading was told to follow a change outward.
+ * How far this review was told to follow a change outward.
  */
 ripples: number, cost: Cost, warnings: Array<Warning>, };
 

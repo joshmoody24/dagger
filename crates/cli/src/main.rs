@@ -465,7 +465,7 @@ fn ranges(before: &str, after: &str) -> (Vec<Span>, Vec<Span>) {
     };
     // A zero-width span on the side that has no lines for an insertion or deletion. The
     // enclosing definition still has to count as changed on both sides, or the two
-    // readings disagree.
+    // snapshots disagree.
     let seam = |starts: &[usize], text: &str, at: usize| -> Span {
         let point = starts.get(at).copied().unwrap_or(text.len()) as u32;
         Span {
@@ -517,7 +517,7 @@ fn read(
     (named, laid): (&str, &adapter::Snapshot),
     changed: &[Changed],
     ripples: u32,
-    // Labels progress output so the two readings can be told apart.
+    // Labels progress output so the two snapshots can be told apart.
     snapshot: &str,
 ) -> Result<(Extraction, Vec<Note>)> {
     let dir = &laid.dir;

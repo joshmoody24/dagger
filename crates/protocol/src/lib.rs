@@ -71,7 +71,7 @@ pub enum Request {
         #[serde(default)]
         changed: Vec<Changed>,
         /// How far past a changed file to follow what uses it; zero means not at all. A
-        /// hint like `changed`, and the one that decides what a reading costs.
+        /// hint like `changed`, and the one that decides what a review costs.
         #[serde(default)]
         ripples: u32,
         #[serde(default)]
@@ -100,7 +100,7 @@ pub struct Changed {
     pub at: Vec<Span>,
 }
 
-/// What an adapter says on stderr while a reading is under way. A fixed vocabulary keeps
+/// What an adapter says on stderr while a review is under way. A fixed vocabulary keeps
 /// the wording the same across adapters.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Progress {
@@ -114,7 +114,7 @@ pub enum Progress {
         known: usize,
         opened: usize,
     },
-    /// What a reading found, with nothing left to ask.
+    /// What an extraction found, with nothing left to ask.
     Finished { files: usize, definitions: usize },
 }
 

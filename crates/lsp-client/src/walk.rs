@@ -58,7 +58,7 @@ pub struct Reach {
     /// How far past a changed file to carry on. Walking a file at one remove is what turns
     /// up what sits at two, so the walk stops one short of what's asked for.
     pub ripples: u32,
-    /// Backstops on files whose users are chased and files opened at all; how far a reading
+    /// Backstops on files whose users are chased and files opened at all; how far a review
     /// goes is `ripples`. Two because opening a file is far cheaper than chasing its users.
     pub walk_limit: usize,
     pub open_limit: usize,

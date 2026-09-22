@@ -37,7 +37,7 @@ struct Settings {
     /// Files this adapter speaks for, when the repo hasn't said.
     #[serde(default)]
     include: Vec<String>,
-    /// Backstop on how many files to chase users of. How far a reading goes is
+    /// Backstop on how many files to chase users of. How far a review goes is
     /// `--ripples`; this only catches a runaway.
     #[serde(default = "files_to_walk")]
     max_walk: usize,

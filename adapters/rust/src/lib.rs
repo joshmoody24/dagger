@@ -54,7 +54,7 @@ struct Settings {
     #[serde(default)]
     linked: Vec<String>,
     /// How many files to chase users of before giving up. A backstop for runaways, not a
-    /// setting to reach for: `--ripples` is how far a reading goes.
+    /// setting to reach for: `--ripples` is how far a review goes.
     #[serde(default = "files_to_walk")]
     max_walk: usize,
 }

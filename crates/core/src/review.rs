@@ -1,4 +1,4 @@
-//! Everything one reading of a repository comes to.
+//! Everything one review of a repository comes to.
 //!
 //! One object, built in one place at the end, with everything about a definition on that
 //! definition, so nothing can name a definition that wasn't handed over.
@@ -81,7 +81,7 @@ pub struct Definition {
     pub parent: Option<Identity>,
 }
 
-/// Everything one reading of a repository comes to.
+/// Everything one review of a repository comes to.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Review {
@@ -96,7 +96,7 @@ pub struct Review {
     pub groups: Vec<Group>,
     /// What a reader calls the grouping: "package", "crate".
     pub grouping: Option<String>,
-    /// How far this reading was told to follow a change outward.
+    /// How far this review was told to follow a change outward.
     pub ripples: u32,
     pub cost: Cost,
     pub warnings: Vec<Warning>,
