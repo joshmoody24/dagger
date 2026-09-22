@@ -246,6 +246,14 @@ fn borrowed(
     file: &Opened,
     symbol: &symbols::Symbol,
 ) -> Option<bool> {
+    /* An import binding is reported as a symbol that is nothing but its name, where a
+     * definition has something after its name. Asked where an import of something never
+     * built is defined, the server points at the import itself — so this has to be settled
+     * before asking. */
+    if symbol.whole == symbol.name_at {
+        return Some(true);
+    }
+
     let defined = server.request("textDocument/definition", at.clone()).ok()?;
 
     let places = match &defined {
