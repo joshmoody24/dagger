@@ -8,6 +8,7 @@ mod config;
 mod diff;
 mod fallback;
 mod grouping;
+mod md;
 mod open;
 mod report;
 mod walk;
@@ -28,7 +29,7 @@ struct Args {
     /// Positional arguments, passed to the snapshot adapter untouched since only it knows
     /// what they mean. Empty means the adapter chooses.
     asked: Vec<String>,
-    json: bool,
+    output: Output,
     explain: bool,
     list: bool,
     help: bool,
@@ -37,16 +38,37 @@ struct Args {
     ripples: Option<u32>,
 }
 
-fn parse_args() -> Result<Args> {
+impl Args {
+    /// Nothing but the mode word, or no mode at all: say how it's used.
+    fn help() -> Self {
+        Args {
+            asked: Vec::new(),
+            output: Output::Terminal,
+            explain: false,
+            list: false,
+            help: true,
+            ripples: None,
+        }
+    }
+}
+
+/// Where the review goes: the mode word on the command line.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Output {
+    Terminal,
+    Json,
+    Markdown,
+}
+
+fn parse_args(given: impl Iterator<Item = String>, output: Output) -> Result<Args> {
     let mut positional = Vec::new();
-    let mut json = false;
     let mut explain = false;
     let mut list = false;
     let mut help = false;
     let mut ripples = None;
     let mut awaiting = false;
 
-    for arg in std::env::args().skip(1) {
+    for arg in given {
         if awaiting {
             ripples = Some(
                 arg.parse()
@@ -57,7 +79,6 @@ fn parse_args() -> Result<Args> {
         }
         match arg.as_str() {
             "--ripples" => awaiting = true,
-            "--json" => json = true,
             "--explain" => explain = true,
             "--list" => list = true,
             // Answered after reading the config, since the snapshot adapter supplies half the text.
@@ -75,7 +96,7 @@ fn parse_args() -> Result<Args> {
         asked: positional,
         help,
         ripples,
-        json,
+        output,
         explain,
         list,
     })
@@ -84,11 +105,13 @@ fn parse_args() -> Result<Args> {
 /// Prints usage. The snapshot adapter is asked for its own part so the list of ways to
 /// name a change isn't kept in two places.
 fn help(repo: &Path, config: &Config) {
-    println!("dagger [--json] [--explain] [--list] [--ripples <n>] [what to read]");
-    println!("dagger open [what to read]");
+    println!("dagger cli  [--explain] [--list] [--ripples <n>] [what to read]");
+    println!("dagger gui  [--ripples <n>] [what to read]");
+    println!("dagger json [--ripples <n>] [what to read]");
+    println!("dagger md   [--ripples <n>] [what to read]");
     println!();
-    println!("Named nothing, dagger reads whatever you're working on. `open` shows the");
-    println!("review in a browser instead of the terminal.");
+    println!("The first word says where the review goes: the terminal, a browser, one line");
+    println!("of JSON, or markdown for an agent. Named nothing, all read what you're working on.");
     println!();
     println!("The built-in adapters run as subcommands: dagger git, dagger lsp, dagger rust.");
     println!("Name one as `adapter = \"git\"` in dagger.toml, or leave the file out and dagger");
@@ -133,16 +156,28 @@ fn status(saying: &str) {
 
 fn main() -> Result<()> {
     let mut given = std::env::args().skip(1);
-    match given.next().as_deref() {
+    let repo = std::env::current_dir()?;
+    // The same words follow every mode; only where the review goes differs.
+    let args = match given.next().as_deref() {
         Some("git") => return dagger_protocol::serve(dagger_git_adapter::answer),
         Some("lsp") => return dagger_protocol::serve(dagger_lsp_adapter::answer),
         Some("rust") => return dagger_protocol::serve(dagger_rust_adapter::answer),
-        Some("open") => return open::serve(&std::env::current_dir()?, given.collect()),
-        _ => {}
-    }
-
-    let args = parse_args()?;
-    let repo = std::env::current_dir()?;
+        Some("cli") => parse_args(given, Output::Terminal)?,
+        Some("json") => parse_args(given, Output::Json)?,
+        Some("md") => parse_args(given, Output::Markdown)?,
+        Some("gui") => {
+            let words: Vec<String> = given.collect();
+            let args = parse_args(words.iter().cloned(), Output::Terminal)?;
+            if args.list || args.explain {
+                bail!("--list and --explain are terminal output; use dagger cli");
+            }
+            if !args.help {
+                return open::serve(&repo, words);
+            }
+            args
+        }
+        _ => Args::help(),
+    };
     let config = Config::read(&repo)?;
 
     if args.help {
@@ -352,18 +387,22 @@ fn compare(
         title,
     );
 
-    if args.json {
+    match args.output {
         // One line, so whoever is reading can take it the moment it ends rather than
         // waiting for this process to finish removing its snapshots.
-        let _ = writeln!(
-            std::io::stdout().lock(),
-            "{}",
-            serde_json::to_string(&review)?
-        );
-    } else {
-        report::print(&review);
-        if !args.list && std::io::stdout().is_terminal() {
-            walk::walk(&review)?;
+        Output::Json => {
+            let _ = writeln!(
+                std::io::stdout().lock(),
+                "{}",
+                serde_json::to_string(&review)?
+            );
+        }
+        Output::Markdown => print!("{}", md::render(&review)),
+        Output::Terminal => {
+            report::print(&review);
+            if !args.list && std::io::stdout().is_terminal() {
+                walk::walk(&review)?;
+            }
         }
     }
     Ok(())

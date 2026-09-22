@@ -5,7 +5,7 @@ import solid from "vite-plugin-solid";
 /* Where the page gets a review while it's being developed here rather than served by
  * `dagger open`.
  *
- * A browser has no way to run anything, so it asks here and this runs `dagger --json`,
+ * A browser has no way to run anything, so it asks here and this runs `dagger json`,
  * the same way `dagger open` answers /review, line for line, so the page can't tell them
  * apart. Reading a file instead is what made the page quietly show yesterday's answer.
  *
@@ -27,7 +27,7 @@ function live() {
           ? asked.getAll("read")
           : (process.env.DAGGER_READ || "").split("\n").filter(Boolean);
 
-        const dagger = spawn("target/debug/dagger", ["--json", ...reading], {
+        const dagger = spawn("target/debug/dagger", ["json", ...reading], {
           cwd: "..",
         });
 

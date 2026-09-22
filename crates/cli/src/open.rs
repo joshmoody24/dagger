@@ -114,7 +114,7 @@ fn content_type(name: &str) -> &'static str {
 /// to remove afterwards. Nothing on stdout by the time it exits means it went wrong.
 fn review(repo: &Path, reading: &[String]) -> Result<Response<Lines>> {
     let mut child = Command::new(std::env::current_exe()?)
-        .arg("--json")
+        .arg("json")
         .args(reading)
         .current_dir(repo)
         .stdin(Stdio::null())

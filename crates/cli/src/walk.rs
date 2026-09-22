@@ -104,7 +104,7 @@ fn show(
 }
 
 /// Just the name, since the module path is already on the line above.
-fn short(name: &str) -> String {
+pub fn short(name: &str) -> String {
     name.rsplit("::").next().unwrap_or(name).to_string()
 }
 
@@ -132,7 +132,7 @@ fn listed(names: &[(String, bool)]) -> String {
 
 /// Dependencies that changed shape underneath this one, which is the reason an unchanged
 /// definition is worth reading at all.
-fn culprits(review: &Review, identity: Identity) -> Vec<Identity> {
+pub fn culprits(review: &Review, identity: Identity) -> Vec<Identity> {
     leaned_on(review, identity)
         .into_iter()
         .filter(|leaned| {
@@ -145,7 +145,7 @@ fn culprits(review: &Review, identity: Identity) -> Vec<Identity> {
 }
 
 /// Uses the review's edges so a chain through something the reader never sees still counts.
-fn leaned_on(review: &Review, identity: Identity) -> Vec<Identity> {
+pub fn leaned_on(review: &Review, identity: Identity) -> Vec<Identity> {
     review
         .edges
         .iter()
@@ -177,7 +177,7 @@ fn print_parts(sides: &Sides, paint: &Paint) {
 
 /// Pieces in file order. The split into parts is for deciding what breaks callers, not
 /// for showing people.
-fn stitched(occurrence: Option<&Occurrence>) -> Option<String> {
+pub fn stitched(occurrence: Option<&Occurrence>) -> Option<String> {
     let occurrence = occurrence?;
 
     Some(

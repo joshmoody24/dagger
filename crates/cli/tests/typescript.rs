@@ -22,7 +22,7 @@ fn the_typescript_fixture_reads_as_expected() {
     }
 
     let run = Command::new(env!("CARGO_BIN_EXE_dagger"))
-        .args(["--list", "before", "after"])
+        .args(["cli", "--list", "before", "after"])
         .current_dir(&fixture)
         .output()
         .expect("dagger should run");
