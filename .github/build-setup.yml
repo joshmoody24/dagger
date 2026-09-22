@@ -1,7 +1,7 @@
 # Steps dist runs before `cargo build` on every release runner: the page has to be built
 # so the binary can embed it.
 - name: Install node
-  uses: actions/setup-node@v4
+  uses: actions/setup-node@v5
   with:
     node-version: 22
 # The directory is in the command: dist keeps only a step's name and command.
