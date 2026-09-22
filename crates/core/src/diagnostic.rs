@@ -10,7 +10,7 @@ pub enum Diagnostic {
     /// One snapshot had a compiler's view of this definition and the other didn't, so we
     /// fell back to comparing the signature as written.
     LopsidedType { definition: Identity },
-    /// A name in this definition's type part that no binder could place. If it turns
+    /// A name in this definition's type part that no extractor could place. If it turns
     /// out to be something that changed, we missed telling the reader about it.
     UnboundInType {
         definition: Identity,

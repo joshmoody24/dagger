@@ -1,5 +1,5 @@
 use crate::model::{Identity, Locator, Occurrence, Part, Piece, Role, Span};
-use crate::reference::{BinderId, Reference, Site, Target};
+use crate::reference::{ExtractorId, Reference, Site, Target};
 
 pub fn occurrence(name: &str, parts: &[(Part, &str)]) -> Occurrence {
     Occurrence {
@@ -32,7 +32,7 @@ fn site(part: Part) -> Site {
     Site {
         part,
         span: Span { start: 0, end: 0 },
-        found_by: BinderId("tsc".to_string()),
+        extractor: ExtractorId("tsc".to_string()),
     }
 }
 

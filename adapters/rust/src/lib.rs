@@ -10,7 +10,7 @@ use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Role};
 use dagger_core::prose::preamble;
-use dagger_core::reference::BinderId;
+use dagger_core::reference::ExtractorId;
 use dagger_lsp_client::walk::{Opened, Reach, Source, Walk, Walked};
 use dagger_lsp_client::{Lines, Server, fenced};
 use dagger_protocol::{Changed, Described, Note, Progress, Request, Response};
@@ -119,7 +119,7 @@ fn extract(
         root,
         RustSource::default(),
         Reach {
-            binder: BinderId("rust-analyzer".to_string()),
+            extractor: ExtractorId("rust-analyzer".to_string()),
             ours: ours.clone(),
             ripples,
             walk_limit: settings.max_walk,

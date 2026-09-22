@@ -8,7 +8,7 @@ use crate::frontier::{Frontier, Wanted};
 use crate::{Lines, Server};
 use anyhow::Result;
 use dagger_core::model::{Locator, Part, Span};
-use dagger_core::reference::{BinderId, Mention, Site, Target};
+use dagger_core::reference::{ExtractorId, Mention, Site, Target};
 use dagger_protocol::{Changed, Note, Progress};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -52,7 +52,7 @@ pub trait Source {
 /// How far a walk may go, and who it's walking for.
 pub struct Reach {
     /// Whose adapter this is, for the mentions it records.
-    pub binder: BinderId,
+    pub extractor: ExtractorId,
     /// The files this adapter speaks for. A mention anywhere else is dropped.
     pub ours: BTreeSet<String>,
     /// How far past a changed file to carry on. Walking a file at one remove is what turns
@@ -81,7 +81,7 @@ pub struct Opened<I> {
 pub struct Walk<S: Source> {
     server: Server,
     root: PathBuf,
-    binder: BinderId,
+    extractor: ExtractorId,
     ours: BTreeSet<String>,
     source: S,
     seen: BTreeMap<String, Opened<S::Item>>,
@@ -107,7 +107,7 @@ impl<S: Source> Walk<S> {
         Walk {
             server,
             root,
-            binder: reach.binder,
+            extractor: reach.extractor,
             ours: reach.ours,
             source,
             seen: BTreeMap::new(),
@@ -317,7 +317,7 @@ impl<S: Source> Walk<S> {
                         start: at as u32,
                         end: at as u32,
                     },
-                    found_by: self.binder.clone(),
+                    extractor: self.extractor.clone(),
                 },
             });
 

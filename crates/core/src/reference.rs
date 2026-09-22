@@ -1,10 +1,10 @@
 use crate::model::{Identity, Locator, Part, Span};
 use serde::{Deserialize, Serialize};
 
-/// Which binder claimed a reference, like "tsc" or "http-route". Kept around so the
+/// Which extractor claimed a reference, like "tsc" or "http-route". Kept around so the
 /// reader can tell a compiler's answer from a guess.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct BinderId(pub String);
+pub struct ExtractorId(pub String);
 
 /// What a mention points at. Some mentions never bind, like a dynamic call, and we
 /// keep those instead of dropping them so the reader knows we came up empty.
@@ -20,7 +20,7 @@ pub enum Target<T> {
 pub struct Site {
     pub part: Part,
     pub span: Span,
-    pub found_by: BinderId,
+    pub extractor: ExtractorId,
 }
 
 /// A mention found in a single snapshot. Binding a name to a declaration is a

@@ -16,7 +16,7 @@ use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, segments};
 use dagger_core::prose::{line_end, line_start, preamble};
-use dagger_core::reference::BinderId;
+use dagger_core::reference::ExtractorId;
 use dagger_lsp_client::walk::{Opened, Reach, Source, Walk, Walked};
 use dagger_lsp_client::{self as lsp, Lines, Server};
 use dagger_protocol::{Changed, Described, Note, Progress, Request, Response};
@@ -101,7 +101,7 @@ fn extract(
     ripples: u32,
     settings: Settings,
 ) -> Result<(Extraction, Vec<Note>)> {
-    let binder = BinderId(
+    let extractor = ExtractorId(
         settings
             .server
             .first()
@@ -114,7 +114,7 @@ fn extract(
     eprintln!(
         "{}",
         Progress::StartingServer {
-            name: binder.0.clone()
+            name: extractor.0.clone()
         }
     );
     let server = Server::start(&settings.server, dir, settings.options.clone())?;
@@ -124,7 +124,7 @@ fn extract(
         root,
         LspSource::default(),
         Reach {
-            binder,
+            extractor,
             ours,
             ripples,
             walk_limit: settings.max_walk,
