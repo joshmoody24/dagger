@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Cuts a release: bumps the version, commits, tags, and pushes. The tag starts the release
+# workflow on GitHub, which builds the binaries and publishes them.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "the working tree has uncommitted changes; commit or stash them first" >&2
+  exit 1
+fi
+if [ "$(git branch --show-current)" != "main" ]; then
+  echo "releases are cut from main" >&2
+  exit 1
+fi
+
+current=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+echo "current version: $current"
+printf 'new version: '
+read -r version
+case "$version" in
+  [0-9]*.[0-9]*.[0-9]*) ;;
+  *) echo "that isn't a version like 1.2.3" >&2; exit 1 ;;
+esac
+if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+  echo "v$version is already tagged" >&2
+  exit 1
+fi
+
+./check
+
+sed -i.bak "s/^version = \"$current\"$/version = \"$version\"/" Cargo.toml && rm Cargo.toml.bak
+cargo update --workspace --quiet
+git add Cargo.toml Cargo.lock
+git commit -q -m "$version"
+git tag "v$version"
+git push
+git push origin "v$version"
+echo "tagged v$version; the release workflow is building it: $(git remote get-url origin | sed 's/\.git$//; s#git@github.com:#https://github.com/#')/actions"

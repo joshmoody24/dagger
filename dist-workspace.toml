@@ -13,7 +13,7 @@ installers = ["shell"]
 # one binary runs on any distro. Windows is out: the git adapter carries files by symlink.
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-musl", "x86_64-apple-darwin", "x86_64-unknown-linux-musl"]
 # The page is built by node before cargo runs, so it can be embedded in the binary.
-github-build-setup = "build-setup.yml"
+github-build-setup = "../build-setup.yml"
 # Path that installers should place binaries in
 install-path = "~/.local/bin"
 # Where to host releases
