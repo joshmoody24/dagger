@@ -18,25 +18,10 @@
           overlays = [ (import rust-overlay) ];
         };
         rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-
-        # What the window around the page needs: a webview and the plumbing under it. Only
-        # the window needs these — the tool itself is Rust and nothing else.
-        window = with pkgs; [
-          webkitgtk_4_1
-          gtk3
-          libsoup_3
-          glib
-          cairo
-          pango
-          gdk-pixbuf
-          atk
-          librsvg
-          pkg-config
-        ];
       in
       {
         devShells.default = pkgs.mkShell {
-          packages = [ rust pkgs.cargo-insta pkgs.nodejs_22 ] ++ window;
+          packages = [ rust pkgs.nodejs_22 ];
         };
       });
 }

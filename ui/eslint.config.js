@@ -14,7 +14,7 @@ import ts from "typescript-eslint";
  * learn to ignore, and then it isn't there for the one that matters.
  */
 export default ts.config(
-  { ignores: ["dist", "src-tauri", "src/types.generated.ts", "*.config.js"] },
+  { ignores: ["dist", "src/types.generated.ts", "*.config.js"] },
   js.configs.recommended,
   ...ts.configs.recommendedTypeChecked,
   solid,

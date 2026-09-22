@@ -5,11 +5,9 @@ import solid from "vite-plugin-solid";
 /* Where the page gets a review while it's being developed here rather than served by
  * `dagger open`.
  *
- * The window asks dagger through Tauri, and `dagger open` runs dagger itself. A browser
- * has no way to run anything, so it asks here and this runs the same command — `dagger
- * --json`, no revisions, which is the working changes. Reading a file instead is what made
- * the page quietly show yesterday's answer every time anything changed. `dagger open`
- * answers /review the same way, line for line, so the page can't tell them apart.
+ * A browser has no way to run anything, so it asks here and this runs `dagger --json`,
+ * the same way `dagger open` answers /review, line for line, so the page can't tell them
+ * apart. Reading a file instead is what made the page quietly show yesterday's answer.
  *
  * The fixture the tests run against is a different thing and stays pinned: a test wants the
  * same input every time, and a page wants the current one.
@@ -85,7 +83,6 @@ function live() {
 
 export default defineConfig({
   plugins: [solid(), live()],
-  // Tauri looks for the page here while developing, and for the build in dist.
   server: { port: 1420, strictPort: true },
   build: { target: "esnext" },
 });

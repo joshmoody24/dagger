@@ -15,9 +15,7 @@ import { SpokenGraph } from "./SpokenGraph.tsx";
 import { wearing } from "./theme.ts";
 import "./Graph.css";
 
-/* Drawn on a canvas rather than DOM elements: hundreds of SVG nodes ran at ~10fps in the
- * Tauri webview versus 60fps here. SpokenGraph keeps it keyboard/screen-reader
- * accessible. */
+/* Drawn on a canvas. SpokenGraph keeps it keyboard/screen-reader accessible. */
 
 interface GraphProps {
   review: Review;

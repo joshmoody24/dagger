@@ -1,4 +1,3 @@
 /target
-ui/src-tauri/target
 ui/node_modules
 ui/dist
