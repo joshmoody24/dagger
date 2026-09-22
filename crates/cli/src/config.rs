@@ -50,7 +50,7 @@ pub struct Extractor {
     pub args: Vec<String>,
     #[serde(default = "nothing")]
     pub settings: toml::Value,
-    /// Globs this extractor claims. The last extractor listed wins a contested file, so a
+    /// Globs this extractor adapter claims. The last one listed wins a contested file, so a
     /// broad rule can be narrowed by a later one. Unclaimed files are read whole.
     #[serde(default)]
     pub include: Vec<String>,

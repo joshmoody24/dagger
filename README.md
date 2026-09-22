@@ -72,9 +72,9 @@ ripples = 1
   - `adapter`: `git` is built in
   - `settings.trunk`: what a branch is compared against. Defaults to the remote's default branch.
   - `settings.carry_ignored`: link ignored files (build output, installed packages) into each snapshot so language servers can resolve imports. Default true.
-- `[[extractors]]`: how code is read, one per language
+- `[[extractors]]`: the extractor adapters that read the code, one per language
   - `adapter`: `rust` and `lsp` are built in
-  - `include`: globs this extractor claims. A later extractor wins a contested file. Unclaimed files are compared whole.
+  - `include`: globs this extractor adapter claims. A later one wins a contested file. Unclaimed files are compared whole.
   - `settings.server` (`lsp`): the language server command
   - `settings.options` (`lsp`): passed to the server as its initialization options
   - `settings.linked` (`rust`): extra Cargo manifests outside the workspace
@@ -87,7 +87,7 @@ ripples = 1
 
 ## Supporting another language
 
-If the language has a language server, supporting it is one extractor entry:
+If the language has a language server, supporting it is one extractor adapter entry:
 
 ```toml
 [[extractors]]
@@ -96,7 +96,7 @@ include = ["**/*.py"]
 settings = { server = ["pyright-langserver", "--stdio"] }
 ```
 
-If the language does not have a language server, or the server's symbols aren't good enough, an extractor is any program that answers `dagger`'s JSON requests on stdin with responses on stdout: what's defined in a file, split into contract, body and docs, and what each definition mentions. The built-in `rust` adapter is one such program: a parser of its own for definitions, with rust-analyzer for references. The requests and responses are in `crates/protocol`, and the vocabulary is in [docs/model.md](docs/model.md).
+If the language does not have a language server, or the server's symbols aren't good enough, an extractor adapter is any program that answers `dagger`'s JSON requests on stdin with responses on stdout: what's defined in a file, split into contract, body and docs, and what each definition mentions. The built-in `rust` adapter is one such program: a parser of its own for definitions, with rust-analyzer for references. The requests and responses are in `crates/protocol`, and the vocabulary is in [docs/model.md](docs/model.md).
 
 ```toml
 [[extractors]]
