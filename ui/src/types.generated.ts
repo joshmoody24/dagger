@@ -99,23 +99,18 @@ reached: number | null,
 /**
  * What it's written inside. Always present in this review when it isn't `None`.
  */
-parent: Identity | null, 
-/**
- * The group its file belongs to, matching one of the paths in `groups`.
- */
-group: Array<string> | null, };
+parent: Identity | null, };
 
-export type Group = { 
+export type Group = { "type": "group", name: string, 
 /**
- * Outermost first. Written as it is rather than joined, so nothing has to agree on a
- * separator that a path component might contain.
+ * How far down its holder it sits: nought for whatever leans on nothing else
+ * there, one more than the furthest thing it leans on otherwise.
  */
-path: Array<string>, 
+tier: number, 
 /**
- * Nought for a group that leans on no other. The page draws its rows by this and the
- * reading order follows it, which is what keeps a reading running down the page.
+ * Tiers ascending, and along a tier in reading order.
  */
-band: number, };
+children: Array<Group>, } | { "type": "node", id: Identity, tier: number, };
 
 export type Impact = "incomplete" | "degraded";
 
@@ -170,7 +165,12 @@ title: string | null, definitions: { [key in Identity]: Definition },
  * What to read, in order. Whatever a step names is worth reading; everything else in
  * `definitions` is here to be drawn around it.
  */
-reading: Array<Step>, edges: Array<Edge>, groups: Array<Group>, 
+reading: Array<Step>, edges: Array<Edge>, 
+/**
+ * Everything drawn, as it nests and stacks: the page's whole arrangement short of
+ * pixels, so the reading and the page can't disagree about it.
+ */
+groups: Array<Group>, 
 /**
  * What a reader calls the grouping: "package", "crate".
  */

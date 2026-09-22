@@ -62,9 +62,7 @@ interface GraphProps {
   here: Identity | null;
   next: Identity | null;
   read: Set<Identity>;
-  box: string | null;
   onOpen: (id: Identity) => void;
-  onOpenBox: (key: string) => void;
 }
 
 export function Graph(props: GraphProps) {
@@ -170,23 +168,7 @@ export function Graph(props: GraphProps) {
   const spotOf = (id: Identity | null): Spot | null => {
     if (id === null) return null;
     const node = props.laid.at.get(id);
-    if (node) return { x: node.x, y: node.y, w: node.w, h: NODE_H };
-
-    const boxed = (box: Box): Spot | null => {
-      if (box.module && box.module.id === id) {
-        return { x: box.x ?? 0, y: box.y ?? 0, w: box.w, h: box.h };
-      }
-      for (const child of box.boxes) {
-        const found = boxed(child);
-        if (found) return found;
-      }
-      return null;
-    };
-    for (const box of props.laid.boxes) {
-      const found = boxed(box);
-      if (found) return found;
-    }
-    return null;
+    return node ? { x: node.x, y: node.y, w: node.w, h: NODE_H } : null;
   };
 
   const every = (boxes: Box[]): Box[] =>
@@ -208,8 +190,8 @@ export function Graph(props: GraphProps) {
 
     let innermost: Box | null = null;
     for (const box of every(props.laid.boxes)) {
-      const [bx, by] = [box.x ?? 0, box.y ?? 0];
-      if (x < bx || x > bx + box.w || y < by || y > by + box.h) continue;
+      if (x < box.x || x > box.x + box.w || y < box.y || y > box.y + box.h)
+        continue;
       if (!innermost || box.w * box.h < innermost.w * innermost.h)
         innermost = box;
     }
@@ -238,14 +220,7 @@ export function Graph(props: GraphProps) {
 
   const onClick = (event: MouseEvent) => {
     const what = at(pointing(event));
-    if (!what) return;
-    if (what.node !== undefined) return props.onOpen(what.node);
-
-    /* A box that answers to a module opens that module. One that's only a place — a folder
-     * holding definitions that belong to it no more than to each other — opens as itself,
-     * rather than reaching inside and picking one of its contents at random. */
-    const module = what.box!.module;
-    return module ? props.onOpen(module.id) : props.onOpenBox(what.box!.key);
+    if (what?.node !== undefined) props.onOpen(what.node);
   };
 
   /* ---------------- drawing ---------------- */
@@ -324,39 +299,21 @@ export function Graph(props: GraphProps) {
 
   function place(box: Box, deep: number) {
     const radius = Math.max(RADIUS.node, RADIUS.box - deep * RADIUS.step);
-    const module = box.module;
-    const [bx, by] = [box.x ?? 0, box.y ?? 0];
-
-    const here = (module && module.id === props.here) || box.key === props.box;
-    const soon = module && module.id === props.next;
     const under = lit(box);
 
     /* Nothing is filled, here or anywhere. A drawing whose only bright things are edges and
      * words stays legible however many boxes are stacked up, and leaves the page its own
      * colour rather than a pile of ever-paler grounds. */
-    ink.setLineDash(soon ? [5, 3] : deep && !here ? [3, 3] : []);
-    ink.lineWidth = here || soon ? 1.8 : under ? 1.4 : 1;
-    ink.strokeStyle = here
-      ? paint.lean
-      : soon
-        ? paint.path
-        : under
-          ? paint.muted
-          : paint.rule;
-    round(bx, by, box.w, box.h, radius);
+    ink.setLineDash(deep ? [3, 3] : []);
+    ink.lineWidth = under ? 1.4 : 1;
+    ink.strokeStyle = under ? paint.muted : paint.rule;
+    round(box.x, box.y, box.w, box.h, radius);
     ink.stroke();
     ink.setLineDash([]);
 
     ink.font = `${BOX_FONT}px ${MONO}`;
-    let x = bx + 10;
-    if (module) {
-      const mark = `${MARK[module.mark]} `;
-      ink.fillStyle = paint[TINT[module.mark]];
-      ink.fillText(mark, x, by + 16);
-      x += ink.measureText(mark).width;
-    }
     ink.fillStyle = paint.muted;
-    ink.fillText(box.label, x, by + 16);
+    ink.fillText(box.label, box.x + 10, box.y + 16);
 
     for (const child of box.boxes) place(child, deep + 1);
   }
@@ -567,7 +524,6 @@ export function Graph(props: GraphProps) {
       props.read,
       props.review,
       props.laid,
-      props.box,
       over(),
       touching(),
     ];

@@ -8,6 +8,7 @@ pub mod propagate;
 pub mod prose;
 pub mod reference;
 pub mod review;
+pub mod shape;
 
 #[cfg(test)]
 mod testing;

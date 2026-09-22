@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import type { Box, Edge, Identity, Line, Raw } from "../src/dagger.ts";
+import type { Box, Edge, Group, Identity, Line, Raw } from "../src/dagger.ts";
 import { digest } from "../src/digest.ts";
 import { compare, focused } from "../src/diff.ts";
 import { NODE_H, layout, shorten, widthOf } from "../src/layout.ts";
@@ -40,23 +40,14 @@ test("everything to read is on the page, and the rest is modules", () => {
   }
 });
 
-test("every definition but a module gets a place", () => {
-  assert.equal(laid.at.size, nodes.length);
+/* A module that's read is a node like any other, inside the box that carries its name;
+ * one that's only here to be drawn around the rest is its box and no more. */
+test("everything to read gets a place, and nothing else", () => {
+  assert.equal(laid.at.size, review.steps.length);
   for (const [, spot] of laid.at) {
     for (const measure of [spot.x, spot.y, spot.w])
       assert.ok(Number.isFinite(measure));
   }
-});
-
-/* A module is its file, so the file's box carries its name instead. */
-test("a module has no node of its own", () => {
-  for (const definition of review.definitions.values()) {
-    if (definition.kind === "module") assert.ok(!laid.at.has(definition.id));
-  }
-  assert.ok(
-    laid.modules.size > 0,
-    "the sample should have at least one module",
-  );
 });
 
 test("nothing is drawn on top of anything else", () => {
@@ -74,32 +65,26 @@ test("nothing is drawn on top of anything else", () => {
 /* Boxes nest to whatever depth the grouping has, so this checks the rule rather than two
  * named levels of it: nothing is ever drawn outside the box that holds it. */
 test("nothing escapes the box that holds it", () => {
-  type Rect = {
-    x?: number | undefined;
-    y?: number | undefined;
-    w?: number | undefined;
-    h: number;
-  };
-  const within = (child: Rect, box: Box) =>
-    child.x! >= box.x! &&
-    child.x! + child.w! <= box.x! + box.w &&
-    child.y! >= box.y! &&
-    child.y! + child.h <= box.y! + box.h;
+  const within = (
+    child: { x: number; y: number; w: number; h: number },
+    box: Box,
+  ) =>
+    child.x >= box.x &&
+    child.x + child.w <= box.x + box.w &&
+    child.y >= box.y &&
+    child.y + child.h <= box.y + box.h;
 
   const walk = (box: Box) => {
     for (const child of box.boxes) {
       assert.ok(within(child, box), `${child.key} escapes ${box.key}`);
       walk(child);
     }
-    for (const layer of box.stack) {
-      if (!("row" in layer)) continue;
-      for (const node of layer.row) {
-        const spot = laid.at.get(node.id);
-        assert.ok(
-          within({ ...spot, h: NODE_H }, box),
-          `${node.name} escapes ${box.key}`,
-        );
-      }
+    for (const id of box.nodes) {
+      const spot = laid.at.get(id)!;
+      assert.ok(
+        within({ ...spot, h: NODE_H }, box),
+        `${name(id)} escapes ${box.key}`,
+      );
     }
   };
 
@@ -424,194 +409,110 @@ test("a long file of repeated lines is compared without weighing every pair", ()
   );
 });
 
-/* A definition as the page would have digested it, for shapes the saved review doesn't
- * hold. Only what laying out reads: which file it's in, what it's inside, and whether it's
- * a box. */
-const one = (
-  id: string,
-  name: string,
-  role: "item" | "container",
-  parent: string | null,
-) => {
-  const kind = role === "container" ? "module" : "function";
+/* A page laid out from a tree written by hand, for shapes the saved review doesn't hold.
+ * The tree says everything but pixels, so a definition here is no more than a name. */
+const node = (id: string, tier: number): Group => ({ type: "node", id, tier });
+const box = (name: string, tier: number, children: Group[]): Group => ({
+  type: "group",
+  name,
+  tier,
+  children,
+});
+const paged = (groups: Group[], read: string[], hidden: string[] = []) => {
+  const ids = new Set<string>();
+  const walk = (group: Group) =>
+    group.type === "node" ? ids.add(group.id) : group.children.forEach(walk);
+  groups.forEach(walk);
+  for (const id of hidden) ids.delete(id);
   const shown = {
-    locator: { scope: [], name },
-    role,
+    locator: { scope: [], name: "" },
+    role: "item",
     parent: null,
-    kind,
+    kind: "function",
     file: "one.rs",
     parts: {},
     contract: null,
   };
-  return [
-    id,
-    {
-      id,
-      name,
-      scope: [],
-      path: name,
-      file: "one.rs",
-      kind,
-      role,
-      change: "added" as const,
-      before: null,
-      after: shown,
-      mark: "added" as const,
-      away: 0,
-      parent,
-      group: [],
-    },
-  ] as const;
-};
-
-/* Laid out with the reading in the order given, and nothing else a review carries. */
-const laidOut = (
-  definitions: ReturnType<typeof one>[],
-  steps: string[],
-  edges: { from: string; to: string }[],
-) =>
-  layout({
-    definitions: new Map(definitions as never),
-    steps: steps.map((definition) => ({ definition, on_faith: [] })),
-    edges,
+  return layout({
+    title: null,
+    definitions: new Map(
+      [...ids].map((id) => [
+        id,
+        {
+          id,
+          name: `f${id}`,
+          scope: [],
+          path: `f${id}`,
+          file: "one.rs",
+          kind: "function",
+          change: "added",
+          before: null,
+          after: shown,
+          mark: "added",
+          away: 0,
+          parent: null,
+        },
+      ]),
+    ),
+    steps: read.map((definition) => ({ definition, on_faith: [] })),
+    edges: [],
     ripples: 1,
     cost: { peak_open: 0, total_open: 0, taken_on_faith: 0, jumps: 0 },
-    bands: new Map(),
+    groups,
     warnings: [],
   } as never);
+};
 
-/* A file is not always one module. Where a language lets a file be a place to put things
- * rather than a thing in itself, several containers can sit at the top of one — and the
- * page used to keep whichever it saw last, drawing that one and silently losing the rest
- * along with every box inside them. */
-test("a file holding several containers draws all of them", () => {
-  const laid = laidOut(
-    [
-      one("1", "Alpha", "container", null),
-      one("2", "Beta", "container", null),
-      one("3", "aMethod", "item", "1"),
-      one("4", "bMethod", "item", "2"),
-    ],
-    ["1", "2", "3", "4"],
-    [],
-  );
-
-  const boxes: string[] = [];
-  const walk = (box: { label: string; boxes: unknown[] }) => {
-    boxes.push(box.label);
-    (box.boxes as (typeof box)[]).forEach(walk);
-  };
-  laid.boxes.forEach(walk);
-
-  assert.ok(
-    boxes.includes("Alpha"),
-    `Alpha was not drawn: ${boxes.join(", ")}`,
-  );
-  assert.ok(boxes.includes("Beta"), `Beta was not drawn: ${boxes.join(", ")}`);
-  assert.equal(laid.at.size, 2, "both methods keep a place");
-});
-
-/* A box inside a box was always drawn at the top of it, above the box's own definitions,
- * whatever leaned on what — so a module's tests sat above the code they test, and every
- * line from a test to what it tests ran downwards, in the style kept for lines a reader has
- * to take on faith. Nothing here needs faith: a test leans on a helper, so the helper holds
- * it up, so the helper goes above. */
-test("what leans on the code around it is drawn below it, inside a box or not", () => {
-  const laid = laidOut(
-    [
-      one("1", "one", "container", null),
-      one("2", "helper", "item", "1"),
-      one("3", "tests", "container", "1"),
-      one("4", "checks_helper", "item", "3"),
-    ],
-    ["2", "4"],
-    [{ from: "4", to: "2" }],
-  );
-
-  const helper = laid.at.get("2")!;
-  const checks = laid.at.get("4")!;
-  assert.ok(
-    checks.y > helper.y,
-    `the test (y ${checks.y}) should sit below the helper it leans on (y ${helper.y})`,
-  );
-});
-
-/* At one depth nothing holds anything else up, so which comes first is the reading's to
- * say — a box of definitions no more than a row of them. It used to be "boxes first", which
- * drew a module's tests above a function the reading reached before them. Run both ways
- * round, so it's the reading deciding and not a rule that happens to agree with it. */
-test("at one depth, the reading decides whether a box comes before a row", () => {
-  const definitions = [
-    one("1", "one", "container", null),
-    one("2", "helper", "item", "1"),
-    one("3", "used", "item", "1"),
-    one("4", "tests", "container", "1"),
-    one("5", "checks_helper", "item", "4"),
-  ];
-  const edges = [
-    { from: "3", to: "2" },
-    { from: "5", to: "2" },
-  ];
-
-  const usedFirst = laidOut(definitions, ["2", "3", "5"], edges);
-  assert.ok(
-    usedFirst.at.get("3")!.y < usedFirst.at.get("5")!.y,
-    "read first, drawn first",
-  );
-
-  const testsFirst = laidOut(definitions, ["2", "5", "3"], edges);
-  assert.ok(
-    testsFirst.at.get("5")!.y < testsFirst.at.get("3")!.y,
-    "read first, drawn first, the other way round",
-  );
-});
-
-/* Where a box sits: its top edge, found by its label. */
-const boxY = (laid: ReturnType<typeof layout>, label: string) => {
-  let found: number | undefined;
+/* Where a box sits, found by its label. */
+const boxAt = (laid: ReturnType<typeof layout>, label: string) => {
+  let found: Box | undefined;
   const walk = (box: Box) => {
-    if (box.label === label) found = box.y;
+    if (box.label === label) found = box;
     box.boxes.forEach(walk);
   };
   laid.boxes.forEach(walk);
   return found!;
 };
 
-/* A container is a definition too — a type carried in a signature, say — and something
- * leaning on it holds it up like anything else. Keyed over nodes alone, the edge into the
- * box was lost, and the box sank below the very thing that depended on it. */
-test("a box that something leans on is drawn above it, like any dependency", () => {
-  const laid = laidOut(
+/* A tier is a row: a higher tier is further down, whether it's a node or a box there, and
+ * along one tier things go left to right in the order they arrived. */
+test("tiers go down the page and the order along one goes across", () => {
+  const laid = paged(
     [
-      one("1", "one", "container", null),
-      one("2", "field", "item", "1"),
-      one("3", "Unit", "container", "1"),
+      box("lib", 0, [
+        node("1", 0),
+        node("2", 0),
+        box("tests", 1, [node("3", 0)]),
+        node("4", 1),
+      ]),
     ],
-    ["3", "2"],
-    [{ from: "2", to: "3" }],
+    ["1", "2", "3", "4"],
   );
+  const at = (id: string) => laid.at.get(id)!;
+  assert.ok(at("1").x < at("2").x, "read first, drawn first");
   assert.ok(
-    boxY(laid, "Unit") < laid.at.get("2")!.y,
-    "the box goes above what leans on it",
+    at("2").y < boxAt(laid, "tests").y,
+    "a box sits below the tier above it",
+  );
+  assert.equal(boxAt(laid, "tests").y, at("4").y, "one tier shares a row");
+  assert.ok(
+    boxAt(laid, "tests").x < at("4").x,
+    "a box takes its place along the row",
   );
 });
 
-/* A box with nothing in it is still a thing in the reading, and takes its turn by its own
- * step rather than sinking to the bottom for want of contents. */
-test("an empty box takes its place in the reading", () => {
-  const definitions = [
-    one("1", "one", "container", null),
-    one("2", "field", "item", "1"),
-    one("3", "Unit", "container", "1"),
+/* Whatever the page has been asked not to show is gone from the definitions it's given,
+ * and a box left holding nothing goes with it — otherwise putting the ripples away left an
+ * empty box labelled after a module nothing mentions. */
+test("a box with nothing left in it is not drawn", () => {
+  const tree = [
+    box("lib", 0, [node("1", 0)]),
+    box("far", 1, [node("2", 0), node("3", 0)]),
   ];
-  const unitFirst = laidOut(definitions, ["3", "2"], []);
-  assert.ok(
-    boxY(unitFirst, "Unit") < unitFirst.at.get("2")!.y,
-    "read first, drawn first",
-  );
-  const fieldFirst = laidOut(definitions, ["2", "3"], []);
-  assert.ok(
-    boxY(fieldFirst, "Unit") > fieldFirst.at.get("2")!.y,
-    "read after, drawn after",
-  );
+  const whole = paged(tree, ["1", "2", "3"]);
+  assert.ok(boxAt(whole, "far"), "something in it, so drawn");
+
+  const pruned = paged(tree, ["1", "2", "3"], ["2", "3"]);
+  assert.ok(boxAt(pruned, "far") === undefined, "nothing left in it");
+  assert.equal(pruned.at.size, 1);
 });

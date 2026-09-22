@@ -1,6 +1,5 @@
 import { createEffect, createMemo, For, Show } from "solid-js";
 import type {
-  Box,
   Definition as Def,
   Identity,
   Review,
@@ -10,7 +9,6 @@ import type {
 import type { Painted } from "./colouring.ts";
 import { MARK, TINT, broke } from "./digest.ts";
 import { compare, focused } from "./diff.ts";
-import { inside } from "./layout.ts";
 import { stitch } from "./text.ts";
 import { colouring, painted, readied, speaks } from "./colouring.ts";
 import { dressing, wearing } from "./theme.ts";
@@ -21,12 +19,10 @@ type Names = Map<string, Identity>;
 interface ReadingProps {
   review: Review;
   here: Identity | null;
-  box: Box | null;
   step: Step | undefined;
   at: number;
   names: Names;
   read: boolean;
-  viewed: Set<Identity>;
   sheet: string;
   width: number;
   onStep: (by: number) => void;
@@ -94,7 +90,7 @@ export function Reading(props: ReadingProps) {
   });
 
   return (
-    <Show when={definition() || props.box}>
+    <Show when={definition()}>
       <aside
         class={`sheet ${props.sheet}`}
         style={
@@ -114,7 +110,7 @@ export function Reading(props: ReadingProps) {
               <b class={`ch ${TINT[one().mark]}`}>{MARK[one().mark]}</b>
             )}
           </Show>
-          <h2>{definition()?.path ?? props.box?.label ?? ""}</h2>
+          <h2>{definition()?.path ?? ""}</h2>
           <button
             class="ib grip"
             onClick={() => props.onExpand()}
@@ -131,6 +127,23 @@ export function Reading(props: ReadingProps) {
           </button>
         </div>
 
+        {/* What this is and why it's here: fixed, so it's still there however far down the
+         * code the reader has scrolled. Only the code below scrolls. */}
+        <div class="sm">
+          <Show when={definition()}>
+            {(one) => (
+              <About
+                definition={one()}
+                because={because()}
+                uses={uses()}
+                step={props.step}
+                review={props.review}
+                onOpen={props.onOpen}
+              />
+            )}
+          </Show>
+        </div>
+
         <div
           class="sb"
           ref={(pane) => {
@@ -138,29 +151,11 @@ export function Reading(props: ReadingProps) {
             props.onPane(pane);
           }}
         >
-          <Show
-            when={props.box}
-            fallback={
-              <Show when={definition()}>
-                {(one) => (
-                  <Definition
-                    definition={one()}
-                    because={because()}
-                    uses={uses()}
-                    step={props.step}
-                    review={props.review}
-                    names={props.names}
-                    onOpen={props.onOpen}
-                  />
-                )}
-              </Show>
-            }
-          >
+          <Show when={definition()}>
             {(one) => (
-              <Package
-                box={one()}
-                review={props.review}
-                viewed={props.viewed}
+              <Diff
+                definition={one()}
+                names={props.names}
                 onOpen={props.onOpen}
               />
             )}
@@ -232,13 +227,13 @@ export function Reading(props: ReadingProps) {
   );
 }
 
-/* One definition: what it is, why it's here, and how it changed. */
-function Definition(props: {
+/* What a definition is and why it's here. Kept above the code rather than scrolling with
+ * it: it's the part worth glancing back at from anywhere in the diff. */
+function About(props: {
   definition: Def;
   because: Identity[];
   uses: Identity[];
   review: Review;
-  names: Names;
   onOpen: (id: Identity) => void;
   step: Step | undefined;
 }) {
@@ -273,57 +268,6 @@ function Definition(props: {
           />
         </p>
       </Show>
-
-      <Diff
-        definition={props.definition}
-        names={props.names}
-        onOpen={props.onOpen}
-      />
-    </>
-  );
-}
-
-/* A box that stands for no definition of its own — a folder, a package. There's nothing to
- * read here, so this says what's inside and hands the reader to it. Picking one of its
- * contents on the reader's behalf would be answering a question nobody asked. */
-function Package(props: {
-  box: Box;
-  review: Review;
-  viewed: Set<Identity>;
-  onOpen: (id: Identity) => void;
-}) {
-  const held = () =>
-    [...inside(props.box)].sort((a, b) => a.name.localeCompare(b.name));
-  const changed = () =>
-    held().filter((one) => one.mark !== "affected" && one.mark !== "still");
-
-  return (
-    <>
-      <p class="file">
-        {props.box.key}
-        <span class="kind">package</span>
-      </p>
-      <p class="why">
-        {held().length} definition{held().length === 1 ? "" : "s"} here,{" "}
-        {changed().length} changed
-      </p>
-
-      <ul class="held">
-        <For each={held()}>
-          {(one) => (
-            <li>
-              <button
-                class={props.viewed.has(one.id) ? "done" : ""}
-                onClick={() => props.onOpen(one.id)}
-              >
-                <b class={`ch ${TINT[one.mark]}`}>{MARK[one.mark]}</b>
-                <span class="nm">{one.name}</span>
-                <span class="at">{one.file}</span>
-              </button>
-            </li>
-          )}
-        </For>
-      </ul>
     </>
   );
 }

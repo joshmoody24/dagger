@@ -67,14 +67,12 @@ export function digest(raw: Raw): Review {
       path: [...shown.locator.scope, shown.locator.name].join("::"),
       file: shown.file,
       kind: shown.kind,
-      role: one.role,
       change: one.change,
       before,
       after,
       mark: marking(one),
       away: one.reached ?? 0,
       parent: one.parent,
-      group: one.group ?? [],
     });
   }
 
@@ -86,9 +84,7 @@ export function digest(raw: Raw): Review {
     ripples: raw.ripples,
     cost: raw.cost,
     grouping: raw.grouping ?? undefined,
-    bands: new Map(
-      raw.groups.map((group) => [group.path.join("/"), group.band]),
-    ),
+    groups: raw.groups,
     warnings: raw.warnings,
   };
 }

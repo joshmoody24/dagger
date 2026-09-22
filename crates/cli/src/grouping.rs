@@ -32,8 +32,6 @@ pub fn of(config: &GroupingConfig, dir: &Path, definitions: &[Definition]) -> Gr
     Grouping {
         name: config.name.clone(),
         of,
-        // Settled once the edges are known, which is after this.
-        bands: Default::default(),
     }
 }
 

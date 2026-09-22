@@ -53,7 +53,6 @@ export interface Definition {
   path: string;
   file: string;
   kind: string;
-  role: Role;
   /** What happened to it. */
   change: Change;
   before: Occurrence | null;
@@ -63,7 +62,6 @@ export interface Definition {
   away: number;
   /** What it's written inside, when that's on the page too. */
   parent: Identity | null;
-  group: string[];
 }
 
 export interface Review {
@@ -76,8 +74,8 @@ export interface Review {
   ripples: number;
   cost: Cost;
   grouping?: string | undefined;
-  /** How deep each group sits among the groups, worked out by dagger rather than here. */
-  bands: Map<string, number>;
+  /** What nests in what and how it stacks, as dagger arranged it. */
+  groups: Group[];
   warnings: Warning[];
 }
 
@@ -102,29 +100,21 @@ export interface Spot {
   h?: number;
 }
 
-/** A place holding definitions, and other places. */
-/* One tier of what a box holds: its own definitions side by side, or the boxes inside it
- * side by side. A box is a stack of these with whatever holds something up above it — so a
- * tier of inner boxes sits below a tier of definitions when what's inside leans on them. */
-export type Layer = { row: Definition[] } | { lane: Box[] };
-
+/** A box on the page: where it is, and what's directly inside it. */
 export interface Box {
   key: string;
   label: string;
-  module: Definition | null;
-  stack: Layer[];
-  /** The boxes directly inside, whichever tier each sits in. */
-  boxes: Box[];
+  x: number;
+  y: number;
   w: number;
   h: number;
-  x?: number;
-  y?: number;
+  boxes: Box[];
+  nodes: Identity[];
 }
 
 export interface Laid {
   at: Map<Identity, Spot>;
   boxes: Box[];
-  modules: Map<string, Definition>;
   w: number;
   h: number;
 }

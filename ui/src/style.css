@@ -375,6 +375,11 @@ main.has-sheet.half .canvas {
   flex: 1;
   min-width: 0;
 }
+/* What the code is about, kept above it rather than scrolled away with it. */
+.sm {
+  flex: none;
+  padding: 0 16px;
+}
 .sb {
   flex: 1;
   overflow-y: auto;

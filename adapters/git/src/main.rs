@@ -383,7 +383,7 @@ fn materialize(rev: &str, carry_ignored: bool) -> Result<PathBuf> {
 /// which can make a neighbouring package's types slightly out of date. The files being
 /// reviewed are read from the snapshot itself and aren't affected.
 fn carry(dir: &Path) -> Result<()> {
-    let repo = std::env::current_dir()?;
+    let repo = std::env::current_dir()?.canonicalize()?;
 
     for entry in listing(&["status", "--porcelain", "--ignored", "-z"])? {
         let Some(path) = entry.strip_prefix("!! ") else {
@@ -398,10 +398,54 @@ fn carry(dir: &Path) -> Result<()> {
         if let Some(parent) = link.parent() {
             fs::create_dir_all(parent)?;
         }
-        std::os::unix::fs::symlink(&target, &link)
-            .with_context(|| format!("couldn't point {path} at the real one"))?;
+        if target
+            .file_name()
+            .is_some_and(|name| name == "node_modules")
+        {
+            packages(&repo, dir, &target, &link)?;
+        } else {
+            std::os::unix::fs::symlink(&target, &link)
+                .with_context(|| format!("couldn't point {path} at the real one"))?;
+        }
     }
 
+    Ok(())
+}
+
+/// Installed packages, an entry at a time rather than the directory whole.
+///
+/// A workspace package is a link back into the repository, and carried whole, the directory
+/// carried that link with it: a file in the snapshot importing a package from the same
+/// repository reached the live copy of it rather than the snapshot's, and the language
+/// server saw two files where the snapshot has one. Every reference from one package to
+/// another was lost that way — the snapshot's definition had no users, and its users
+/// pointed at a definition nobody was asking about. So a link that leads into the
+/// repository is turned to lead into the snapshot instead; everything else keeps pointing
+/// at what's installed.
+fn packages(repo: &Path, dir: &Path, installed: &Path, link: &Path) -> Result<()> {
+    fs::create_dir_all(link)?;
+    for entry in fs::read_dir(installed)? {
+        let name = entry?.file_name();
+        let (real, ours) = (installed.join(&name), link.join(&name));
+
+        // Scoped packages sit one level down, in a plain directory of their own.
+        if name.to_string_lossy().starts_with('@') && real.is_dir() && !real.is_symlink() {
+            packages(repo, dir, &real, &ours)?;
+            continue;
+        }
+
+        let leads_to = fs::read_link(&real)
+            .ok()
+            .and_then(|to| installed.join(to).canonicalize().ok());
+        let target = match leads_to {
+            Some(to) if to.starts_with(repo) && !to.starts_with(installed) => {
+                dir.join(to.strip_prefix(repo)?)
+            }
+            _ => real,
+        };
+        std::os::unix::fs::symlink(&target, &ours)
+            .with_context(|| format!("couldn't point {} at the real one", ours.display()))?;
+    }
     Ok(())
 }
 
@@ -535,5 +579,39 @@ mod tests {
         ] {
             assert!(read(&words).is_err(), "{words:?} should not be understood");
         }
+    }
+
+    /* The link that lost every cross-package reference: a workspace package is installed as
+     * a link back into the repository, and carried whole, node_modules carried that link
+     * with it — so a snapshot importing its own sibling package reached the live copy. */
+    #[test]
+    fn a_workspace_package_is_pointed_at_the_snapshots_copy() {
+        let root = std::env::temp_dir().join(format!("dagger-carry-{}", std::process::id()));
+        let (repo, snap) = (root.join("repo"), root.join("snap"));
+        let installed = repo.join("node_modules");
+        fs::create_dir_all(repo.join("pkgs/a")).unwrap();
+        fs::create_dir_all(installed.join("@s")).unwrap();
+        fs::create_dir_all(installed.join("b")).unwrap();
+        std::os::unix::fs::symlink("../../pkgs/a", installed.join("@s/a")).unwrap();
+        std::os::unix::fs::symlink("b", installed.join("c")).unwrap();
+        let repo = repo.canonicalize().unwrap();
+
+        packages(
+            &repo,
+            &snap,
+            &repo.join("node_modules"),
+            &snap.join("node_modules"),
+        )
+        .unwrap();
+
+        let led = |name: &str| fs::read_link(snap.join("node_modules").join(name)).unwrap();
+        assert_eq!(led("@s/a"), snap.join("pkgs/a"), "into the snapshot");
+        assert_eq!(led("b"), repo.join("node_modules/b"), "at what's installed");
+        assert_eq!(
+            led("c"),
+            repo.join("node_modules/c"),
+            "a link within node_modules is left alone"
+        );
+        fs::remove_dir_all(&root).unwrap();
     }
 }

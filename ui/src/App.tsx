@@ -17,7 +17,7 @@ import {
 } from "lucide-solid";
 import { Graph } from "./Graph.tsx";
 import { Reading } from "./Reading.tsx";
-import type { Box, Identity, Raw } from "./dagger.ts";
+import type { Identity, Raw } from "./dagger.ts";
 import { digest } from "./digest.ts";
 import { layout } from "./layout.ts";
 import { namesIn } from "./text.ts";
@@ -51,20 +51,6 @@ export function App(props: { raw: Raw }) {
         .map((one) => one.id),
     );
     if (!gone.size) return all;
-
-    /* A module that's only here to hold something goes when that something does. These are
-     * the context tier — drawn, never read — and a file earns one by having members in the
-     * review. Take the members away and what's left is an empty box labelled after a file
-     * nothing in the reading mentions. */
-    const holds = new Set(
-      [...all.definitions.values()]
-        .filter((one) => one.kind !== "module" && !gone.has(one.id))
-        .map((one) => one.file),
-    );
-    for (const one of all.definitions.values()) {
-      if (one.kind === "module" && one.mark === "still" && !holds.has(one.file))
-        gone.add(one.id);
-    }
 
     return {
       ...all,
@@ -152,7 +138,6 @@ export function App(props: { raw: Raw }) {
       ? `${hiding().length} this review might not be showing`
       : `${weaker().length} worked out a weaker way`;
 
-  const spread = (one: Box): Box[] => [one, ...one.boxes.flatMap(spread)];
   /* Beside the graph it's a column you can put away and drag wider; over the graph it's a
    * drawer. Either way, doing anything at all brings it back — you might skip past
    * something you hadn't read, but you asked to go there, and a tool that argues about
@@ -182,17 +167,12 @@ export function App(props: { raw: Raw }) {
    * something else. So the reading has a position, and looking has a subject, and stepping
    * puts the two back together. */
   const [aside, setAside] = createSignal<Identity | null>(null);
-  /* A box that stands for no definition — a folder full of them — can still be looked at,
-   * and looking at it shows the box rather than something inside it. */
-  const [box, setBox] = createSignal<string | null>(null);
-  const here = () =>
-    box() ? null : (aside() ?? steps()[at()]?.definition ?? null);
+  const here = () => aside() ?? steps()[at()]?.definition ?? null;
   const next = () => steps()[at() + 1]?.definition ?? null;
   const stepping = () => aside() === null;
 
   const step = (by: number) => {
     setAside(null);
-    setBox(null);
     setAt((was) => Math.min(Math.max(was + by, 0), steps().length - 1));
     open();
   };
@@ -209,7 +189,6 @@ export function App(props: { raw: Raw }) {
       return now;
     });
   const goTo = (id: Identity) => {
-    setBox(null);
     const found = steps().findIndex((step) => step.definition === id);
     if (found >= 0) {
       setAside(null);
@@ -217,12 +196,6 @@ export function App(props: { raw: Raw }) {
     } else {
       setAside(id);
     }
-    open();
-  };
-
-  const goToBox = (key: string) => {
-    setAside(null);
-    setBox(key);
     open();
   };
 
@@ -396,19 +369,12 @@ export function App(props: { raw: Raw }) {
             here={here()}
             next={showNext() ? next() : null}
             read={read()}
-            box={box()}
             onOpen={goTo}
-            onOpenBox={goToBox}
           />
         </div>
         <Reading
           review={review()}
           here={here()}
-          box={
-            laid()
-              .boxes.flatMap(spread)
-              .find((one) => one.key === box()) ?? null
-          }
           step={stepping() ? steps()[at()] : undefined}
           at={at()}
           onStep={step}
@@ -418,8 +384,7 @@ export function App(props: { raw: Raw }) {
           }}
           onOpen={goTo}
           names={names()}
-          read={here() !== null && read().has(here()!)}
-          viewed={read()}
+          read={here() !== null && read().has(here())}
           onToggle={toggleRead}
           sheet={facing()}
           width={width()}

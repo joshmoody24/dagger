@@ -17,6 +17,7 @@ use crate::model::{self, Identity, Locator, Role, Sides};
 use crate::order::{Cost, Step, order};
 use crate::propagate::affected;
 use crate::reference::{Reference, Target};
+use crate::shape::{Group, Shape};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -59,18 +60,6 @@ pub struct Warning {
     pub about: Option<Identity>,
 }
 
-/// A group of files, and how deep it sits among the groups.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
-pub struct Group {
-    /// Outermost first. Written as it is rather than joined, so nothing has to agree on a
-    /// separator that a path component might contain.
-    pub path: Vec<String>,
-    /// Nought for a group that leans on no other. The page draws its rows by this and the
-    /// reading order follows it, which is what keeps a reading running down the page.
-    pub band: u32,
-}
-
 /// One definition, and everything this review knows about it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -86,8 +75,6 @@ pub struct Definition {
     pub reached: Option<u32>,
     /// What it's written inside. Always present in this review when it isn't `None`.
     pub parent: Option<Identity>,
-    /// The group its file belongs to, matching one of the paths in `groups`.
-    pub group: Option<Vec<String>>,
 }
 
 /// Everything one reading of a repository comes to.
@@ -103,6 +90,8 @@ pub struct Review {
     /// `definitions` is here to be drawn around it.
     pub reading: Vec<Step>,
     pub edges: Vec<Edge>,
+    /// Everything drawn, as it nests and stacks: the page's whole arrangement short of
+    /// pixels, so the reading and the page can't disagree about it.
     pub groups: Vec<Group>,
     /// What a reader calls the grouping: "package", "crate".
     pub grouping: Option<String>,
@@ -180,32 +169,32 @@ pub fn review(
     }
 
     let edges = project(&shown, references);
-    let ordering = order(&read, &edges, &definitions, grouping);
 
     let kept: BTreeMap<Identity, Definition> = definitions
-        .into_iter()
+        .iter()
         .filter(|def| shown.contains(&def.identity))
         .map(|def| {
             let identity = def.identity;
-            let role = def.sides.latest().role;
             (
                 identity,
                 Definition {
-                    role,
+                    role: def.sides.latest().role,
                     change: changes.get(&identity).cloned().unwrap_or(Change::Added),
                     reached: reached.get(&identity).copied().filter(|&far| far > 0),
                     parent: parent_of.get(&identity).copied(),
-                    group: Some(grouping.path_of(identity).to_vec())
-                        .filter(|path| !path.is_empty()),
-                    sides: def.sides,
+                    sides: def.sides.clone(),
                 },
             )
         })
         .collect();
 
+    let shape = Shape::new(&kept, grouping);
+    let ordering = order(&read, &edges, &definitions, grouping, &shape.tops(&edges));
+    let groups = shape.groups(&edges, &ordering.steps);
+
     Review {
         title,
-        groups: settled(grouping, &kept, &edges),
+        groups,
         grouping: (!grouping.name.is_empty()).then(|| grouping.name.clone()),
         definitions: kept,
         reading: ordering.steps,
@@ -345,71 +334,6 @@ fn project(shown: &BTreeSet<Identity>, references: &[Reference]) -> Vec<Edge> {
     }
 
     edges
-}
-
-/// The groups the shown definitions are in, and how deep each sits among the others.
-fn settled(
-    grouping: &Grouping,
-    definitions: &BTreeMap<Identity, Definition>,
-    edges: &[Edge],
-) -> Vec<Group> {
-    let mut paths: BTreeSet<Vec<String>> = BTreeSet::new();
-    for one in definitions.values() {
-        if let Some(path) = &one.group {
-            paths.insert(path.clone());
-        }
-    }
-
-    let group_of =
-        |identity: &Identity| definitions.get(identity).and_then(|one| one.group.clone());
-    let mut between: BTreeMap<Vec<String>, BTreeSet<Vec<String>>> = paths
-        .iter()
-        .map(|path| (path.clone(), BTreeSet::new()))
-        .collect();
-    for edge in edges {
-        if let (Some(from), Some(to)) = (group_of(&edge.from), group_of(&edge.to))
-            && from != to
-        {
-            between.entry(from).or_default().insert(to);
-        }
-    }
-
-    let mut deep: BTreeMap<Vec<String>, u32> = BTreeMap::new();
-    for path in between.keys() {
-        depth(path, &between, &mut deep);
-    }
-
-    let _ = grouping;
-    paths
-        .into_iter()
-        .map(|path| {
-            let band = deep.get(&path).copied().unwrap_or(0);
-            Group { path, band }
-        })
-        .collect()
-}
-
-/// One more than the furthest thing it leans on. A circle is settled by whoever is asked
-/// first, which is enough: being in one means there's no right answer, only a readable one.
-fn depth(
-    group: &[String],
-    between: &BTreeMap<Vec<String>, BTreeSet<Vec<String>>>,
-    seen: &mut BTreeMap<Vec<String>, u32>,
-) -> u32 {
-    if let Some(&found) = seen.get(group) {
-        return found;
-    }
-    seen.insert(group.to_vec(), 0);
-    let found = between
-        .get(group)
-        .into_iter()
-        .flatten()
-        .filter(|other| other.as_slice() != group)
-        .map(|other| depth(other, between, seen) + 1)
-        .max()
-        .unwrap_or(0);
-    seen.insert(group.to_vec(), found);
-    found
 }
 
 #[cfg(test)]
@@ -555,9 +479,6 @@ mod tests {
                     Role::Container,
                     "{identity:?} is inside something that holds nothing"
                 );
-            }
-            if let Some(path) = &one.group {
-                assert!(review.groups.iter().any(|group| &group.path == path));
             }
             assert_ne!(one.reached, Some(0), "reached counts hops, never nought");
         }
