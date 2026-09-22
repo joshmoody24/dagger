@@ -23,9 +23,9 @@ pub struct Config {
 pub struct GroupingConfig {
     /// What a reader would call it: "package", "crate", "service".
     pub name: String,
-    /// Files whose nearest containing directory is the group: `BUILD.bazel`, `Cargo.toml`,
-    /// `package.json`. Several because one repository is often several kinds of thing at
-    /// once; the nearest marker of any kind wins, so they still nest.
+    /// Files whose directory is a group: `BUILD.bazel`, `Cargo.toml`, `package.json`. A
+    /// definition belongs to the nearest marker above its file. Several kinds, because one
+    /// repository is often several kinds of thing at once.
     pub markers: Vec<String>,
 }
 

@@ -70,20 +70,20 @@ ripples = 1
 
 - `[snapshots]`: how revisions are laid out on disk
   - `adapter`: `git` is built in
-  - `settings.trunk`: what a branch is compared against; defaults to the remote's default branch
-  - `settings.carry_ignored`: link ignored files (build output, installed packages) into each snapshot so language servers can resolve imports; default true
+  - `settings.trunk`: what a branch is compared against. Defaults to the remote's default branch.
+  - `settings.carry_ignored`: link ignored files (build output, installed packages) into each snapshot so language servers can resolve imports. Default true.
 - `[[extractors]]`: how code is read, one per language
   - `adapter`: `rust` and `lsp` are built in
-  - `include`: globs this extractor claims; a later extractor wins a contested file, unclaimed files are compared whole
+  - `include`: globs this extractor claims. A later extractor wins a contested file. Unclaimed files are compared whole.
   - `settings.server` (`lsp`): the language server command
   - `settings.options` (`lsp`): passed to the server as its initialization options
   - `settings.linked` (`rust`): extra Cargo manifests outside the workspace
-- `[grouping]`: how the graph is boxed
-  - `name`: what a box is called
-  - `markers`: files whose directory is a box; the nearest marker wins, so boxes nest
+- `[grouping]`: how definitions are grouped. Each group is drawn as a box on the graph.
+  - `name`: what a group is called
+  - `markers`: files whose directory is a group. A definition belongs to the nearest marker above its file. Groups do not nest.
 - `[review]`
   - `ignore`: files left out entirely
-  - `ripples`: how many steps outward from a change to follow what it affects; `--ripples` on the command line overrides it
+  - `ripples`: how many steps outward from a change to follow what it affects. `--ripples` on the command line overrides it.
 
 ## Supporting another language
 
@@ -104,7 +104,7 @@ adapter = "./tools/dagger-python"
 include = ["**/*.py"]
 ```
 
-A path with a slash is relative to the repository; a bare name comes off `PATH`. A `[snapshots]` adapter is named the same way, for a version control system other than git.
+A path with a slash is relative to the repository. A bare name comes off `PATH`. A `[snapshots]` adapter is named the same way, for a version control system other than git.
 
 ## Developing
 
