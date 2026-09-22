@@ -69,11 +69,7 @@ pub fn render(review: &Review) -> String {
         }
         if !step.on_faith.is_empty() {
             let on_faith: Vec<String> = step.on_faith.iter().map(named).collect();
-            let _ = writeln!(
-                out,
-                "Read before its dependencies, which are in a cycle: {}.\n",
-                on_faith.join(", ")
-            );
+            let _ = writeln!(out, "Taken on faith (a cycle): {}.\n", on_faith.join(", "));
         }
 
         let before = walk::stitched(definition.sides.before());

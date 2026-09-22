@@ -49,7 +49,7 @@ pub fn print(review: &Review) {
     let _ = writeln!(
         out,
         "+ added   - removed   ! type changed   ~ body changed   \" docs changed   = reached, unchanged   . untouched\n\
-         at most {} held in mind at once, {} read early, {} jumps between files\n",
+         at most {} open at peak, {} taken on faith, {} jumps\n",
         review.cost.peak_open, review.cost.taken_on_faith, review.cost.jumps
     );
 

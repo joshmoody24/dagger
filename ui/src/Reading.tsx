@@ -204,7 +204,7 @@ function Names(props: {
       .filter((one): one is Def => one !== undefined)
       .map((definition) => ({
         definition,
-        /* No step (viewing out of order) means nothing can be "not yet read". */
+        /* No step (read out of order) means nothing can be "not yet read". */
         soon: (props.step?.on_faith || []).includes(definition.id),
       }));
 

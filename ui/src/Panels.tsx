@@ -22,8 +22,8 @@ export function CostPanel(props: {
       title="Cognitive load metrics"
     >
       <ul>
-        <li>{props.review.cost.peak_open} definitions in mind at once</li>
-        <li>{props.review.cost.taken_on_faith} definitions out of order</li>
+        <li>{props.review.cost.peak_open} definitions open at peak</li>
+        <li>{props.review.cost.taken_on_faith} definitions taken on faith</li>
         <li>
           {props.review.cost.jumps} {props.review.grouping || "file"} jumps
         </li>
