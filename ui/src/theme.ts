@@ -4,24 +4,26 @@ import { createSignal } from "solid-js";
  * the same questions (background, comment, deletion) and there are hundreds to choose from.
  * Only the roles this page uses are read. */
 
-/* Separate dynamic imports so only the theme being worn is fetched. All near-black: grey
- * dark themes have far less contrast against their own background (about 8x vs 13-18x)
- * and tire the eye. */
+/* Separate dynamic imports so only the theme being worn is fetched. The first is the
+ * default. All dark: the page is drawn for dark and a light theme leaves its borders
+ * and code half-invisible. */
 const WEARING: Record<string, () => Promise<{ default: Theme }>> = {
-  "github-dark-high-contrast": () =>
-    import("@shikijs/themes/github-dark-high-contrast"),
-  vesper: () => import("@shikijs/themes/vesper"),
-  "github-dark-default": () => import("@shikijs/themes/github-dark-default"),
-  "vitesse-black": () => import("@shikijs/themes/vitesse-black"),
-  houston: () => import("@shikijs/themes/houston"),
   "night-owl": () => import("@shikijs/themes/night-owl"),
   "vitesse-dark": () => import("@shikijs/themes/vitesse-dark"),
+  "github-dark-default": () => import("@shikijs/themes/github-dark-default"),
   "dark-plus": () => import("@shikijs/themes/dark-plus"),
+  vesper: () => import("@shikijs/themes/vesper"),
+  dracula: () => import("@shikijs/themes/dracula"),
+  "one-dark-pro": () => import("@shikijs/themes/one-dark-pro"),
+  "catppuccin-mocha": () => import("@shikijs/themes/catppuccin-mocha"),
+  "tokyo-night": () => import("@shikijs/themes/tokyo-night"),
+  nord: () => import("@shikijs/themes/nord"),
+  "rose-pine": () => import("@shikijs/themes/rose-pine"),
+  "kanagawa-wave": () => import("@shikijs/themes/kanagawa-wave"),
 };
 
 /* Shiki's shape, loosely. A theme may leave out anything. */
 export interface Theme {
-  type?: string;
   colors?: Record<string, string>;
   tokenColors?: {
     scope?: string | string[];
@@ -39,11 +41,31 @@ export const wearing = worn;
 const [dressed, setDressed] = createSignal<Theme | null>(null);
 export const dressing = dressed;
 
+const REMEMBERED = "dagger:theme";
+
+/** The theme worn last time, if this browser still has it and it's still offered. */
+export function remembered(): string {
+  try {
+    const name = localStorage.getItem(REMEMBERED);
+    return name && name in WEARING ? name : themes[0];
+  } catch {
+    return themes[0];
+  }
+}
+
+/* Worn before the theme has loaded, so a held key walks the list rather than asking the
+ * same theme for its neighbour every time. A theme overtaken while loading isn't painted. */
 export async function wear(name: string, root = document.documentElement) {
+  setWorn(name);
   const { default: theme } = await WEARING[name]();
+  if (worn() !== name) return;
   paint(theme, root);
   setDressed(theme);
-  setWorn(name);
+  try {
+    localStorage.setItem(REMEMBERED, name);
+  } catch {
+    /* Storage refused; the choice lasts as long as the page. */
+  }
 }
 
 /** The next one along, so a key can walk the list. */
@@ -150,7 +172,7 @@ function paint(theme: Theme, root: HTMLElement) {
       scoped(theme, "comment") ||
       INSTEAD.muted,
   );
-  root.style.colorScheme = theme.type === "light" ? "light" : "dark";
+  root.style.colorScheme = "dark";
 }
 
 /* First rule for the scope that actually sets a foreground. */

@@ -8,10 +8,10 @@ import {
 } from "solid-js";
 import { App } from "./App.tsx";
 import { Waiting } from "./Waiting.tsx";
-import { themes, wear } from "./theme.ts";
+import { remembered, wear } from "./theme.ts";
 import "./base.css";
 
-await wear(themes[0]);
+await wear(remembered());
 
 /* Always runs dagger fresh, through whichever server is behind the page, rather than
  * reading a saved review, which would silently go stale. */
