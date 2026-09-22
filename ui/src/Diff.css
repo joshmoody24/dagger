@@ -31,15 +31,20 @@ pre.code .gutter {
 pre.code .gap {
   color: var(--muted);
 }
-/* An ellipsis, the same as any other gap in the code; hovering says it opens. */
+/* An ellipsis in the gutter's colour, centred, wearing the key that opens it. */
 pre.code button.fold {
   font: inherit;
   color: var(--faint);
   background: none;
   border: 0;
   width: 100%;
-  text-align: start;
+  text-align: center;
+  text-indent: 0;
   cursor: pointer;
+}
+pre.code button.fold kbd {
+  margin-inline-start: 6px;
+  vertical-align: 1px;
 }
 pre.code button.fold:hover,
 pre.code button.fold:focus-visible {

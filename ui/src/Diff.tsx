@@ -199,7 +199,7 @@ export function Diff(props: {
                 title={`${gap().to - gap().from - shown(gap())} unchanged lines; opens ${STEP}`}
                 onClick={() => unfold(gap().from)}
               >
-                <span class="gap">…</span>
+                … <kbd>o</kbd>
               </button>
             )}
           </Show>
