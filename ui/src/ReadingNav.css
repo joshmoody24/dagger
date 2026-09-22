@@ -1,0 +1,68 @@
+/* 44px is the smallest reliable touch target. Bottom padding clears the phone home
+ * indicator. */
+.nav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--rule);
+}
+.nav .pair {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  flex: none;
+  margin-inline-start: auto;
+}
+.nav kbd {
+  margin-top: 1px;
+}
+.nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.nav .nav-quiet {
+  height: 50px;
+  padding-inline: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.nav .nav-quiet:disabled,
+.nav .nav-primary:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.nav .nav-progress {
+  height: 50px;
+  padding-inline: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font: 14px var(--mono);
+  color: var(--muted);
+}
+.nav .nav-progress.done {
+  color: var(--add);
+  border-color: var(--add);
+}
+.nav .nav-primary {
+  height: 50px;
+  padding-inline: 14px;
+  border-radius: 8px;
+  background: var(--lean);
+  color: var(--paper);
+  font-weight: 600;
+  font-size: 14.5px;
+}
+/* Dark on bright is already maximum contrast; a background behind the key could only
+ * reduce it. */
+.nav .nav-primary kbd {
+  opacity: 1;
+  border-color: currentColor;
+  background: none;
+}

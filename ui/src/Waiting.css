@@ -1,0 +1,81 @@
+/* Centred: it's the only thing on the page. */
+.waiting {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  color: var(--muted);
+  font: 13px var(--mono);
+}
+.phases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.phase {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+}
+.phase::before {
+  content: "";
+  grid-row: 1;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rule);
+  justify-self: center;
+  align-self: center;
+}
+.phase.at::before {
+  border-color: var(--lean);
+  animation: beating 1.4s ease-in-out infinite;
+}
+.phase.yet {
+  color: var(--faint);
+}
+.phase.was::before {
+  background: var(--muted);
+  border-color: var(--muted);
+}
+.phase.at .what {
+  color: var(--ink);
+}
+.phase .detail,
+.phase .through {
+  grid-column: 2;
+}
+.phase .detail {
+  color: var(--faint);
+}
+.phase .through {
+  display: block;
+  height: 2px;
+  background: var(--rule);
+  border-radius: 2px;
+  max-width: 240px;
+}
+.phase .through i {
+  display: block;
+  height: 100%;
+  background: var(--lean);
+  border-radius: 2px;
+}
+
+@keyframes beating {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phase.at::before {
+    animation: none;
+  }
+}

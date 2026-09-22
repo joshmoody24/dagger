@@ -1,0 +1,168 @@
+.add {
+  color: var(--add);
+}
+.del {
+  color: var(--del);
+}
+.chg {
+  color: var(--chg);
+}
+.aff {
+  color: var(--muted);
+}
+.mark {
+  font: 700 13px/1 var(--mono);
+  display: inline-block;
+  width: 1ch;
+  text-align: center;
+}
+
+/* A bottom drawer (away, half, full) until there's room for it beside the graph. */
+.sheet {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 10;
+  height: 58dvh;
+  background: var(--surface);
+  border-top: 1px solid var(--rule);
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 28%);
+  transform: translateY(105%);
+  transition:
+    transform 0.2s ease,
+    height 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+.sheet.half,
+.sheet.full {
+  transform: none;
+}
+.sheet.full {
+  height: 100dvh;
+  border-radius: 0;
+}
+/* Keep the graph clear of the drawer. */
+main.has-sheet.half .canvas {
+  bottom: 58dvh;
+}
+/* Drag handle: wide enough to grab, invisible until hovered. */
+.wider {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  z-index: 1;
+  cursor: col-resize;
+}
+.wider:hover {
+  background: var(--rule);
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-block: 10px 6px;
+  padding-inline: 16px 8px;
+  flex: none;
+}
+.sheet-head h2 {
+  margin: 0;
+  font: 500 16px/1.3 var(--mono);
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+/* Stays above the code rather than scrolling with it. */
+.sheet-meta {
+  flex: none;
+  padding-inline: 16px;
+}
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 16px 12px;
+}
+.file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font: 13px var(--mono);
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.kind {
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.why {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.why button {
+  color: var(--ink);
+  font-weight: 600;
+  font-family: var(--mono);
+  text-underline-offset: 3px;
+}
+.why button.soon {
+  color: var(--chg);
+}
+.why button:hover {
+  text-decoration: underline dotted;
+}
+
+.icon-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 18px;
+  flex: none;
+}
+
+/* Wide enough for the sheet to sit beside the graph instead of being a drawer. The
+ * number is WIDE in media.ts; a media query can't read a custom property. */
+@media (min-width: 900px) {
+  .sheet {
+    position: relative;
+    transform: none;
+    height: auto;
+    width: 46%;
+    min-width: 320px;
+    max-width: 80vw;
+    flex: none;
+    border-radius: 0;
+    /* The window frames the right and bottom edges; the top needs a border of its own
+     * against the header. */
+    border-top: 1px solid var(--rule);
+    border-inline-start: 1px solid var(--rule);
+    box-shadow: none;
+    transition: none;
+  }
+  .sheet.full {
+    height: auto;
+  }
+  /* Hidden entirely: a collapsed strip would only take up room. d brings it back. */
+  .sheet.away {
+    display: none;
+  }
+  .grip {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    transition: none;
+  }
+}

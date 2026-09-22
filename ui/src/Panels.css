@@ -1,0 +1,33 @@
+/* A <dialog>, so the browser handles stacking, focus trapping and Escape. */
+.panel {
+  width: min(560px, calc(100vw - 32px));
+  padding: 16px 18px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.panel::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.panel h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.panel ul {
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 14px;
+  color: var(--muted);
+  max-height: 50dvh;
+  overflow: auto;
+}
+.panel li {
+  margin-bottom: 5px;
+}

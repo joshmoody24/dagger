@@ -1,5 +1,6 @@
 import { createMemo, For, Show } from "solid-js";
 import { phases, standing } from "./progress.ts";
+import "./Waiting.css";
 
 /* Shows phases rather than a percentage: the slowest phase (language server indexing)
  * reports nothing until it's done, so no honest overall progress exists. */

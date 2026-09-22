@@ -1,9 +1,15 @@
 import { render } from "solid-js/web";
-import { createResource, createSignal, Match, Switch } from "solid-js";
+import {
+  createResource,
+  createSignal,
+  Match,
+  type Setter,
+  Switch,
+} from "solid-js";
 import { App } from "./App.tsx";
 import { Waiting } from "./Waiting.tsx";
 import { themes, wear } from "./theme.ts";
-import "./style.css";
+import "./base.css";
 
 await wear(themes[0]);
 
@@ -24,13 +30,13 @@ declare global {
 
 /* Always runs dagger fresh (via Tauri or the dev server) rather than reading a saved
  * review, which would silently go stale. */
-async function load() {
+async function load(setSaid: Setter<string[]>) {
   const tauri = window.__TAURI__;
   if (!tauri) {
     /* Query string is forwarded so a URL for one change is shareable. */
     const said = await fetch(`/review${window.location.search}`);
     if (!said.ok) throw new Error(await said.text());
-    return await streamed(said);
+    return await streamed(said, setSaid);
   }
 
   const off = await tauri.event.listen("dagger://said", (sent) =>
@@ -48,7 +54,7 @@ async function load() {
 }
 
 /* Newline-delimited JSON: progress notes, then the review last. */
-async function streamed(said: Response) {
+async function streamed(said: Response, setSaid: Setter<string[]>) {
   const reader = said.body!.getReader();
   const words = new TextDecoder();
   let left = "";
@@ -71,10 +77,9 @@ async function streamed(said: Response) {
   }
 }
 
-const [said, setSaid] = createSignal<string[]>([]);
-
 function Root() {
-  const [review] = createResource(load);
+  const [said, setSaid] = createSignal<string[]>([]);
+  const [review] = createResource(() => load(setSaid));
 
   return (
     <Switch>

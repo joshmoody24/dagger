@@ -1,0 +1,57 @@
+pre.code {
+  margin: 0 0 10px;
+  background: var(--paper);
+  border-radius: 6px;
+  font: 13px/1.6 var(--mono);
+  padding: 6px 0;
+}
+/* Long lines wrap: horizontal scrolling loses the change marks. The hanging indent keeps a
+ * continuation from looking like a line of its own. */
+pre.code .line {
+  display: block;
+  padding-inline: calc(32px + var(--gutter, 3ch)) 12px;
+  position: relative;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-indent: 12px hanging;
+}
+/* Line numbers. The page sets --gutter to fit the largest number, since a fixed width
+ * overflows on long files. */
+pre.code .gutter {
+  position: absolute;
+  inset-inline-start: 22px;
+  width: var(--gutter, 3ch);
+  text-align: right;
+  color: var(--faint);
+  text-indent: 0;
+}
+pre.code .gap {
+  color: var(--muted);
+}
+pre.code .marker {
+  position: absolute;
+  inset-inline-start: 8px;
+  font-weight: 700;
+}
+pre.code .line.added {
+  background: var(--addbg);
+}
+pre.code .line.added .marker {
+  color: var(--add);
+}
+pre.code .line.removed {
+  background: var(--delbg);
+}
+pre.code .line.removed .marker {
+  color: var(--del);
+}
+pre.code.same {
+  color: var(--muted);
+}
+pre.code .link {
+  color: var(--lean);
+  text-underline-offset: 3px;
+}
+pre.code .link:hover {
+  text-decoration: underline dotted;
+}

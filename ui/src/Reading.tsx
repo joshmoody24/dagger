@@ -1,24 +1,20 @@
-import { createEffect, createMemo, For, Show } from "solid-js";
-import type {
-  Definition as Def,
-  Identity,
-  Review,
-  Shown,
-  Step,
-} from "./dagger.ts";
-import type { Painted } from "./colouring.ts";
+import { createSignal, For, onCleanup, Show } from "solid-js";
+import type { Definition as Def, Identity, Review, Step } from "./dagger.ts";
 import { MARK, TINT, broke } from "./digest.ts";
-import { compare, focused } from "./diff.ts";
-import { stitch } from "./text.ts";
-import { colouring, painted, readied, speaks } from "./colouring.ts";
-import { dressing, wearing } from "./theme.ts";
-
-type Names = Map<string, Identity>;
+import { Diff, type Names } from "./Diff.tsx";
+import { useHeldKeys } from "./keys.ts";
+import { ReadingNav } from "./ReadingNav.tsx";
+import { Resizer } from "./Resizer.tsx";
+import "./Reading.css";
 
 /** How far the drawer is open on a narrow screen. */
 export type Sheet = "closed" | "half" | "full";
 /** Where the sheet sits: a column on a wide screen, a drawer on a narrow one. */
 export type Facing = "beside" | "away" | Sheet;
+
+/* j/k scroll speed in px/s. About sixty lines: fast enough to cross a long definition,
+ * slow enough to still read on the way past. */
+const SPEED = 1240;
 
 interface ReadingProps {
   review: Review;
@@ -28,14 +24,10 @@ interface ReadingProps {
   names: Names;
   read: boolean;
   sheet: Facing;
-  width: number;
   onStep: (by: number) => void;
   onRead: (by: number) => void;
   onOpen: (id: Identity) => void;
   onToggle: () => void;
-  onWiden: (width: number) => void;
-  /** Exposes the diff pane so the parent's j/k keys can scroll it. */
-  onPane: (pane: HTMLDivElement) => void;
   onExpand: () => void;
   onClose: () => void;
 }
@@ -51,43 +43,41 @@ export function Reading(props: ReadingProps) {
   const because = () => leans().filter((id) => broke(props.review, id));
   const uses = () => leans().filter((id) => !broke(props.review, id));
 
-  let sheet: HTMLDivElement | undefined;
+  /* Dragged width of the column; 0 leaves the stylesheet's default. */
+  const [width, setWidth] = createSignal(0);
 
-  /* Pointer capture so releasing outside the handle still ends the drag. */
-  const widen = (event: PointerEvent) => {
-    const edge = event.currentTarget as HTMLElement;
-    edge.setPointerCapture(event.pointerId);
+  let body: HTMLDivElement | undefined;
 
-    const move = (moved: PointerEvent) =>
-      props.onWiden(window.innerWidth - moved.clientX);
-    const done = () => {
-      edge.removeEventListener("pointermove", move);
-      edge.removeEventListener("pointerup", done);
-      edge.removeEventListener("pointercancel", done);
-    };
+  /* j/k scroll via rAF between keydown and keyup rather than per key repeat, because
+   * repeat timing (delay, then bursts) makes the scroll stutter. */
+  let going = 0;
+  let rolling = 0;
+  let last = 0;
 
-    edge.addEventListener("pointermove", move);
-    edge.addEventListener("pointerup", done);
-    edge.addEventListener("pointercancel", done);
+  const roll = (now: number) => {
+    if (!body || !going) {
+      rolling = 0;
+      return;
+    }
+    // Time-based so speed is the same at any refresh rate.
+    const since = last ? Math.min(now - last, 100) : 16;
+    last = now;
+    body.scrollTop += going * SPEED * (since / 1000);
+    rolling = requestAnimationFrame(roll);
   };
 
-  /* Scroll to the first changed line, or a long definition opens showing no change. */
-  createEffect(() => {
-    const here = definition();
-    const pane = sheet;
-    if (!here || !pane) return;
-
-    queueMicrotask(() => {
-      const changed = pane.querySelector(".ln.a, .ln.r");
-      if (!changed) {
-        pane.scrollTop = 0;
-        return;
-      }
-      const above = pane.getBoundingClientRect().top;
-      const onto = changed.getBoundingClientRect().top;
-      pane.scrollTop += onto - above - 12;
-    });
-  });
+  useHeldKeys(
+    { j: 1, k: -1 },
+    (way) => {
+      going = way;
+      last = 0;
+      if (!rolling) rolling = requestAnimationFrame(roll);
+    },
+    (way) => {
+      if (going === way) going = 0;
+    },
+  );
+  onCleanup(() => rolling && cancelAnimationFrame(rolling));
 
   return (
     <Show when={definition()}>
@@ -95,26 +85,26 @@ export function Reading(props: ReadingProps) {
         <aside
           class={`sheet ${props.sheet}`}
           style={
-            props.sheet === "beside" && props.width
-              ? { width: `${props.width}px` }
+            props.sheet === "beside" && width()
+              ? { width: `${width()}px` }
               : undefined
           }
         >
           <Show when={props.sheet === "beside"}>
-            <div class="wider" onPointerDown={widen} />
+            <Resizer onResize={setWidth} />
           </Show>
-          <div class="sh">
-            <b class={`ch ${TINT[one().mark]}`}>{MARK[one().mark]}</b>
+          <div class="sheet-head">
+            <b class={`mark ${TINT[one().mark]}`}>{MARK[one().mark]}</b>
             <h2>{one().path}</h2>
             <button
-              class="ib grip"
+              class="icon-button grip"
               onClick={() => props.onExpand()}
               aria-label={props.sheet === "full" ? "Shrink" : "Expand"}
             >
               {props.sheet === "full" ? "⌄" : "⌃"}
             </button>
             <button
-              class="ib grip"
+              class="icon-button grip"
               onClick={() => props.onClose()}
               aria-label="Close"
             >
@@ -122,7 +112,7 @@ export function Reading(props: ReadingProps) {
             </button>
           </div>
 
-          <div class="sm">
+          <div class="sheet-meta">
             <About
               definition={one()}
               because={because()}
@@ -133,13 +123,7 @@ export function Reading(props: ReadingProps) {
             />
           </div>
 
-          <div
-            class="sb"
-            ref={(pane) => {
-              sheet = pane;
-              props.onPane(pane);
-            }}
-          >
+          <div class="sheet-body" ref={body}>
             <Diff
               definition={one()}
               names={props.names}
@@ -147,58 +131,14 @@ export function Reading(props: ReadingProps) {
             />
           </div>
 
-          <div class="nav">
-            <div class="pair">
-              <button
-                class="by"
-                disabled={props.at === 0}
-                onClick={() => props.onStep(-1)}
-                aria-label="Back, without marking"
-              >
-                <span class="gl">back</span>
-                <kbd>p</kbd>
-              </button>
-              <button
-                class="by"
-                disabled={props.at === props.review.steps.length - 1}
-                onClick={() => props.onStep(1)}
-                aria-label="Next, without marking"
-              >
-                <span class="gl">next</span>
-                <kbd>n</kbd>
-              </button>
-              <button
-                class={`pos${props.read ? " done" : ""}`}
-                onClick={() => props.onToggle()}
-                aria-label={
-                  props.read ? "Viewed. Press to unmark" : "Not viewed yet"
-                }
-              >
-                <span class="gl">
-                  {props.read ? "✓ " : ""}
-                  {props.at + 1}/{props.review.steps.length}
-                </span>
-                <kbd>m</kbd>
-              </button>
-              <button
-                class="go"
-                disabled={props.at === 0}
-                onClick={() => props.onRead(-1)}
-                aria-label="Viewed, and back"
-              >
-                <span class="gl">✓ back</span>
-                <kbd>h</kbd>
-              </button>
-              <button
-                class="go"
-                onClick={() => props.onRead(1)}
-                aria-label="Viewed, and next"
-              >
-                <span class="gl">✓ next</span>
-                <kbd>l</kbd>
-              </button>
-            </div>
-          </div>
+          <ReadingNav
+            at={props.at}
+            total={props.review.steps.length}
+            read={props.read}
+            onStep={props.onStep}
+            onRead={props.onRead}
+            onToggle={props.onToggle}
+          />
         </aside>
       )}
     </Show>
@@ -267,138 +207,16 @@ function Names(props: {
       {(one, index) => (
         <>
           <Show when={index() > 0}>, </Show>
-          <b
+          <button
+            type="button"
             class={one.soon ? "soon" : ""}
             onClick={() => props.onOpen(one.definition.id)}
           >
             {one.definition.name}
             {one.soon ? " (not yet seen)" : ""}
-          </b>
+          </button>
         </>
       )}
     </For>
   );
-}
-
-function Diff(props: {
-  definition: Def;
-  names: Names;
-  onOpen: (id: Identity) => void;
-}) {
-  createEffect(() =>
-    readied(speaks(props.definition.file), dressing(), wearing()),
-  );
-
-  /* Memoised: read once per rendered line, and diffing/colouring is expensive. */
-  const lines = createMemo(() => {
-    const [was, is] = [
-      stitch(props.definition.before),
-      stitch(props.definition.after),
-    ];
-    const all: Shown[] =
-      was && is
-        ? compare(was, is)
-        : [
-            ...(was ?? []).map((line) => ({ mark: "−" as const, line })),
-            ...(is ?? []).map((line) => ({ mark: "+" as const, line })),
-          ];
-    return focused(all);
-  });
-
-  const unchanged = createMemo(
-    () => lines().length > 0 && lines().every((one) => one.mark === " "),
-  );
-
-  /* Highlighted in one pass so multi-line tokens (strings, comments) are handled. */
-  const tinted = createMemo(() => {
-    void colouring();
-    return painted(
-      lines().map((one) => one.line.text),
-      speaks(props.definition.file),
-      wearing(),
-    );
-  });
-
-  const gutter = () => {
-    const most = Math.max(0, ...lines().map((one) => one.line.at ?? 0));
-    return `${Math.max(3, String(most).length)}ch`;
-  };
-
-  return (
-    <pre
-      class={`code${unchanged() ? " same" : ""}`}
-      style={{ "--gutter": gutter() }}
-    >
-      <For each={lines()}>
-        {(one, at) => (
-          <span
-            class={`ln ${one.mark === "+" ? "a" : one.mark === "−" ? "r" : ""}`}
-          >
-            <i>{one.mark === " " ? "" : one.mark}</i>
-            <u>{one.line.at ?? ""}</u>
-            <Show
-              when={one.line.at !== null}
-              fallback={<span class="gap">…</span>}
-            >
-              <Code
-                pieces={tinted()[at()] ?? [{ text: one.line.text }]}
-                names={props.names}
-                here={props.definition.id}
-                onOpen={props.onOpen}
-              />
-            </Show>
-          </span>
-        )}
-      </For>
-    </pre>
-  );
-}
-
-/* Post-processes highlighter output to link names that are definitions in this review,
- * which no highlighting library can do on its own. */
-function Code(props: {
-  pieces: Painted[];
-  names: Names;
-  here: Identity;
-  onOpen: (id: Identity) => void;
-}) {
-  const parts = (): Led[] =>
-    props.pieces.flatMap((piece) =>
-      piece.colour ? split(piece, props.names, props.here) : [piece],
-    );
-
-  return (
-    <For each={parts()}>
-      {(part) => (
-        <Show
-          when={part.goes}
-          fallback={
-            <span style={part.colour ? { color: part.colour } : undefined}>
-              {part.text}
-            </span>
-          }
-        >
-          {(goes) => (
-            <span
-              class="lnk"
-              style={part.colour ? { color: part.colour } : undefined}
-              onClick={() => props.onOpen(goes())}
-            >
-              {part.text}
-            </span>
-          )}
-        </Show>
-      )}
-    </For>
-  );
-}
-
-type Led = Painted & { goes?: Identity };
-
-function split(piece: Painted, names: Names, here: Identity): Led[] {
-  const goes = names.get(piece.text.trim());
-  if (goes !== undefined && goes !== here && piece.text.trim() === piece.text) {
-    return [{ ...piece, goes }];
-  }
-  return [piece];
 }
