@@ -109,7 +109,7 @@ export function App(props: { raw: Raw; said: string[] }) {
     Math.min(index(), Math.max(steps().length - 1, 0)),
   );
 
-  /* `aside` is a definition being viewed that isn't in the reading order (e.g. an
+  /* `aside` is a definition being read that isn't in the reading order (e.g. an
    * unchanged module). Stepping clears it and returns to `at`. */
   const [aside, setAside] = createSignal<Identity | null>(null);
   const here = () => aside() ?? steps()[at()]?.definition ?? null;

@@ -74,11 +74,11 @@ fn show(
         paint.wrap(DIM, &definition.sides.latest().file),
     );
 
-    let unseen = |dependency: &Identity| step.on_faith.contains(dependency);
+    let unread = |dependency: &Identity| step.on_faith.contains(dependency);
     let named = |dependency: &Identity| {
         names
             .get(dependency)
-            .map(|name| (short(name), unseen(dependency)))
+            .map(|name| (short(name), unread(dependency)))
     };
 
     let blamed = broken_by(review, identity);
@@ -119,9 +119,9 @@ fn listed(names: &[(String, bool)]) -> String {
     let written: Vec<String> = names
         .iter()
         .take(SHOWN)
-        .map(|(name, unseen)| {
-            if *unseen {
-                format!("{name} (not yet seen)")
+        .map(|(name, unread)| {
+            if *unread {
+                format!("{name} (not yet read)")
             } else {
                 name.clone()
             }

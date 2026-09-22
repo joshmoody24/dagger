@@ -34,7 +34,7 @@ export function ReadingNav(props: ReadingNavProps) {
         <button
           class={`nav-progress${props.read ? " done" : ""}`}
           onClick={() => props.onToggle()}
-          aria-label={props.read ? "Viewed. Press to unmark" : "Not viewed yet"}
+          aria-label={props.read ? "Read. Press to unmark" : "Not read yet"}
         >
           <span>
             {props.read ? "✓ " : ""}
@@ -46,7 +46,7 @@ export function ReadingNav(props: ReadingNavProps) {
           class="nav-primary"
           disabled={props.at === 0}
           onClick={() => props.onRead(-1)}
-          aria-label="Viewed, and back"
+          aria-label="Read, and back"
         >
           <span>✓ back</span>
           <kbd>h</kbd>
@@ -54,7 +54,7 @@ export function ReadingNav(props: ReadingNavProps) {
         <button
           class="nav-primary"
           onClick={() => props.onRead(1)}
-          aria-label="Viewed, and next"
+          aria-label="Read, and next"
         >
           <span>✓ next</span>
           <kbd>l</kbd>

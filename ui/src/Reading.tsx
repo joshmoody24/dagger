@@ -204,7 +204,7 @@ function Names(props: {
       .filter((one): one is Def => one !== undefined)
       .map((definition) => ({
         definition,
-        /* No step (viewing out of order) means nothing can be "not yet seen". */
+        /* No step (viewing out of order) means nothing can be "not yet read". */
         soon: (props.step?.on_faith || []).includes(definition.id),
       }));
 
@@ -219,7 +219,7 @@ function Names(props: {
             onClick={() => props.onOpen(one.definition.id)}
           >
             {one.definition.name}
-            {one.soon ? " (not yet seen)" : ""}
+            {one.soon ? " (not yet read)" : ""}
           </button>
         </>
       )}
