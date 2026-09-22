@@ -1,11 +1,6 @@
-//! What holds what, and how it stacks.
+//! How groups and definitions nest, and which tier each sits on.
 //!
-//! A group from the grouping holds definitions, a definition holds whatever is written
-//! inside it, and at every level the same question has the same answer: whatever holds
-//! something up sits above it, and along one tier whichever is read first comes first.
-//! Worked out here, once, so the reading and the page can't disagree about it. They used
-//! to: the page worked the tiers out again for itself from the edges, and every place the
-//! two workings differed was a bug that looked like a layout bug.
+//! Tiers are worked out here, once, so the reading and the page can't disagree about them.
 
 use crate::group::Grouping;
 use crate::model::Identity;
@@ -19,13 +14,11 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Group {
-    /// A box: a group from the grouping, or a definition with others written inside it. A
-    /// definition's box holds its own node when there's something in it to read, which is
-    /// what a reader reads and points at.
+    /// A group from the grouping, or a definition with others written inside it. A
+    /// definition's box holds its own node when there's something in it to read.
     Group {
         name: String,
-        /// How far down its holder it sits: nought for whatever leans on nothing else
-        /// there, one more than the furthest thing it leans on otherwise.
+        /// Zero if it depends on nothing else in its holder, else one more than its deepest dependency.
         tier: u32,
         /// Tiers ascending, and along a tier in reading order.
         children: Vec<Group>,
@@ -60,8 +53,8 @@ impl Group {
 pub struct Shape<'a> {
     definitions: &'a BTreeMap<Identity, Definition>,
     children: BTreeMap<Identity, Vec<Identity>>,
-    /// The outermost definitions of each group. An empty path is no group at all: those
-    /// sit at the top beside the groups, each on its own.
+    /// The outermost definitions of each group. An empty path means no group: those sit at
+    /// the top beside the groups.
     outermost: BTreeMap<Vec<String>, Vec<Identity>>,
 }
 
@@ -111,8 +104,7 @@ impl<'a> Shape<'a> {
         arranged(top, edges, &first)
     }
 
-    /* A node is something to read. A definition here only to be drawn around what's read
-     * — a module nothing changed in — is its box and no more. */
+    // A definition with nothing to read (a module nothing changed in) is only a box.
     fn build(&self, id: Identity, edges: &[Edge], first: &BTreeMap<Identity, usize>) -> Group {
         let node = Group::Node { id, tier: 0 };
         match self.children.get(&id) {
@@ -134,8 +126,8 @@ impl<'a> Shape<'a> {
     }
 }
 
-/// The same things with their tiers filled in, tiers ascending and along a tier in reading
-/// order. A box counts as one thing: it leans on whatever its contents lean on outside it.
+/// Fills in tiers and sorts by tier, then reading order. A box counts as one thing that
+/// depends on whatever its contents depend on outside it.
 fn arranged(mut held: Vec<Group>, edges: &[Edge], first: &BTreeMap<Identity, usize>) -> Vec<Group> {
     let units: Vec<BTreeSet<Identity>> = held
         .iter()
@@ -170,9 +162,8 @@ fn arranged(mut held: Vec<Group>, edges: &[Edge], first: &BTreeMap<Identity, usi
         .collect()
 }
 
-/// Nought for a unit that leans on nothing else here, one more than the furthest it leans
-/// on otherwise. A circle is settled by whichever unit is asked first, which is enough:
-/// being in one means there is no right answer, only a readable one.
+/// Zero for a unit that depends on nothing else here, else one more than its deepest
+/// dependency. A cycle has no right answer, so it's settled by whichever unit is visited first.
 fn tiers(units: &[BTreeSet<Identity>], edges: &[Edge]) -> Vec<u32> {
     let unit_of: BTreeMap<Identity, usize> = units
         .iter()
@@ -289,8 +280,7 @@ mod tests {
             .collect()
     }
 
-    /* A test leans on a helper, so the helper holds it up, so the helper goes above — with
-     * the box of tests counting as one thing that leans on whatever its contents do. */
+    /// A box of tests counts as one thing that depends on whatever its contents do.
     #[test]
     fn what_leans_on_the_code_around_it_sits_below_it_box_or_not() {
         let groups = shaped(
@@ -311,8 +301,6 @@ mod tests {
         );
     }
 
-    /* A definition with others inside it is a box holding its own node, so a reader has
-     * something to read and point at; one with nothing inside is just a node. */
     #[test]
     fn a_box_holds_its_own_node_and_an_empty_one_is_a_node() {
         let groups = shaped(
@@ -325,7 +313,6 @@ mod tests {
         assert!(boxed(&groups, "Alias").is_none());
     }
 
-    /* A box is a definition too: something leaning on it holds it up like anything else. */
     #[test]
     fn a_box_that_something_leans_on_is_a_dependency_like_any_other() {
         let groups = shaped(
@@ -341,7 +328,6 @@ mod tests {
         assert_eq!(node(&groups, 1).unwrap().tier(), 1);
     }
 
-    /* At one tier the order along it is the reading's to say, a box no more than a node. */
     #[test]
     fn along_a_tier_the_reading_decides() {
         let definitions = [
@@ -360,7 +346,6 @@ mod tests {
         assert_eq!(inside(&[1, 2, 5, 3]), ["1", "2", "tests", "3"]);
     }
 
-    /* Groups stack the same way, and whatever is in no group sits beside them. */
     #[test]
     fn a_group_sits_below_what_it_leans_on_and_the_ungrouped_beside_them() {
         let definitions: BTreeMap<Identity, Definition> = [

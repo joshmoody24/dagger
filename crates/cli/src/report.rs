@@ -3,15 +3,13 @@ use dagger_core::model::Part;
 use dagger_core::review::{Definition, Impact, Review};
 use std::io::Write;
 
-/// A one-character shorthand for what happened, borrowed from the mock: additions and
-/// removals stand out, and a contract change is louder than a body change.
+/// One-character summary of a change. A contract change is louder than a body change.
 pub fn glyph(change: &Change) -> char {
     match change {
         Change::Added => '+',
         Change::Removed => '-',
         Change::Kept(edits) if edits.contract => '!',
-        // The signature was rewritten without callers noticing: reformatted, or a type
-        // spelled a different way that means the same thing.
+        // Signature rewritten without changing meaning: reformatted, or a type spelled differently.
         Change::Kept(edits) if edits.changed(Part::Type) => '~',
         Change::Kept(edits) if edits.changed(Part::Body) => '~',
         Change::Kept(edits) if edits.changed(Part::Docs) => '"',
@@ -26,14 +24,13 @@ pub fn name(definition: &Definition) -> String {
     path.join("::")
 }
 
-/// Writing rather than printing, because a reader quitting out of a pager closes the
-/// pipe, and that shouldn't look like a crash.
+/// Write errors are ignored because a reader quitting a pager closes the pipe, and that
+/// shouldn't look like a crash.
 pub fn print(review: &Review) {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    // A definition can be both changed and downstream of someone else's change, so
-    // these two counts overlap and don't add up to the total on purpose.
+    // Changed and affected overlap, so they don't add up to the total on purpose.
     let read = review.reading.len();
     let changed = review
         .reading
@@ -84,8 +81,7 @@ pub fn print(review: &Review) {
         );
     }
 
-    // Whatever might be hiding a change is said first, and said as the worse news it is.
-    // Told all together, the one that matters is buried among the ones that don't.
+    // Warnings that might hide a change come first, so they aren't buried among the rest.
     let (hiding, weaker): (Vec<_>, Vec<_>) = review
         .warnings
         .iter()

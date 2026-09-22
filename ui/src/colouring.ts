@@ -2,21 +2,11 @@ import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { createSignal } from "solid-js";
 
-/* Colouring code the way an editor does, with the grammar an editor uses.
- *
- * What was here before split a line into comments, strings, names and everything else,
- * which is four colours where an editor has twenty: a keyword, a number and a bracket all
- * came out the same, so most of the page was one colour. Shiki reads the same TextMate
- * grammars, which is what makes its answer look like the editor the reader came from —
- * and it takes the theme already being worn, so the two can't disagree.
- *
- * A whole block at once, not a line at a time. A grammar carries state from one line to the
- * next — inside a block comment, inside a template string — so a line handed over on its own
- * is read as if the file started there, and the middle of a comment comes back as code.
- */
+/* Shiki, using the theme already being worn, so code looks like the reader's editor. Whole
+ * blocks are highlighted at once because grammars carry state between lines (block
+ * comments, template strings). */
 
-/* Only the languages this can be pointed at so far. A grammar is a few hundred kilobytes,
- * so they're fetched when a file needs one and not before. */
+/* Grammars are a few hundred kilobytes each, so they're fetched on demand. */
 const GRAMMARS: Record<string, () => Promise<unknown>> = {
   typescript: () => import("@shikijs/langs/typescript"),
   tsx: () => import("@shikijs/langs/tsx"),
@@ -64,8 +54,7 @@ export interface Painted {
 let ready: HighlighterCore | undefined;
 const loading = new Set<string>();
 
-/* Bumped whenever a grammar or theme finishes loading, so anything showing code can ask
- * again now there's an answer. */
+/* Bumped when a grammar or theme finishes loading so code re-renders. */
 const [settled, setSettled] = createSignal(0);
 export const colouring = settled;
 
@@ -97,8 +86,7 @@ export async function readied(
     }
     setSettled((was) => was + 1);
   } catch {
-    /* A grammar that won't load leaves the code plain, which is worse to look at and
-     * right in every other way. */
+    /* Leave the code plain and allow a retry. */
     loading.delete(asked);
   }
 }

@@ -1,13 +1,5 @@
-//! Checking that nothing changed without being accounted for.
-//!
-//! The review is only as honest as the extractors: anything they walk past simply isn't
-//! in it, and the output looks just as tidy either way. So every line that differs between
-//! the snapshots is checked against the definitions covering that file, and whatever falls
-//! outside all of them is reported.
-//!
-//! Imports are the usual answer. Nobody has written an extractor yet that calls an import
-//! statement a definition, so a commit that only changes what a file pulls in can produce
-//! a review with nothing in it.
+//! Reports differing lines that no definition covers. Anything an extractor skips
+//! (imports, usually) would otherwise silently drop out of the review.
 
 use dagger_core::diagnostic::Diagnostic;
 use dagger_core::model::{Definition, Occurrence};
@@ -46,8 +38,8 @@ pub fn check(
 /// Enough line numbers to go and look, not enough to drown the rest of the output.
 const SHOWN: usize = 5;
 
-/// Which stretches of each file some definition speaks for, on each side. A part that
-/// named its own file is counted against that one, the way a C declaration in a header is.
+/// Byte ranges some definition covers, per file. A part in another file (a C declaration
+/// in a header) counts against that file.
 type Coverage<'a> = BTreeMap<&'a str, Vec<Range<usize>>>;
 
 fn covered(definitions: &[Definition]) -> (Coverage<'_>, Coverage<'_>) {
@@ -79,9 +71,8 @@ fn read(dir: &Path, file: &str) -> String {
     std::fs::read_to_string(dir.join(file)).unwrap_or_default()
 }
 
-/// Which differing lines no definition speaks for, numbered from one as an editor would.
-/// A line that was deleted is checked against the older side, an added one against the
-/// newer, and reported at whichever side it belongs to.
+/// Differing lines no definition covers, numbered from one. Deleted lines are checked
+/// against the before side, added lines against the after side.
 fn unaccounted(
     before: &str,
     after: &str,
@@ -95,8 +86,7 @@ fn unaccounted(
     let mut old_line = 0usize;
     let mut new_line = 0usize;
     for change in diff.iter_all_changes() {
-        // A blank line belongs to nobody. Definitions sit apart from each other, and the
-        // space between them isn't something a reader was going to look at.
+        // Blank lines between definitions aren't worth reporting.
         let blank = change.value().trim().is_empty();
 
         match change.tag() {
@@ -122,8 +112,7 @@ fn unaccounted(
     missed
 }
 
-/// Where each line starts, so a line number can be matched against the byte ranges
-/// extractors report.
+/// Line start offsets, so line numbers can be matched against extractors' byte ranges.
 fn offsets(text: &str) -> Vec<usize> {
     let mut starts = vec![0];
     starts.extend(
@@ -141,11 +130,8 @@ fn line_at(starts: &[usize], line: usize) -> Option<Range<usize>> {
     Some(start..end)
 }
 
-/// Whether any definition speaks for any of this line.
-///
-/// Overlap rather than containment, because a definition rarely starts where its line does.
-/// `pub fn start()` begins after the `pub`, a doc comment begins after the indentation, and
-/// asking whether the line's first byte sits inside the range says no to both.
+/// Overlap rather than containment, since a definition rarely starts at its line's first
+/// byte (`pub fn` starts after the `pub`, a doc comment after the indentation).
 fn inside(line: Option<Range<usize>>, covered: Option<&[Range<usize>]>) -> bool {
     let Some(line) = line else {
         return true;

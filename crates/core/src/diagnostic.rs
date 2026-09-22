@@ -1,16 +1,14 @@
 use crate::model::{Identity, Locator};
 use serde::{Deserialize, Serialize};
 
-/// Something an adapter handed us that we had to work around. We answer anyway, but
-/// the answer came from worse information than it should have, and the reader
-/// deserves to hear about it.
+/// Something an adapter handed us that we had to work around. We still answer, but from
+/// worse information than we should have, and the reader should know.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum Diagnostic {
-    /// One snapshot had a compiler's view of this definition and the other didn't,
-    /// so we fell back to comparing the signature as written. Usually means the file
-    /// changed language or stopped type checking.
+    /// One snapshot had a compiler's view of this definition and the other didn't, so we
+    /// fell back to comparing the signature as written.
     LopsidedContract { definition: Identity },
     /// A name in this definition's type part that no binder could place. If it turns
     /// out to be something that changed, we missed telling the reader about it.
@@ -20,26 +18,18 @@ pub enum Diagnostic {
     },
     /// An extractor reported a mention coming from a definition it never reported.
     MentionFromNowhere { from: Locator },
-    /// A definition whose own pieces overlap, or run backwards.
-    ///
-    /// Pieces are the definition cut into parts, so they divide it up rather than covering
-    /// each other. Two pieces over the same text means the same line is shown twice — and
-    /// when they're in different parts, that one line is both contract and prose, so a
-    /// comment change reads as breaking every caller or the other way about.
+    /// A definition whose own pieces overlap, or run backwards. Overlapping pieces show
+    /// the same line twice, and across parts make one line both contract and prose.
     Tangled {
         definition: Locator,
         /// Where the trouble starts, in bytes.
         at: u32,
     },
-    /// Two definitions in one snapshot answering to the same name.
-    ///
-    /// A definition has to be addressable by name, or it can't be told from its twin in the
-    /// other snapshot. One of them gets matched and the rest read as arriving or leaving,
-    /// which nobody did — so this can invent a change as easily as hide one.
+    /// Two definitions in one snapshot with the same name. Only one gets matched and the
+    /// rest read as added or removed, so this can invent a change or hide one.
     TwoOfOneName { locator: Locator, times: usize },
-    /// Lines that differ between the snapshots but sit inside no definition, so nothing in
-    /// the review accounts for them. Whatever an extractor walked past. A reader who trusts
-    /// the review would never learn these changed.
+    /// Lines that differ between the snapshots but sit inside no definition, so the review
+    /// never shows them.
     Unattributed {
         file: String,
         lines: usize,
@@ -49,10 +39,7 @@ pub enum Diagnostic {
 }
 
 impl Diagnostic {
-    /// Which definition this is about, where it's about one that has an identity.
-    ///
-    /// Some aren't: lines belonging to nothing are about a file, and a name reported twice
-    /// is about a name that couldn't become an identity in the first place.
+    /// Which definition this is about, when it's about one with an identity.
     pub fn about(&self) -> Option<Identity> {
         match self {
             Diagnostic::LopsidedContract { definition }
@@ -64,14 +51,8 @@ impl Diagnostic {
         }
     }
 
-    /// Whether this one means the review might not be showing something that changed.
-    ///
-    /// These aren't all the same kind of bad news, and reporting them as though they were
-    /// teaches a reader to ignore the lot. Changed lines nobody accounts for, a mention
-    /// from a definition that was never reported, a name in a contract that nothing could
-    /// place — each of those can hide a change, and a reader trusting the review would
-    /// never learn of it. A lopsided contract is different in kind: the change is there
-    /// and it's shown, it was just worked out from the text rather than the compiler.
+    /// Whether this could mean the review is missing a change. A lopsided contract can't:
+    /// the change is shown, just worked out from the text rather than the compiler.
     pub fn hides(&self) -> bool {
         !matches!(self, Diagnostic::LopsidedContract { .. })
     }

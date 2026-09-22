@@ -7,9 +7,8 @@ import type {
   Review,
 } from "./dagger.ts";
 
-/* Turns what dagger sent into the shapes a page wants: one word for what happened to each
- * definition, and the two sides pulled out of a shape built so "in neither" can't be
- * written. Nothing here decides anything about the code — that arrives already settled.
+/* Turns what dagger sent into the shapes the page wants. Nothing here decides anything
+ * about the code; that arrives already settled.
  */
 
 export const MARK = {
@@ -31,20 +30,11 @@ export const TINT = {
   still: "aff",
 };
 
-/* Nearly nothing, now.
- *
- * This used to gather one definition's facts from six places — a map for what changed,
- * another for how far a change reached it, another for its group — and word every warning
- * itself. All of that arrives already worked out and already said, so what's left is the
- * page's own business: flattening a name for display, choosing the one word a node has room
- * for, and pulling the two sides out of a shape built so "in neither" can't be written.
- */
 export function digest(raw: Raw): Review {
   const definitions = new Map<Identity, Definition>();
   for (const [id, one] of Object.entries(raw.definitions)) {
-    /* Which sides there are is the one thing the model won't let you get wrong: a
-     * definition is added, removed, or kept with both — never neither. Asked this way
-     * rather than by reaching for a field, the compiler holds that to it. */
+    /* Checked by discriminant so the compiler enforces added, removed or kept, never
+     * neither. */
     const sides = one.sides;
     const before =
       "kept" in sides

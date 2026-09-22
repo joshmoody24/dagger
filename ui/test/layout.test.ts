@@ -1,7 +1,4 @@
-/* Checks the part of the page that isn't drawing: reading a review and working out where
- * things go. Runs on a saved review, so it needs no browser, no repository and no language
- * server.
- */
+/* Runs on a saved review, so no browser, repository or language server is needed. */
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -22,10 +19,7 @@ const nodes = [...review.definitions.values()].filter(
   (d) => d.kind !== "module",
 );
 
-/* Two different things arrive: what there is to read, and what has to be on the page for
- * the reading to make sense. Everything in the reading order is here to be drawn, and what
- * isn't in it is the modules around the rest — never an ordinary definition quietly left
- * out of the order. */
+/* Anything not in the reading order must be a module drawn around the rest. */
 test("everything to read is on the page, and the rest is modules", () => {
   const ordered = new Set(review.steps.map((step) => step.definition));
   for (const step of ordered) assert.ok(review.definitions.has(step));
@@ -40,8 +34,7 @@ test("everything to read is on the page, and the rest is modules", () => {
   }
 });
 
-/* A module that's read is a node like any other, inside the box that carries its name;
- * one that's only here to be drawn around the rest is its box and no more. */
+/* A module that's read is a node; one that isn't is only a box. */
 test("everything to read gets a place, and nothing else", () => {
   assert.equal(laid.at.size, review.steps.length);
   for (const [, spot] of laid.at) {
@@ -62,8 +55,7 @@ test("nothing is drawn on top of anything else", () => {
   }
 });
 
-/* Boxes nest to whatever depth the grouping has, so this checks the rule rather than two
- * named levels of it: nothing is ever drawn outside the box that holds it. */
+/* Boxes nest to any depth, so this checks the rule at every level. */
 test("nothing escapes the box that holds it", () => {
   const within = (
     child: { x: number; y: number; w: number; h: number },
@@ -91,9 +83,7 @@ test("nothing escapes the box that holds it", () => {
   laid.boxes.forEach(walk);
 });
 
-/* Whatever holds something up is drawn above it, and the only lines allowed to point the
- * other way are the ones where no drawing could do better: both ends are in the same cycle,
- * so one of them has to come first. Those are drawn differently on purpose. */
+/* Downward edges are only allowed inside a cycle, where something has to come first. */
 test("a line only runs downwards where the code is circular", () => {
   const placed = review.edges.filter(
     (edge) => laid.at.has(edge.from) && laid.at.has(edge.to),
@@ -112,8 +102,7 @@ test("a line only runs downwards where the code is circular", () => {
 
 const name = (id: Identity) => review.definitions.get(id)!.name;
 
-/* Which cycle each definition belongs to, if any: Tarjan, with everything else left in a
- * group of its own. */
+/* Tarjan's SCC: which cycle each definition belongs to. */
 function cycles(edges: Edge[]) {
   const leadsTo = new Map<Identity, Identity[]>();
   for (const edge of edges)
@@ -150,8 +139,7 @@ function cycles(edges: Edge[]) {
   return group;
 }
 
-/* The one that bit us: the graph's font grew and the width it was drawn from didn't, so
- * names hung out of their boxes. These numbers mirror where Node puts its text. */
+/* These numbers mirror where Node puts its text. */
 test("a name stays inside its node", () => {
   const CHAR = 13 * 0.6;
   for (const node of nodes) {
@@ -178,8 +166,7 @@ test("a definition in one piece reads as itself", () => {
   assert.equal(shown, piece.text.replace(/^\n+|\n+$/g, ""));
 });
 
-/* A module's imports aren't one stretch of the file, and a gap has to say so rather than
- * running two distant lines together. */
+/* A gap between non-adjacent pieces is shown, not run together. */
 test("pieces that aren't next to each other are separated", () => {
   const scattered = [...review.definitions.values()].find((definition) => {
     const pieces =
@@ -200,8 +187,7 @@ test("pieces that aren't next to each other are separated", () => {
   );
 });
 
-/* A reader points at a line — "the check on line 31" — so every line that's really in the
- * file says which one, counting up as it goes. */
+/* Readers refer to lines by number, so every real line carries one. */
 test("every line says where it is in the file", () => {
   for (const definition of review.definitions.values()) {
     const lines = stitch(definition.after);
@@ -225,8 +211,7 @@ test("every line says where it is in the file", () => {
   }
 });
 
-/* Both snapshots are read at once, so what dagger says about them arrives interleaved.
- * Nothing here may be worked out from the order the lines turn up in. */
+/* Both snapshots are read at once, so lines interleave; nothing may depend on their order. */
 test("a progress report reads the same however the two readings interleave", () => {
   const said = [
     "comparing aaa to bbb",
@@ -267,8 +252,6 @@ test("every reading still going is shown as going", () => {
   );
 });
 
-/* A definition can be a whole file, and a file can be ten thousand lines. What's near a
- * change is context; what's far from one is a haystack. */
 test("a long diff is cut down to what sits near a change", () => {
   const line = (at: number, text: string) => ({ at, text });
   const lines = Array.from({ length: 500 }, (_, at) => ({
@@ -302,7 +285,6 @@ test("a diff with no changes at all keeps its beginning", () => {
   );
 });
 
-/* Short enough to show whole, and it is: no marks where nothing was left out. */
 test("a short diff is left alone", () => {
   const lines = [
     { mark: " " as const, line: { at: 1, text: "one" } },
@@ -311,9 +293,7 @@ test("a short diff is left alone", () => {
   assert.deepEqual(focused(lines, 10), lines);
 });
 
-/* Whatever it decides changed, the marks have to add up: reading everything but the
- * additions gives back the older version, and everything but the removals the newer. A
- * diff that doesn't is lying about one of them. */
+/* Everything but the additions is the old side; everything but the removals is the new. */
 test("a diff rebuilds both of the sides it came from", () => {
   const lines = (texts: string[]) =>
     texts.map((text, at) => ({ at: at + 1, text }));
@@ -347,8 +327,6 @@ test("a diff rebuilds both of the sides it came from", () => {
   }
 });
 
-/* The reason the comparison was rewritten: a definition can be a whole file, and the table
- * of every line against every other took most of a second to find a handful of changes. */
 test("a small change in a long file is found without weighing every line against every other", () => {
   const lines = (texts: string[]) =>
     texts.map((text, at) => ({ at: at + 1, text }));
@@ -374,10 +352,7 @@ test("nothing changed means nothing marked", () => {
   assert.ok(compare(lines, [...lines]).every((one) => one.mark === " "));
 });
 
-/* The case the first long-file test missed. Its six thousand lines were all distinct, so
- * every one of them was a place the two versions could be pinned together. A file of
- * repeated punctuation — which is what generated output looks like — offers no such line,
- * and the comparison used to fall back to weighing every line against every other. */
+/* No line is unique to both sides, so there is nothing to anchor on. */
 test("a long file of repeated lines is compared without weighing every pair", () => {
   const body = Array.from({ length: 4000 }, (_, at) => ({
     at: at + 2,
@@ -409,8 +384,7 @@ test("a long file of repeated lines is compared without weighing every pair", ()
   );
 });
 
-/* A page laid out from a tree written by hand, for shapes the saved review doesn't hold.
- * The tree says everything but pixels, so a definition here is no more than a name. */
+/* Layouts from hand-written trees, for shapes the saved review doesn't have. */
 const node = (id: string, tier: number): Group => ({ type: "node", id, tier });
 const box = (name: string, tier: number, children: Group[]): Group => ({
   type: "group",
@@ -474,8 +448,6 @@ const boxAt = (laid: ReturnType<typeof layout>, label: string) => {
   return found!;
 };
 
-/* A tier is a row: a higher tier is further down, whether it's a node or a box there, and
- * along one tier things go left to right in the order they arrived. */
 test("tiers go down the page and the order along one goes across", () => {
   const laid = paged(
     [
@@ -501,9 +473,6 @@ test("tiers go down the page and the order along one goes across", () => {
   );
 });
 
-/* Whatever the page has been asked not to show is gone from the definitions it's given,
- * and a box left holding nothing goes with it — otherwise putting the ripples away left an
- * empty box labelled after a module nothing mentions. */
 test("a box with nothing left in it is not drawn", () => {
   const tree = [
     box("lib", 0, [node("1", 0)]),

@@ -1,15 +1,11 @@
-/* The shapes dagger emits, as far as the page cares about them.
- *
- * Only what's read here is described. A protocol is dagger's to define and this is one
- * reader of it, so claiming more than is used would be inventing a second, quietly
- * disagreeing copy of the model.
+/* The shapes dagger emits, only as far as the page reads them. The protocol is dagger's;
+ * describing more than is used would be a second, disagreeing copy of it.
  */
 
 import type * as wire from "./types.generated.ts";
 
-/* What dagger says is written from the types that say it, in types.generated.ts, and named
- * here so the page has one place to look. What the page makes of it is further down and
- * written by hand, because nothing in Rust knows about a box on a screen. */
+/* Wire types come from types.generated.ts and are re-exported here so the page has one
+ * place to look. The page's own shapes are below. */
 export type Identity = wire.Identity;
 export type Span = wire.Span;
 export type Piece = wire.Piece;
@@ -28,12 +24,8 @@ export type Warning = wire.Warning;
 /** One definition as it arrives, with everything dagger knows about it. */
 export type RawDefinition = wire.Definition;
 
-/* Everything one reading of a repository comes to.
- *
- * Named here rather than described here. This used to be written out by hand, which left
- * the outermost shape — the one every other shape arrives inside — as the one thing nothing
- * checked. A renamed field doesn't fail in TypeScript: the declaration is satisfied and the
- * value turns up undefined. */
+/* Aliased to the generated type so a renamed field fails to compile instead of arriving
+ * undefined. */
 export type Raw = wire.Review;
 
 /* ---------------- what the page makes of it ---------------- */
@@ -41,11 +33,8 @@ export type Raw = wire.Review;
 export type Mark =
   "added" | "removed" | "contract" | "body" | "docs" | "affected" | "still";
 
-/* One definition, in the shape a page wants rather than the shape it arrived in.
- *
- * Nearly all of this now arrives already worked out, and what's left is the page's own
- * business: a name flattened for display, a one-word mark to draw, the two sides pulled out
- * of the shape that makes "in neither" unrepresentable. */
+/* One definition in the shape the page wants: name flattened, a one-word mark, and both
+ * sides pulled out of the wire shape. */
 export interface Definition {
   id: Identity;
   name: string;
@@ -79,9 +68,8 @@ export interface Review {
   warnings: Warning[];
 }
 
-/* One line as the page shows it: what it says, and where it is in the file. A gap between
- * two pieces of a definition is a line on the page and nowhere in the file, so it has no
- * number. */
+/* A gap between two pieces of a definition is a line on the page but not in the file, so it
+ * has no number. */
 export interface Line {
   at: number | null;
   text: string;

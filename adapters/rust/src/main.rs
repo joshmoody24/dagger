@@ -1,12 +1,7 @@
 //! Reads a Rust snapshot and reports what's defined in it.
 //!
-//! Two tools, each doing what it's good at. `syn` parses the files, which is how the
-//! parts and their spans are worked out. rust-analyzer answers what refers to what,
-//! because that's a question about meaning rather than shape, and guessing it from
-//! names invents edges that aren't there.
-//!
-//! rust-analyzer has to be on PATH. Without it there's nothing useful to report: a
-//! graph of made-up edges reads worse than no graph.
+//! `syn` finds the definitions and their spans. rust-analyzer (required on PATH) says
+//! what refers to what, since guessing that from names invents edges.
 
 mod items;
 mod modules;
@@ -45,9 +40,7 @@ fn main() -> Result<()> {
 fn answer(request: Request) -> Result<Response> {
     match request {
         Request::Describe { settings } => Ok(Response::Described {
-            // Nothing here needs them, but this is the first thing dagger asks, and a
-            // setting nobody understands is worth hearing about before a snapshot has been
-            // laid out rather than after.
+            // Settings are checked here so a bad one is reported before any snapshot is laid out.
             include: settings_of(settings).map(|_| vec!["**/*.rs".to_string()])?,
             revisions: None,
             usage: Vec::new(),
@@ -73,20 +66,12 @@ fn answer(request: Request) -> Result<Response> {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Settings {
-    /// Cargo manifests to load besides the one at the root.
-    ///
-    /// A workspace can leave a crate out — dagger's own window is kept out of its workspace
-    /// so a build of the tool doesn't drag a webview in with it — and rust-analyzer then
-    /// knows nothing about the files in it. Every definition there comes back with no
-    /// contract and no callers, which is worse than slow.
+    /// Cargo manifests to load besides the root one, for crates the workspace leaves out;
+    /// rust-analyzer otherwise knows nothing about their files.
     #[serde(default)]
     linked: Vec<String>,
-    /// How many files to chase users of before giving up and saying so.
-    ///
-    /// A backstop, not a setting anybody should have to reach for: how far a reading goes
-    /// is `--ripples`, and someone who asks for ten steps and gets six because of a number
-    /// they never chose has been told something untrue about their own change. So this
-    /// sits high enough to catch a runaway and nothing else.
+    /// How many files to chase users of before giving up. A backstop for runaways, not a
+    /// setting to reach for: `--ripples` is how far a reading goes.
     #[serde(default = "files_to_walk")]
     max_walk: usize,
 }
@@ -95,9 +80,8 @@ fn files_to_walk() -> usize {
     Reach::WALK
 }
 
-/// What the repository told this adapter, refused if it isn't something this adapter
-/// knows. A setting quietly ignored is worse than one rejected: the run carries on and
-/// answers a question nobody asked.
+/// Unknown settings are rejected rather than ignored, so a typo doesn't silently change
+/// the run.
 fn settings_of(settings: serde_json::Value) -> Result<Settings> {
     let settings = if settings.is_null() {
         json!({})
@@ -128,8 +112,7 @@ fn extract(
         }
     );
     let mut options = json!({
-        // Nothing here needs macros expanded or build scripts run, and both cost real
-        // time on a cold tree.
+        // Neither is needed here, and both cost real time on a cold tree.
         "cargo": { "buildScripts": { "enable": false } },
         "procMacro": { "enable": false },
     });
@@ -168,9 +151,8 @@ fn extract(
         },
     );
 
-    // `syn` costs nothing over the wire, so every claimed file is parsed up front rather
-    // than only what the walk happens to reach — a file nobody's change touches still gets
-    // to say what it defines. Only the rust-analyzer half of reading it stays lazy.
+    // Parsing with `syn` is cheap, so every file is parsed up front; only the
+    // rust-analyzer side stays lazy.
     for path in &ours {
         walk.look(path);
     }
@@ -239,8 +221,7 @@ impl Source for RustSource {
     }
 }
 
-/// A file that won't parse is skipped and spoken about, rather than taking the whole
-/// snapshot down with it. Half a review beats none.
+/// A file that won't parse is skipped and noted rather than failing the whole snapshot.
 fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parsed> {
     let source =
         std::fs::read_to_string(dir.join(path)).with_context(|| format!("couldn't read {path}"))?;
@@ -260,17 +241,9 @@ fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parse
     })
 }
 
-/// Gives each definition the prose written above it.
-///
-/// A syntax tree has no comments in it. `///` survives because the language calls it an
-/// attribute and hands it over with the item; `//` and `/* */` are thrown away by the lexer
-/// before anything here sees them. So a definition arrives owning its declaration and not a
-/// word of what was written to explain it, and a change to that explanation is reported as
-/// lines belonging to no definition at all — which, in a codebase that explains itself in
-/// prose rather than in doc comments, is most of what gets written.
-///
-/// The rule is the same one every extractor needs, so it's kept in one place and told
-/// without knowing what a comment looks like in any language.
+/// Gives each definition the plain comment written above it. `syn` keeps `///` but the
+/// lexer drops `//` and `/* */`, so without this a change to such a comment belongs to
+/// no definition.
 fn told(source: &str, found: &mut [items::Found]) {
     let claimed: Vec<Range<usize>> = found
         .iter()
@@ -285,8 +258,7 @@ fn told(source: &str, found: &mut [items::Found]) {
         ) else {
             continue;
         };
-        /* A file's own module starts where the file does, so there's nothing above it —
-         * and reaching for some would take the prose off whatever comes first. */
+        // Nothing sits above the file's own module; looking would steal the first item's prose.
         if from == 0 {
             continue;
         }
@@ -331,8 +303,8 @@ fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
     }
 }
 
-/// Whether this kind of thing can hold others. A property of the language, which is why the
-/// extractor is the one to say it: nothing downstream knows that Rust has `impl` blocks.
+/// Only the extractor knows which kinds hold others; nothing downstream knows Rust has
+/// `impl` blocks.
 fn role_of(kind: &str) -> Role {
     match kind {
         "module" | "impl" | "trait" => Role::Container,
@@ -340,12 +312,8 @@ fn role_of(kind: &str) -> Role {
     }
 }
 
-/// What this is written inside: the smallest thing that covers it and isn't it.
-///
-/// Read straight off the spans, because Rust nests — a method is written inside its `impl`,
-/// which is written inside its module. Nothing has to be inferred from names, which is the
-/// point: a method's scope names the type it belongs to, not the `impl` block it sits in,
-/// so anything working backwards from the scope gets this wrong in the ordinary case.
+/// The smallest definition that covers this one. Read off spans rather than scope names:
+/// a method's scope names its type, not the `impl` block it sits in.
 fn holding<'a>(file: &'a Parsed, found: &items::Found) -> Option<&'a items::Found> {
     file.found
         .iter()
@@ -363,13 +331,9 @@ fn locator(found: &items::Found) -> Locator {
     }
 }
 
-/// Hover is markdown with the definition fenced off in it, which is rust-analyzer's
-/// account of what the thing looks like from outside.
-///
-/// The first block names the module it lives in, so the one wanted is the last — but only
-/// of those before the rule. Past the rule comes the doc comment, and a doc comment's
-/// examples are fenced rust too. Reading one of those as the contract would turn editing
-/// an example into breaking every caller.
+/// The contract is the last fenced rust block before the `---` rule: the first block only
+/// names the module, and past the rule doc examples are fenced rust too, so reading one
+/// would make editing an example a breaking change.
 fn signature(hover: &serde_json::Value) -> Option<String> {
     let markdown = hover["contents"]["value"].as_str()?;
     let declaration = markdown.split("\n---").next().unwrap_or(markdown);

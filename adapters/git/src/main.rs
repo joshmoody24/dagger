@@ -1,12 +1,7 @@
 //! Lays a git revision out on disk for the extractors to read.
 //!
-//! Runs in the repository it's reading, since a request only names a revision. Uses
-//! `git archive` rather than a checkout, so the user's working tree and index are
-//! never touched.
-//!
-//! The revision `current` means the files as they are right now, uncommitted edits
-//! and new files included. That one needs no copying: the repository is already the
-//! snapshot, and we just say which files count so that build output stays out.
+//! Uses `git archive` rather than a checkout so the working tree and index are never
+//! touched. The revision `current` is the working tree itself, so it needs no copying.
 
 use anyhow::{Context, Result, bail};
 use dagger_protocol::{Request, Response, Revisions};
@@ -37,12 +32,11 @@ fn main() -> Result<()> {
 #[derive(Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
-    /// Point the snapshot at the repository's ignored files — build output, installed
-    /// packages — instead of leaving them out. On by default: without them, tooling that
-    /// reads generated declarations has to compile everything from source instead.
+    /// Whether to link the repository's ignored files (build output, installed packages)
+    /// into the snapshot. On by default: without them a language server compiles
+    /// everything from source.
     carry_ignored: bool,
-    /// What branches are cut from and merged back into, when it isn't the obvious one.
-    /// Left empty, this is whatever the remote says its own HEAD is.
+    /// The branch others are cut from. Empty means whatever the remote's HEAD is.
     trunk: String,
 }
 
@@ -74,9 +68,7 @@ fn answer(request: Request) -> Result<Response> {
         }
         Request::Describe { settings } => Ok(Response::Described {
             include: {
-                // Nothing here needs them, but this is the first thing dagger asks, and a
-                // setting nobody understands is worth hearing about before a snapshot has
-                // been laid out rather than after.
+                // Settings are checked here so a bad one is reported before any snapshot is laid out.
                 settings_of(settings)?;
                 Vec::new()
             },
@@ -93,13 +85,8 @@ fn answer(request: Request) -> Result<Response> {
     }
 }
 
-/// What the repository told this adapter, refused if it isn't something this adapter
-/// knows.
-///
-/// A setting quietly ignored is worse than one rejected: the run carries on, answers a
-/// question nobody asked, and looks exactly like a run that did as it was told. This used
-/// to take whatever it could make sense of and shrug off the rest, which meant a typo in
-/// `dagger.toml` was invisible — and so was every setting written after it.
+/// Unknown settings are rejected rather than ignored, so a typo in `dagger.toml` doesn't
+/// silently change the run.
 fn settings_of(settings: serde_json::Value) -> Result<Settings> {
     if settings.is_null() {
         return Ok(Settings::default());
@@ -116,7 +103,7 @@ const CURRENT: &str = "current";
 fn worth_reviewing() -> Result<Revisions> {
     let dirty = !listing(&["status", "--porcelain", "-z"])?.is_empty();
     Ok(if dirty {
-        // Nothing committed means nothing to read a message off.
+        // `current` isn't a commit, so there's no subject to read.
         Revisions {
             before: "HEAD".to_string(),
             after: CURRENT.to_string(),
@@ -136,28 +123,21 @@ fn worth_reviewing() -> Result<Revisions> {
 struct Ends<'a> {
     left: &'a str,
     right: &'a str,
-    /// Whether the left end means "where these two parted" rather than the revision
-    /// itself — git's `...`, and what reviewing a branch wants.
+    /// Whether the left end means the merge base (git's `...`) rather than the revision itself.
     parted: bool,
 }
 
 /// The trunk, spelled so `resolve` knows to go and find it.
 const TRUNK: &str = "";
 
-/// Every way this adapter lets a change be named. Said once: dagger shows it in its own
-/// help, and it's what a reader who typed something else gets told.
+/// Every way a change can be named. Shown in dagger's help and in the error for anything else.
 const UNDERSTOOD: &str = "\
 branch <name>        that branch, since it left the trunk
 commits <a> <b>      those two revisions
 commits <a>..<b>     or <a>...<b>, as git writes them";
 
-/// What was typed, in the words this adapter knows.
-///
-/// Spelled out rather than guessed at. A single name could just as well mean "the branch
-/// I want to read" as "the thing my branch came from", and the two give entirely different
-/// answers — one of them quietly, since a review of the wrong change looks exactly like a
-/// review of the right one. Git learned this with `checkout` and split it in two, so
-/// there's no sense learning it again here.
+/// A bare name is refused rather than guessed: it could mean the branch to read or the
+/// branch it came from, and a review of the wrong change looks just like the right one.
 fn read(asked: &[String]) -> Result<Ends<'_>> {
     match asked {
         [word, name] if word == "branch" => Ok(Ends {
@@ -190,10 +170,8 @@ fn span(range: &str) -> Ends<'_> {
     }
 }
 
-/// Where a branch parted from what it branched off, or the revisions themselves.
-///
-/// Both ends come back as commits rather than as whatever was typed, so that nothing
-/// downstream has to resolve a name a second time and possibly differently.
+/// Both ends come back as commits so nothing downstream resolves a name a second time,
+/// possibly differently.
 fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> {
     let Ends {
         left,
@@ -225,19 +203,15 @@ fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> {
     })
 }
 
-/// The commit's own one-line description of itself, when it has one to read. `current`
-/// isn't a commit, so there's nothing here for it either.
+/// The commit's subject line, if any. `current` isn't a commit, so it has none.
 fn subject(commit: &str) -> Option<String> {
     say(&["log", "-1", "--format=%s", commit])
         .ok()
         .filter(|line| !line.is_empty())
 }
 
-/// What branches here are cut from.
-///
-/// A remote records which branch it hands out by default, which is the same question, and
-/// having been told once git remembers it. Repositories that never got that far fall back
-/// to the usual names.
+/// The branch others are cut from: the remote's default branch when git has recorded it,
+/// otherwise the usual names.
 fn trunk(settings: &Settings) -> Result<String> {
     if !settings.trunk.is_empty() {
         return Ok(settings.trunk.clone());
@@ -258,13 +232,8 @@ fn trunk(settings: &Settings) -> Result<String> {
     )
 }
 
-/// The commit a name stands for, the way a person means it.
-///
-/// A branch someone fetched but never checked out is only a remote-tracking ref, so the
-/// name they read on the pull request isn't a revision git will answer to. `git checkout`
-/// guesses past that and everything else refuses to, which is why naming a colleague's
-/// branch looks like a typo. This guesses the same way: the name as written first, then
-/// the one remote that has it.
+/// A fetched but never checked-out branch is only a remote-tracking ref, which `rev-parse`
+/// refuses. Like `git checkout`, try the name as written, then the one remote that has it.
 fn commit(name: &str) -> Result<String> {
     if let Ok(found) = say(&[
         "rev-parse",
@@ -306,11 +275,8 @@ fn current_files() -> Result<Vec<String>> {
         "-z",
     ])?;
 
-    /* Minus whatever has been deleted but not yet staged. `--cached` means the index, and
-     * the index still holds a file somebody has only removed from disk — so the snapshot
-     * claimed a file that wasn't there, the extractor was asked to read it, and the review
-     * carried "this might not be showing you something" about a deletion it was showing
-     * perfectly well. Alarm about nothing teaches a reader to ignore alarm. */
+    // `--cached` still lists files deleted from disk but not staged, so drop those or the
+    // snapshot claims a file that isn't there.
     let gone: BTreeSet<String> = listing(&["ls-files", "--deleted", "-z"])?
         .into_iter()
         .collect();
@@ -370,18 +336,9 @@ fn materialize(rev: &str, carry_ignored: bool) -> Result<PathBuf> {
     Ok(dir)
 }
 
-/// Points the snapshot at whatever the repository ignores: build output, installed
-/// packages, caches.
-///
-/// None of it is part of a review — it isn't tracked, so it can't have changed — but
-/// leaving it out is the difference between a language server reading one small generated
-/// declaration per package and compiling every package from source. On a monorepo that is
-/// the difference between seconds and never finishing.
-///
-/// Links rather than copies, so nothing is duplicated and nothing is written to. What's
-/// there belongs to whenever the repository was last built rather than to this revision,
-/// which can make a neighbouring package's types slightly out of date. The files being
-/// reviewed are read from the snapshot itself and aren't affected.
+/// Links the repository's ignored files into the snapshot so a language server can read
+/// generated declarations instead of compiling every package from source. Linked, not
+/// copied, so they reflect the last build rather than this revision; reviewed files aren't affected.
 fn carry(dir: &Path) -> Result<()> {
     let repo = std::env::current_dir()?.canonicalize()?;
 
@@ -414,9 +371,8 @@ fn carry(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// How far into a carried directory to look for links back into the repository. Two is
-/// as deep as any package manager keeps its installed links: a package, or a package in a
-/// scope of packages.
+/// How deep to look for links back into the repository. Two is as deep as package managers
+/// keep installed links: a package, or a package in a scope.
 const DEEP: u32 = 2;
 
 /// The three roots a carried link is judged against.
@@ -427,18 +383,9 @@ struct Carry {
     root: PathBuf,
 }
 
-/// One entry of an ignored directory, pointed at the real one — unless it's a link that
-/// leads back into the repository, or a directory holding one.
-///
-/// An installed package can be a link to its source elsewhere in the same repository.
-/// Carried whole, the directory carried that link with it: a file in the snapshot
-/// importing a package from the same repository reached the live copy of it rather than
-/// the snapshot's, and the language server saw two files where the snapshot has one.
-/// Every reference from one package to another was lost that way. So a link that leads
-/// into the repository is turned to lead into the snapshot instead, and a directory
-/// holding such a link is carried an entry at a time so that one can be. Nothing here
-/// knows what a package manager is: any link back into the repository gets the same
-/// treatment, whichever tool made it.
+/// A link leading back into the repository is pointed into the snapshot instead: otherwise
+/// the language server sees the live copy and the snapshot's as two files and loses every
+/// cross-package reference. A directory holding such a link is carried an entry at a time.
 fn carried(carry: &Carry, real: &Path, ours: &Path, deep: u32) -> Result<()> {
     if let Some(into) = leads_home(carry, real) {
         return Ok(std::os::unix::fs::symlink(into, ours)?);
@@ -574,8 +521,6 @@ mod tests {
         );
     }
 
-    /* `...` has to be tried first: read as two dots it would leave a name starting with a
-     * dot, and ask git about a revision nobody typed. */
     #[test]
     fn three_dots_are_not_read_as_two() {
         assert_eq!(span("main...HEAD").left, "main");
@@ -589,8 +534,6 @@ mod tests {
         assert_eq!(span("..main").left, "HEAD");
     }
 
-    /* The whole point of spelling it out: a name on its own meant two different things
-     * depending on who typed it, and got no complaint either way. */
     #[test]
     fn a_bare_name_is_refused_rather_than_guessed_at() {
         let words = asked(&["main"]);
@@ -612,9 +555,6 @@ mod tests {
         }
     }
 
-    /* The link that lost every cross-package reference: a package installed as a link back
-     * into the repository, carried whole with the directory around it — so a snapshot
-     * importing its own sibling package reached the live copy. */
     #[test]
     fn a_link_back_into_the_repository_is_pointed_at_the_snapshots_copy() {
         let root = std::env::temp_dir().join(format!("dagger-carry-{}", std::process::id()));

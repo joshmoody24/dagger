@@ -1,14 +1,7 @@
 //! Everything one reading of a repository comes to.
 //!
-//! One object, and everything about a single definition lives on that definition. Learning
-//! what happened to one thing used to mean six lookups — one map for what changed, another
-//! for how far a change reached it, another for its group — and three of those maps held
-//! entries for definitions that were never handed over at all, which nobody downstream
-//! could resolve and nothing noticed.
-//!
-//! Built in one place, at the end, from everything that's known by then. Assembled a piece
-//! at a time by whoever happened to know each piece, it could always be half-built, and a
-//! fact about something that isn't here could always be written down.
+//! One object, built in one place at the end, with everything about a definition on that
+//! definition, so nothing can name a definition that wasn't handed over.
 
 use crate::change::{Change, classify};
 use crate::diagnostic::Diagnostic;
@@ -44,17 +37,14 @@ pub enum Impact {
     Degraded,
 }
 
-/// A reason this review might be wrong.
-///
-/// Dagger's own findings and an adapter's apologies, in one list, because they are one
-/// thing to whoever is reading: something that happened on the way that they should know
-/// about. What separates them is `impact`, which is what a reader actually acts on.
+/// A reason this review might be wrong. Dagger's own findings and adapter notes share
+/// one list; `impact` is what a reader acts on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Warning {
     pub impact: Impact,
-    /// Worded here rather than on the page, so there's one wording rather than one per
-    /// reader, and so the names in it can be looked up while they're still to hand.
+    /// Worded here rather than on the page, so there's one wording and names can be
+    /// looked up while they're still to hand.
     pub message: String,
     /// What it's about, when it's about one definition. For pointing somebody at it.
     pub about: Option<Identity>,
@@ -70,8 +60,7 @@ pub struct Definition {
     pub sides: Sides,
     /// What happened to it.
     pub change: Change,
-    /// How many hops away the nearest change that reached it is. Never nought: whether it
-    /// changed on its own account is what `change` is for, and a definition can be both.
+    /// Hops from the nearest change that reached it. Never zero: its own change is `change`.
     pub reached: Option<u32>,
     /// What it's written inside. Always present in this review when it isn't `None`.
     pub parent: Option<Identity>,
@@ -81,17 +70,14 @@ pub struct Definition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Review {
-    /// What the commit under review is called, when whoever laid out the snapshots could
-    /// say. Not dagger's to work out — a directory has no commit message, only the
-    /// adapter that read the history knows whether there was one.
+    /// The commit's title, when the adapter knows one. A directory has no commit message.
     pub title: Option<String>,
     pub definitions: BTreeMap<Identity, Definition>,
     /// What to read, in order. Whatever a step names is worth reading; everything else in
     /// `definitions` is here to be drawn around it.
     pub reading: Vec<Step>,
     pub edges: Vec<Edge>,
-    /// Everything drawn, as it nests and stacks: the page's whole arrangement short of
-    /// pixels, so the reading and the page can't disagree about it.
+    /// Everything drawn, as it nests and stacks, so the reading and the page can't disagree.
     pub groups: Vec<Group>,
     /// What a reader calls the grouping: "package", "crate".
     pub grouping: Option<String>,
@@ -101,11 +87,8 @@ pub struct Review {
     pub warnings: Vec<Warning>,
 }
 
-/// Works the whole thing out, from everything that's known.
-///
-/// `notes` is whatever the adapters had to say, already worded, since only they know what
-/// they ran into. `found` is everything dagger noticed on the way here, worded below where
-/// the definitions are still to hand.
+/// `notes` are the adapters' warnings, already worded. `found` is what dagger noticed,
+/// worded here where the definitions are still to hand.
 pub fn review(
     definitions: Vec<model::Definition>,
     references: &[Reference],
@@ -138,8 +121,6 @@ pub fn review(
         .chain(reached.keys().copied())
         .collect();
 
-    /* What each definition is written inside, as an identity rather than a name. Worked out
-     * once, here, while everything is still to hand. */
     let parent_of: BTreeMap<Identity, Identity> = {
         let by_name: BTreeMap<&Locator, Identity> = definitions
             .iter()
@@ -154,10 +135,8 @@ pub fn review(
             .collect()
     };
 
-    /* Everything worth reading, and everything it's written inside, all the way out. A box
-     * can't be drawn around something whose container isn't here, and a parent naming a
-     * definition nobody was given is the same dangling reference this shape exists to make
-     * unwriteable. Measured at two to five percent of the reading. */
+    // Everything worth reading plus every container around it, so a box is never drawn
+    // around something whose container isn't here.
     let mut shown = read.clone();
     let mut queue: VecDeque<Identity> = read.iter().copied().collect();
     while let Some(one) = queue.pop_front() {
@@ -205,11 +184,8 @@ pub fn review(
     }
 }
 
-/// One of dagger's own findings, worded for whoever has to act on it.
-///
-/// Every case is about some particular definition, and five copies of one sentence with
-/// nothing to tell them apart are no use to anybody — so the names are looked up here,
-/// where the definitions are still to hand.
+/// One of dagger's own findings, worded. Names are looked up here so five findings of
+/// one kind can be told apart.
 fn told(found: &Diagnostic, definitions: &[model::Definition]) -> Warning {
     let named = |identity: Identity| match definitions
         .iter()
@@ -445,9 +421,7 @@ mod tests {
         assert!(review.edges.is_empty());
     }
 
-    /// The invariants the shape exists to keep. Every identity named anywhere has to be a
-    /// definition that was handed over — three separate bugs have been exactly this, each
-    /// in a different map, each invisible until somebody went looking.
+    /// Every identity named anywhere is a definition that was handed over.
     #[test]
     fn nothing_names_a_definition_that_was_not_handed_over() {
         let review = reviewed(

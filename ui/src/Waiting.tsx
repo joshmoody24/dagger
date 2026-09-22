@@ -1,17 +1,8 @@
 import { createMemo, For, Show } from "solid-js";
 import { phases, standing } from "./progress.ts";
 
-/* What dagger is doing, while it does it.
- *
- * A review of a large repository takes a minute or two, almost all of it a compiler loading
- * a project, and a page saying nothing for that long is a page that looks broken. There's
- * no honest percentage to show — the slowest part, a language server indexing, reports
- * nothing until it's finished — so this shows the shape of the work instead: which stretch
- * is being done, which are finished, and how far through the one that can say.
- *
- * Everything here is read out of what dagger already tells whoever runs it. It says which
- * snapshot it's reading and how far through it is; this only arranges that on a page.
- */
+/* Shows phases rather than a percentage: the slowest phase (language server indexing)
+ * reports nothing until it's done, so no honest overall progress exists. */
 
 export function Waiting(props: { said: string[] }) {
   const shape = createMemo(() => phases(props.said));

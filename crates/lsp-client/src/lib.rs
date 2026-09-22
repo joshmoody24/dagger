@@ -65,9 +65,8 @@ impl Server {
                         // Without asking for markdown, hover arrives as prose with the
                         // signature buried in it rather than fenced off.
                         "hover": { "contentFormat": ["markdown"] },
-                        // Unasked, symbols come back as a flat list of names and whole
-                        // ranges. The nested form also says where each name sits, which
-                        // is the spot everything else gets asked about.
+                        // The nested form also says where each name sits, which is where
+                        // everything else gets asked about.
                         "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
                     },
                 },
@@ -77,9 +76,8 @@ impl Server {
         self.notify("initialized", json!({}))
     }
 
-    /// Reads notifications until one satisfies `settled`. Some servers answer questions
-    /// before they've finished indexing, and those answers are wrong rather than slow,
-    /// which is worse.
+    /// Reads notifications until one satisfies `settled`. Some servers answer before they've
+    /// finished indexing, and those answers are wrong rather than slow.
     pub fn wait_until(&mut self, settled: impl Fn(&Value) -> bool) -> Result<()> {
         loop {
             let message = self.read_message()?;
@@ -133,12 +131,9 @@ impl Server {
         Ok(())
     }
 
-    /// Reads the next message meant for us, answering anything the server asks of the
-    /// client along the way.
-    ///
-    /// Conversation runs both ways: a server may ask the client to register a capability
-    /// or hand over configuration, and it waits for the answer before doing anything
-    /// else. Ignoring those questions doesn't lose a feature, it wedges the server.
+    /// Reads the next message meant for us, answering the server's own requests along the
+    /// way. A server waits for those answers before doing anything else, so ignoring them
+    /// wedges it.
     fn read_message(&mut self) -> Result<Value> {
         loop {
             let message = self.read_raw()?;
@@ -148,8 +143,7 @@ impl Server {
             }
 
             let result = match message["method"].as_str() {
-                // One answer per thing asked about, and none of them a setting we hold
-                // an opinion on.
+                // One answer per item, none of them a setting we have an opinion on.
                 Some("workspace/configuration") => Value::Array(
                     message["params"]["items"]
                         .as_array()

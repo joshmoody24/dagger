@@ -1,25 +1,10 @@
-//! The order to read a change in.
+//! The order to read a change in: nothing before what it depends on, then finish the
+//! current branch before moving on, then foundations before what stands on them.
 //!
-//! One rule above all others: don't read something before the things it leans on. After
-//! that, finish where you are before going elsewhere, and meet what everything stands on
-//! before the things standing on it. A reader led back and forth across a change spends
-//! their attention on finding their place rather than on the code.
-//!
-//! Something is *open* once it's been read and something still unread depends on it:
-//! it has to be kept in mind. It closes when the last thing depending on it is read,
-//! which is the satisfying part of finishing a branch. Something taken *on faith* is
-//! the opposite, a promise held about code not yet seen, which only happens when
-//! definitions depend on each other in a circle and there's no honest place to start.
-//!
-//! Candidates are compared in order rather than scored and added up, so there are no
-//! weights to argue about — `pick` lists the order, a line of reasoning each.
-//!
-//! There was for a while a second reading that left every foundation until the last
-//! moment, to carry as little as possible at once. Measured against this one it held no
-//! less in mind at the worst moment, moved the reader between packages half again as
-//! often, and began in whichever package the change happened to lean on hardest — which
-//! on a page laid out by what depends on what is the bottom. It's gone; what's left is
-//! the one reading, and the numbers it costs are in `Cost` for arguing with.
+//! A definition is *open* once read while something unread still depends on it. One is
+//! taken *on faith* when read before a dependency, which only happens in a cycle.
+//! Candidates are compared criterion by criterion rather than scored, so there are no
+//! weights to tune; `pick` lists the criteria.
 
 use crate::group::Grouping;
 use crate::model::{self, Identity, Locator, Role};
@@ -31,8 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Step {
     pub definition: Identity,
-    /// What this leans on that hasn't been read yet. Only ever non-empty inside a
-    /// circle, and kept as short as we can manage.
+    /// Dependencies not yet read. Only non-empty inside a cycle.
     pub on_faith: Vec<Identity>,
 }
 
@@ -40,30 +24,23 @@ pub struct Step {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Ordering {
     pub steps: Vec<Step>,
-    /// How this reading went, so one rule can be argued against another with numbers
-    /// from real changes rather than taste.
+    /// Numbers for comparing one ordering rule against another on real changes.
     pub cost: Cost,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Cost {
-    /// The most that was in the reader's head at once.
+    /// The most open at once.
     pub peak_open: usize,
-    /// Added up over every step, so a long shallow reading can be told apart from a
-    /// short deep one.
+    /// Summed over every step, to tell a long shallow reading from a short deep one.
     pub total_open: usize,
     pub taken_on_faith: usize,
-    /// Steps that landed somewhere other than the one before: another package, or failing
-    /// a grouping, another file.
+    /// Steps that moved to another package, or without a grouping, another file.
     pub jumps: usize,
 }
 
-/// `read` is what's worth reading; `edges` is what leans on what among everything drawn.
-///
-/// Takes the two things it uses rather than the whole review, which is what let the review
-/// be one object: a function asking for more than it needs was the only reason the analysis
-/// had to exist as a separate type before the reading could be worked out from it.
+/// `read` is what's worth reading; `edges` is what depends on what among everything drawn.
 pub fn order(
     read: &BTreeSet<Identity>,
     edges: &[Edge],
@@ -84,8 +61,8 @@ pub fn order(
 
     let enclosing = enclosing(definitions);
     let homes = homes(&members, definitions, &enclosing);
-    /* Whatever holds others says what it is before the things it holds: a module's prose
-     * and imports, an impl's header. Read afterwards, it arrives once nobody needs it. */
+    // A container's header (a module's prose and imports, an impl's header) is read on
+    // arriving at it, right before its contents.
     let headers: Vec<bool> = {
         let roles: BTreeMap<Identity, Role> = definitions
             .iter()
@@ -97,8 +74,7 @@ pub fn order(
             .collect()
     };
 
-    // Where each one sits, for judging whether reading the next takes the reader somewhere
-    // else. A grouping says where if it has an opinion; failing that, the file it's in.
+    // Where each member sits, for counting jumps: the grouping's path if any, else the file.
     let wheres: Vec<&[String]> = {
         members
             .iter()
@@ -183,14 +159,10 @@ pub fn order(
     Ordering { steps, cost }
 }
 
-/// Which members lean on which, and the same the other way round.
+/// Which members depend on which, and the reverse.
 ///
-/// A container leans on whatever its contents lean on outside it. Its own definition is its
-/// prose and imports — what it brings in is exactly what it stands on — but nothing ever
-/// says so as an edge, so it stood on nothing. "Never before what it leans on" then let a
-/// module through the moment the reader arrived, while everything it holds was still
-/// waiting on other modules: its header read seven steps ahead of the first line it holds,
-/// introducing nothing.
+/// A container depends on whatever its contents depend on outside it. No edge ever says
+/// so, and without it a module header would be read long before anything it holds.
 fn relations(
     edges: &[Edge],
     places: &BTreeMap<Identity, usize>,
@@ -216,9 +188,8 @@ fn relations(
 
     for edge in edges {
         lean(edge.from, edge.to);
-        /* Outward from the leaner, stopping at the first container that holds what it
-         * leans on too — everything further out holds both, and a thing doesn't stand on
-         * what's inside it. */
+        // Stop at the first container that also holds the target: nothing depends on
+        // what's inside it.
         for &container in around(&edge.from) {
             if container == edge.to || around(&edge.to).contains(&container) {
                 break;
@@ -230,9 +201,8 @@ fn relations(
     (leans_on, holds_up)
 }
 
-/// What each definition is written inside, nearest first, as far as that stays in the same
-/// file. A parent is said as a name, so it's resolved by name — within the file, since a
-/// name means nothing outside the one that holds it.
+/// What each definition is written inside, nearest first, within the same file. Parents
+/// are given as names, so they're resolved by name within the file.
 fn enclosing(definitions: &[model::Definition]) -> BTreeMap<Identity, Vec<Identity>> {
     let shown: BTreeMap<Identity, (&str, &Locator, Option<&Locator>)> = definitions
         .iter()
@@ -263,16 +233,9 @@ fn enclosing(definitions: &[model::Definition]) -> BTreeMap<Identity, Vec<Identi
         .collect()
 }
 
-/// The module each member belongs to, named so two can be told apart.
-///
-/// A module, not a file. They line up most of the time, which is why the file alone would
-/// nearly work — but a file holding two modules holds two trains of thought, and the reader
-/// knows it even when the filesystem doesn't.
-///
-/// The outermost container a file holds is that file's module, whatever the language calls
-/// it, so this needs to know nothing about modules to find one. Stopping at the first
-/// container instead would make a method and a plain function in one module two places,
-/// and a reader moving between them has not gone anywhere.
+/// The module each member belongs to. Not the file, since a file can hold two modules.
+/// The outermost container in a file is its module, whatever the language calls it; the
+/// nearest container would wrongly make a method and a plain function two places.
 fn homes(
     members: &[Identity],
     definitions: &[model::Definition],
@@ -286,7 +249,7 @@ fn homes(
         })
         .collect();
 
-    // A file can't hold a null and neither can a name, so the two can't be confused.
+    // Neither a file name nor a path can contain a null, so the two halves can't be confused.
     let named = |file: &str, locator: &Locator| {
         let mut path = locator.scope.clone();
         path.push(locator.name.clone());
@@ -308,7 +271,7 @@ fn homes(
         .collect()
 }
 
-/// Where the reader is, and where everything else is, at every sense of the word.
+/// Where the reader currently is, and where every member sits.
 struct Where<'a> {
     groups: &'a [&'a [String]],
     homes: &'a [String],
@@ -317,10 +280,8 @@ struct Where<'a> {
 }
 
 impl Where<'_> {
-    /// How far reading this one would take the reader: nowhere, out of the module, or out
-    /// of the package altogether. Counting only the package let a reading wander between
-    /// the modules inside one as freely as if they were the same place, which to whoever
-    /// is reading them they are not.
+    /// How far reading this one moves the reader: nowhere, out of the module, or out of
+    /// the package. Module counts too, so a reading doesn't wander between modules freely.
     fn away(&self, candidate: usize) -> isize {
         match (self.group, self.home) {
             (Some(group), Some(home)) => {
@@ -349,22 +310,15 @@ fn pick(
                 .filter(|&&leaned| read[leaned] && unread_holds[leaned] == 1)
                 .count();
             (
-                // Never before what it leans on.
+                // Never before what it depends on.
                 unread_leans[candidate],
-                // Stay in the module you're in: a reader pulled out of one has to come
-                // back to it later and find the thread again.
+                // Stay in the current module; leaving means coming back to find the thread.
                 at.away(candidate),
-                // Arriving somewhere, read what it says it is before what it holds: a
-                // module's own definition is its file's prose and what it brings in.
-                //
-                // Costs more held in mind on some readings and less on others — a module's
-                // imports count against it the way a function's contract does, which
-                // overstates them, since nobody holds an import list in their head.
+                // On arriving somewhere, read the container's header before its contents.
                 isize::from(!headers[candidate]),
                 // Then finish a branch, when one can be finished.
                 -(closes as isize),
-                // Then, among things equally free to read, whatever the most is waiting
-                // on — which is what "upstream" means once the names are taken away.
+                // Then whatever the most things are waiting on.
                 -(unread_holds[candidate] as isize),
                 // Position settles the rest, so the same change always reads the same.
                 candidate as isize,
@@ -379,8 +333,7 @@ mod tests {
     use crate::review::Edge;
     use crate::testing::occurrence;
 
-    /// `count` definitions, all edited, wired up by the given pairs. Each pair reads
-    /// "the first leans on the second".
+    /// `count` edited definitions, wired up by pairs of "the first depends on the second".
     fn built(
         count: u32,
         leans: &[(u32, u32)],
@@ -434,8 +387,7 @@ mod tests {
         assert_eq!(reading.iter().copied().collect::<BTreeSet<u32>>().len(), 6);
     }
 
-    /// 0 and 1 both lean on 2. Reading 2 first leaves two things open at once, but
-    /// there's no way around it, and the pair that closes it should follow straight on.
+    /// 0 and 1 both depend on 2, so 2 is read first.
     #[test]
     fn a_shared_foundation_comes_first() {
         let reading = reading(3, &[(0, 2), (1, 2)]);
@@ -443,8 +395,7 @@ mod tests {
         assert_eq!(reading[0], 2);
     }
 
-    /// Two separate chains. Finishing one before starting the other keeps fewer things
-    /// in mind than alternating between them.
+    /// Finishing one chain before starting the other keeps fewer things open.
     #[test]
     fn one_chain_is_finished_before_the_next_is_started() {
         let reading = reading(4, &[(0, 1), (2, 3)]);
@@ -456,10 +407,8 @@ mod tests {
         );
     }
 
-    /// What something stands on is read before it, and the branch is finished before
-    /// anything else is begun — so a definition that stands alone, owing nothing and owed
-    /// nothing, is read last rather than first. It can be read at any time, which is
-    /// exactly why it shouldn't interrupt something that can't.
+    /// A definition with no dependencies either way is read last: it can go anywhere, so
+    /// it shouldn't interrupt a branch.
     #[test]
     fn a_foundation_is_read_first_and_what_stands_alone_last() {
         // 0 leans on 2, and 1 stands alone.
@@ -487,8 +436,7 @@ mod tests {
         );
     }
 
-    /// Same graph, but 1 sits in another file. Since either order is otherwise equal,
-    /// the reading should stay put rather than hop out and back.
+    /// 1 sits in another file; with all else equal, the reading stays put.
     #[test]
     fn a_reading_would_rather_stay_in_one_file() {
         let (read, edges, definitions) = built(3, &[(0, 1), (0, 2)], &["a.rs", "b.rs", "a.rs"]);
@@ -521,10 +469,8 @@ mod tests {
         );
     }
 
-    /// A module's header — its own prose and imports — is read on arriving at the module,
-    /// and not before: not ahead of what its contents lean on, which put the introduction
-    /// steps before the thing it introduces. 1 sits inside 0 and leans on 2, which is
-    /// elsewhere — so 0 has to wait for 2 just as 1 does, and then comes right before 1.
+    /// A container's header is read right before its contents, not before what they depend
+    /// on. 1 sits inside 0 and depends on 2 in another file, so 0 waits for 2 too.
     #[test]
     fn a_containers_header_is_read_right_before_what_it_holds() {
         let (read, edges, mut definitions) = built(3, &[(1, 2)], &["a.rs", "a.rs", "b.rs"]);

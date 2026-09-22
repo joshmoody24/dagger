@@ -1,7 +1,5 @@
 //! Drives the adapters, hands the results to the core, and prints what came back.
-//!
-//! Everything that touches a disk or starts a process lives on this side. The core is
-//! given two piles of facts and nothing else.
+//! Everything that touches disk or starts a process lives here; the core only gets facts.
 
 mod adapter;
 mod assign;
@@ -24,16 +22,15 @@ use std::io::{IsTerminal, Write};
 use std::path::Path;
 
 struct Args {
-    /// What was typed after the flags, in order and untouched. Empty means the user
-    /// named nothing, so the snapshot adapter gets to choose. Dagger never reads these:
-    /// what counts as a way of naming history is the adapter's to say.
+    /// Positional arguments, passed to the snapshot adapter untouched since only it knows
+    /// what they mean. Empty means the adapter chooses.
     asked: Vec<String>,
     json: bool,
     explain: bool,
     list: bool,
     help: bool,
-    /// How far past what changed to follow what depends on it. Left unsaid, the repository
-    /// decides, and failing that so does dagger.
+    /// How far past what changed to follow dependents. Unset means the repository's
+    /// setting, then dagger's default.
     ripples: Option<u32>,
 }
 
@@ -60,8 +57,7 @@ fn parse_args() -> Result<Args> {
             "--json" => json = true,
             "--explain" => explain = true,
             "--list" => list = true,
-            // Answered once the repository has been read, since half the answer is the
-            // snapshot adapter's and this doesn't know yet which one that is.
+            // Answered after reading the config, since the snapshot adapter supplies half the text.
             "-h" | "--help" => help = true,
             flag if flag.starts_with('-') => bail!("don't know the flag {flag}"),
             value => positional.push(value.to_string()),
@@ -82,12 +78,8 @@ fn parse_args() -> Result<Args> {
     })
 }
 
-/// What dagger does, and how this repository lets a change be named.
-///
-/// The second half isn't dagger's to write. Which words work here depends on the snapshot
-/// adapter configured, so it's asked rather than guessed at — a list kept in two places is
-/// a list that goes wrong in one of them. A repository with no adapter, or one that won't
-/// answer, simply has nothing extra to say.
+/// Prints usage. The snapshot adapter is asked for its own part so the list of ways to
+/// name a change isn't kept in two places.
 fn help(repo: &Path, config: &Config) {
     println!("dagger [--json] [--explain] [--list] [--ripples <n>] [what to read]");
     println!();
@@ -120,8 +112,7 @@ fn help(repo: &Path, config: &Config) {
     }
 }
 
-/// Progress goes to stderr, where it can't get mixed into the review itself. Reading two
-/// snapshots takes long enough that saying nothing looks like a hang.
+/// Progress goes to stderr so it can't mix into the review. Saying nothing looks like a hang.
 fn status(saying: &str) {
     let mut err = std::io::stderr();
     let _ = if err.is_terminal() {
@@ -151,8 +142,7 @@ fn main() -> Result<()> {
     let before = lay_out(&repo, &config, &revisions.before)?;
     let after = lay_out(&repo, &config, &revisions.after)?;
 
-    // The snapshots take themselves away when they go out of scope here, whichever way
-    // this ends.
+    // Temporary snapshots are removed on drop, whichever way this ends.
     if args.explain {
         explain(&config, &claims, &after)
     } else {
@@ -168,13 +158,12 @@ fn main() -> Result<()> {
     }
 }
 
-/// What to compare. The user's word first, then whatever the snapshot adapter thinks is
-/// worth looking at, and failing both, the last commit.
+/// What to compare: the user's choice, else the snapshot adapter's suggestion, else the last commit.
 fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<Revisions> {
     match (args.asked.as_slice(), &config.snapshots) {
         ([], _) => {}
         (asked, Some(snapshots)) => return adapter::revisions(repo, snapshots, asked),
-        // Without an adapter there's nobody to ask, so two directories is all this can be.
+        // Without an adapter the arguments can only be two directories.
         ([before, after], None) => {
             return Ok(Revisions {
                 before: before.clone(),
@@ -208,8 +197,7 @@ fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<Revisions> {
     }))
 }
 
-/// What each extractor will be given: what the repo asked for, or failing that, what
-/// the adapter says it reads.
+/// Globs per extractor: the configured `include`, or failing that what the adapter declares.
 fn claims(repo: &Path, config: &Config) -> Result<Vec<Vec<String>>> {
     config
         .extractors
@@ -230,8 +218,7 @@ fn claims(repo: &Path, config: &Config) -> Result<Vec<Vec<String>>> {
         .collect()
 }
 
-/// Who ended up with what, so a surprising assignment can be looked at instead of
-/// guessed at.
+/// Prints which extractor got which files, so a surprising assignment can be checked.
 fn explain(config: &Config, claims: &[Vec<String>], snapshot: &adapter::Snapshot) -> Result<()> {
     let assignment = assign::assign(
         &config.review.ignore,
@@ -276,25 +263,17 @@ fn compare(
     let changed = assign::not_ignored(&config.review.ignore, differing(before.1, after.1)?)?;
     status(&format!("{} files differ", changed.len()));
 
-    /* What was asked for, else what the repository asks for, else far enough to answer
-     * "who breaks if this breaks" and no further. */
+    // The default of 1 is just enough to answer "who breaks if this breaks".
     let ripples = args.ripples.or(config.review.ripples).unwrap_or(1);
 
     let (before_dir, after_dir) = (before.1.dir.clone(), after.1.dir.clone());
 
-    /* Where, in each differing file, the bytes actually differ — worked out once, on
-     * disk, before anything is asked of an adapter. Each side keeps only its own half:
-     * an adapter reading `before_dir` has no use for where a line landed in `after_dir`. */
+    // Worked out once here so adapters don't each diff the files. Each side only gets its
+    // own half, since an adapter reading one directory has no use for the other's offsets.
     let (changed_before, changed_after) = changed_ranges(&before_dir, &after_dir, &changed);
 
-    /* One after the other, though neither reading looks at the other and both together are
-     * nearly the whole of what a run costs.
-     *
-     * Reading them at once was tried and taken out again. It ran a third faster and took
-     * 24GB to do it: a language server has to load the whole project before it can answer
-     * anything, so two of them is two of everything, and on a sixty gigabyte machine it
-     * came within a fifth of a percent of what the out-of-memory killer watches for. A
-     * review that might be killed partway is worse than a review that takes longer. */
+    // Read sequentially on purpose. Reading both at once means two language servers each
+    // loading the whole project, which took 24GB and nearly hit the OOM killer.
     let (before, mut notes) = read(
         repo,
         config,
@@ -317,21 +296,16 @@ fn compare(
 
     let matched = match_snapshots(before, after);
 
-    // Which group each definition is in. Only this side can answer it, since it means
-    // looking for marker files on disk, so it's worked out here and handed over.
+    // Grouping needs marker files on disk, so it's worked out here rather than in the core.
     let grouping = match config.grouping.as_ref() {
         Some(wanted) => grouping::of(wanted, &after_dir, &matched.definitions),
         None => Grouping::default(),
     };
 
-    /* Everything anyone had to say before the review was worked out: what the adapters
-     * couldn't do, and what the two snapshots turned out to disagree about. Dagger's own
-     * findings join them inside. */
     let warnings: Vec<Warning> = notes
         .into_iter()
         .map(|note| Warning {
-            // An adapter's note is always about something it couldn't do, so whatever it
-            // was about isn't in the review.
+            // An adapter's note is always about something it couldn't do.
             impact: Impact::Incomplete,
             message: match &note.file {
                 Some(file) => format!("{file}: {}", note.message),
@@ -373,8 +347,8 @@ fn compare(
     Ok(())
 }
 
-/// Which files aren't the same on both sides. Only a hint for adapters, so a file
-/// that can't be read counts as differing rather than stopping anything.
+/// Files that differ between sides. Only a hint for adapters, so an unreadable file
+/// counts as differing rather than failing.
 fn differing(before: &adapter::Snapshot, after: &adapter::Snapshot) -> Result<Vec<String>> {
     let listed = |snapshot: &adapter::Snapshot| -> Result<Vec<String>> {
         match &snapshot.files {
@@ -398,17 +372,9 @@ fn differing(before: &adapter::Snapshot, after: &adapter::Snapshot) -> Result<Ve
         .collect())
 }
 
-/// Where, in each differing file, the bytes actually differ — for the before side and the
-/// after side in turn.
-///
-/// Whole files used to be handed to an adapter as "this one changed", which left it no way
-/// to tell a four-line edit from a rewrite: it asked after every definition in the file
-/// either way. On redo's own self-review that meant 494 definitions asked about across
-/// files that between them had a few dozen lines actually differ.
-///
-/// A file the line diff finds nothing to narrow — its bytes differ, or it wouldn't be here,
-/// but not in a way lines can say, a binary file being the usual reason — gets no ranges,
-/// which an adapter reads as "the whole file", the same as before this existed.
+/// Byte ranges that differ in each file, per side, so an adapter can skip definitions a
+/// small edit didn't touch. A file the line diff can't narrow (a binary, usually) gets no
+/// ranges, which an adapter reads as "the whole file".
 fn changed_ranges(before: &Path, after: &Path, files: &[String]) -> (Vec<Changed>, Vec<Changed>) {
     let mut on_before = Vec::with_capacity(files.len());
     let mut on_after = Vec::with_capacity(files.len());
@@ -430,9 +396,7 @@ fn changed_ranges(before: &Path, after: &Path, files: &[String]) -> (Vec<Changed
     (on_before, on_after)
 }
 
-/// The stretches of each side a line diff didn't find equal, as byte spans rather than
-/// line numbers — which is what a definition's own span is written in, and the only
-/// currency the two can be compared in.
+/// The unequal stretches of each side, as byte spans since that's what definition spans use.
 fn ranges(before: &str, after: &str) -> (Vec<Span>, Vec<Span>) {
     let starts = |text: &str| -> Vec<u32> {
         let mut at = vec![0u32];
@@ -446,12 +410,9 @@ fn ranges(before: &str, after: &str) -> (Vec<Span>, Vec<Span>) {
             end: starts.get(to).copied().unwrap_or(text.len() as u32),
         }
     };
-    /* Where an insertion or a deletion sits on the side that has no lines to show for
-     * it — a point, not a stretch, since nothing there differs. It still falls inside
-     * whatever definition encloses it: an interface gaining a field is a changed
-     * interface on both sides, even though only one side has a line to point at. Left
-     * unmarked, that side never asks after the interface's contract, the other side
-     * does, and the two readings disagree about something neither of them got wrong. */
+    // A zero-width span on the side that has no lines for an insertion or deletion. The
+    // enclosing definition still has to count as changed on both sides, or the two
+    // readings disagree.
     let seam = |starts: &[u32], text: &str, at: usize| -> Span {
         let point = starts.get(at).copied().unwrap_or(text.len() as u32);
         Span {
@@ -495,8 +456,7 @@ fn ranges(before: &str, after: &str) -> (Vec<Span>, Vec<Span>) {
     (at_before, at_after)
 }
 
-/// Every extractor's answer for one snapshot, plus the leftovers, merged into the one
-/// pile of facts the core expects.
+/// Every extractor's answer for one snapshot, plus the fallback, merged into one extraction.
 fn read(
     repo: &Path,
     config: &Config,
@@ -504,8 +464,7 @@ fn read(
     (rev, snapshot): (&str, &adapter::Snapshot),
     changed: &[Changed],
     ripples: u32,
-    // Which of the two this is. Both are read at once, so everything said on the way has
-    // to say whose it is or the two reports become one nobody can follow.
+    // Labels progress output so the two readings can be told apart.
     side: &str,
 ) -> Result<(Extraction, Vec<Note>)> {
     let dir = &snapshot.dir;
@@ -515,10 +474,8 @@ fn read(
         dir,
         snapshot.files.as_deref(),
     )?;
-    /* Only the files that differ. Whatever nobody claimed gets read whole, and reading a
-     * file that didn't change buys nothing: both sides come out identical, so it's kept,
-     * unchanged, and never worth reading. On a repository of any size that's the whole cost
-     * of the run — a hundred thousand files read off disk twice to say nothing. */
+    // Only files that differ: an unchanged file reads the same on both sides, and reading a
+    // whole repository twice to say nothing was most of the run's cost.
     let differs: std::collections::BTreeSet<&str> =
         changed.iter().map(|one| one.file.as_str()).collect();
     let fallen: Vec<String> = assignment
@@ -549,8 +506,7 @@ fn read(
     Ok((merged, notes))
 }
 
-/// A revision named on the command line only means something if a snapshot adapter is
-/// configured. Without one, the two arguments are just directories.
+/// Without a snapshot adapter, a revision is just a directory.
 fn lay_out(repo: &Path, config: &Config, rev: &str) -> Result<adapter::Snapshot> {
     match &config.snapshots {
         Some(snapshots) => adapter::materialize(repo, snapshots, rev),
@@ -575,8 +531,7 @@ fn lay_out(repo: &Path, config: &Config, rev: &str) -> Result<adapter::Snapshot>
 mod tests {
     use super::*;
 
-    /// Whether any span covers this byte position — what an adapter does with a seam to
-    /// decide whether the definition sitting there is worth asking about.
+    /// Whether any span covers this byte, the way an adapter checks a seam.
     fn covered(spans: &[Span], at: u32) -> bool {
         spans
             .iter()
@@ -598,9 +553,6 @@ mod tests {
         assert!(covered(&after, 4));
     }
 
-    /* The case that used to go missing: a line arrives with nothing removed to pair it
-     * with, so the side that lost nothing got no range at all — and a definition whose
-     * braces span the insertion point never learned it had changed. */
     #[test]
     fn a_pure_insertion_still_marks_a_seam_on_the_other_side() {
         let before = "interface Money {\n  amount: number;\n}\n";
@@ -613,8 +565,7 @@ mod tests {
         );
         assert!(!after_at.is_empty());
 
-        // The seam sits between "amount: number;" and the closing brace — inside the
-        // interface's own span either way it's measured.
+        // The seam must land inside the interface's own span.
         let whole = 0..before.len() as u32;
         assert!(before_at.iter().all(|span| whole.contains(&span.start)));
     }
@@ -632,8 +583,6 @@ mod tests {
         );
     }
 
-    /* Two separate hunks, apart in the file, stay apart rather than merging into one
-     * span that would claim everything between them as changed too. */
     #[test]
     fn separate_hunks_are_reported_separately() {
         let before = "fn a() { 1 }\nfn mid() { 0 }\nfn b() { 2 }\n";

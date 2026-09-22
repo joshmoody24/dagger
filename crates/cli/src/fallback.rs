@@ -1,7 +1,5 @@
-//! Reads whatever no extractor claimed, one definition per file.
-//!
-//! Coarse on purpose. It exists so nothing in a review can go unmentioned, whether
-//! it's a lockfile, a pile of YAML, or a language nobody has written an adapter for.
+//! Reads files no extractor claimed, one definition per file. Coarse on purpose, so
+//! nothing in a review can go unmentioned.
 
 use dagger_core::matching::Extraction;
 use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
@@ -18,8 +16,7 @@ pub fn extract(dir: &Path, files: &[String]) -> Extraction {
     }
 }
 
-/// Binary files are skipped. There's nothing a reader could do with one, and no
-/// sensible way to show it changing.
+/// Binary files are skipped, since there's no sensible way to show one changing.
 fn occurrence(dir: &Path, file: &str) -> Option<Occurrence> {
     let text = std::fs::read_to_string(dir.join(file)).ok()?;
     let path = Path::new(file);
@@ -40,8 +37,7 @@ fn occurrence(dir: &Path, file: &str) -> Option<Occurrence> {
     };
     Some(Occurrence {
         locator: Locator { scope, name },
-        // A whole file read as one definition holds nothing and sits inside nothing: there
-        // is no structure here to report, which is what falling back means.
+        // A whole file has no structure to report.
         role: Role::Item,
         parent: None,
         kind: "file".to_string(),

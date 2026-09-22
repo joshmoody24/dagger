@@ -23,19 +23,15 @@ import { layout } from "./layout.ts";
 import { namesIn } from "./text.ts";
 import { next as another, wear, wearing } from "./theme.ts";
 
-/* How fast j and k scroll, in pixels a second. About sixty lines, which crosses a long
- * definition without waiting on it and still reads on the way past. */
+/* j/k scroll speed in px/s. About sixty lines: fast enough to cross a long definition,
+ * slow enough to still read on the way past. */
 const SPEED = 1240;
 
 export function App(props: { raw: Raw }) {
   const whole = createMemo(() => digest(props.raw));
 
-  /* How far out to show what a change reached.
-   *
-   * Starts at none. What changed is the review; what a change reached is a second and
-   * larger question, and one worth asking on purpose rather than being handed. Never goes
-   * further than the reading went — whoever ran dagger said how far to follow with
-   * --ripples, and a page offering more than that would be offering to show nothing. */
+  /* Starts at 0 so affected-only definitions are opt-in. Capped at what dagger was run
+   * with (--ripples), since nothing beyond that exists in the data. */
   const [ripples, setRipples] = createSignal(0);
   const further = () =>
     setRipples((was) => (was >= whole().ripples ? 0 : was + 1));
@@ -71,26 +67,13 @@ export function App(props: { raw: Raw }) {
   const [read, setRead] = createSignal<Set<Identity>>(new Set());
   const [worriesOpen, setWorriesOpen] = createSignal(false);
   const [costOpen, setCostOpen] = createSignal(false);
-  /* Whether to draw where the reading goes next. Off to begin with: it's a hint about what's
-   * coming, and a reader working down the list already knows. */
   const [showNext, setShowNext] = createSignal(false);
 
-  /* Narrow enough that the sheet has to cover the graph rather than sit beside it. The
-   * sheet is then a drawer with three heights, and the graph is only worth looking at while
-   * it's out of the way — so it starts shut. Beside the graph there's nothing to shut. */
-  /* The diff, so the keys that scroll it have something to scroll. It belongs to the
-   * sheet and is handed back rather than reached for, since a page that queries its own
-   * markup has two descriptions of it. */
+  /* The diff pane, handed up by Reading so j/k can scroll it. */
   let pane: HTMLDivElement | undefined;
 
-  /* Scrolling the diff while a key is held.
-   *
-   * Driven by holding rather than by pressing, because a keyboard repeats on its own
-   * schedule: one press, half a second of nothing, then a stream of them. Moving on each
-   * repeat inherits that — it starts, stops, and starts again — however smooth each step
-   * is. So a key going down means start, a key coming up means stop, and in between this
-   * moves at one speed regardless of what the keyboard is doing.
-   */
+  /* j/k scroll via rAF between keydown and keyup rather than per key repeat, because
+   * repeat timing (delay, then bursts) makes the scroll stutter. */
   let going = 0;
   let rolling = 0;
   let last = 0;
@@ -101,7 +84,7 @@ export function App(props: { raw: Raw }) {
       rolling = 0;
       return;
     }
-    // By the clock, not by the frame, so it travels the same on any screen.
+    // Time-based so speed is the same at any refresh rate.
     const since = last ? Math.min(now - last, 100) : 16;
     last = now;
     sheet.scrollTop += going * SPEED * (since / 1000);
@@ -138,10 +121,7 @@ export function App(props: { raw: Raw }) {
       ? `${hiding().length} this review might not be showing`
       : `${weaker().length} worked out a weaker way`;
 
-  /* Beside the graph it's a column you can put away and drag wider; over the graph it's a
-   * drawer. Either way, doing anything at all brings it back — you might skip past
-   * something you hadn't read, but you asked to go there, and a tool that argues about
-   * that is worse than one that does as it's told. */
+  /* Wide: a closable, resizable column. Narrow: a drawer. Any navigation reopens it. */
   const [beside, setBeside] = createSignal(true);
   const [width, setWidth] = createSignal(0);
 
@@ -153,19 +133,14 @@ export function App(props: { raw: Raw }) {
   const shut = () => (wide() ? setBeside(false) : setSheet("closed"));
   const facing = () => (wide() ? (beside() ? "beside" : "away") : sheet());
 
-  /* Putting the ripples away can leave the reading past its end. */
+  /* Turning ripples down can shrink steps() below `at`. */
   const steps = () => review().steps;
   createEffect(() =>
     setAt((was) => Math.min(was, Math.max(steps().length - 1, 0))),
   );
 
-  /* What's being looked at, which isn't always a step.
-   *
-   * Most of the page is the reading order, and `at` is where in it you are. But a module
-   * that didn't itself change is on the page without being in that order — it's the box
-   * around things that did — and picking one has to show it rather than quietly show
-   * something else. So the reading has a position, and looking has a subject, and stepping
-   * puts the two back together. */
+  /* `aside` is a definition being viewed that isn't in the reading order (e.g. an
+   * unchanged module). Stepping clears it and returns to `at`. */
   const [aside, setAside] = createSignal<Identity | null>(null);
   const here = () => aside() ?? steps()[at()]?.definition ?? null;
   const next = () => steps()[at() + 1]?.definition ?? null;
@@ -199,16 +174,9 @@ export function App(props: { raw: Raw }) {
     open();
   };
 
-  /* The same keys as the command line, because the point of both is to read a change
-   * without taking a hand off the keyboard. Nothing here needs anything focused. */
+  /* Same keys as the CLI. Global, so nothing needs focus. */
   const keys = {
-    /* The way through a review: done with this one, on to the next. Back is the same move
-     * in the other direction — you're as finished with it either way, and a way forward
-     * that marks and a way back that doesn't is two different ideas wearing one pair of
-     * keys.
-     *
-     * Sideways, because that's what moving between definitions is. Up and down belong to
-     * the thing you're reading. */
+    /* h/l both mark as read: going back means you're done with the current one too. */
     l: () => {
       markRead();
       step(1);
@@ -217,11 +185,9 @@ export function App(props: { raw: Raw }) {
       markRead();
       step(-1);
     },
-    /* Through the one in front of you, which is where up and down mean what they say.
-     * A few lines at a time: one is too slow to hold, a screenful loses your place. */
     j: () => scroll(1),
     k: () => scroll(-1),
-    /* The way around it, for when you want to look without saying you've looked. */
+    /* n/p step without marking as read. */
     n: () => step(1),
     p: () => step(-1),
     ArrowDown: () => step(1),
@@ -231,12 +197,8 @@ export function App(props: { raw: Raw }) {
       toggleRead();
       open();
     },
-    /* Away, and nothing left behind to say so. A strip down the side saying "there's a
-     * thing here" is the thing, taking up room. */
     d: () => (showing() ? shut() : open()),
     r: () => further(),
-    /* Trying colours on. Every one is somebody's editor, so the question is which, and the
-     * only way to answer it is to look. */
     t: () => void wear(another(wearing())),
     g: () => setAt(0),
     G: () => setAt(steps().length - 1),
@@ -254,17 +216,13 @@ export function App(props: { raw: Raw }) {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const pressed = keys[event.key as keyof typeof keys];
     if (!pressed) return;
-    /* j and k are driven by holding — started on the press, stopped on the lift — so a
-     * repeat of either says nothing new, and acting on one is what made scrolling stutter.
-     * Everything else is a step, and a held key should keep stepping: that's how you get
-     * through a dozen files without a dozen presses. */
+    /* j/k run from keydown to keyup, so ignore their repeats. Other keys should repeat. */
     const held = event.key === "j" || event.key === "k";
     if (!(held && event.repeat)) void pressed();
     event.preventDefault();
   };
 
-  /* Letting go stops what holding started. Losing the window counts as letting go of
-   * everything, since no key will ever come up to say otherwise. */
+  /* Window blur stops scrolling too, since the keyup will never arrive. */
   const onLift = (event: KeyboardEvent) => {
     if (event.key === "j") settle(1);
     if (event.key === "k") settle(-1);
@@ -293,9 +251,7 @@ export function App(props: { raw: Raw }) {
           <span class="prog">
             {at() + 1}/{steps().length}
           </span>
-          {/* Only there when there's something to say, and only a warning when something
-           * might be missing. A review worked out a weaker way is worth knowing about and
-           * isn't worth alarm — told as alarm, it teaches you to ignore the alarm. */}
+          {/* Warning icon only for "incomplete"; "degraded" is info so alarms stay meaningful. */}
           <Show when={review().warnings.length}>
             <button
               class={`worry${hiding().length ? " bad" : ""}`}
@@ -312,9 +268,6 @@ export function App(props: { raw: Raw }) {
             </button>
           </Show>
 
-          {/* What the reading cost, kept behind the same corner as everything else that's
-           * worth a look but isn't worth a line of the page. It doesn't change while you
-           * read, so it doesn't need to sit there while you do. */}
           <button
             class="worry"
             onClick={() => {
@@ -327,8 +280,6 @@ export function App(props: { raw: Raw }) {
             <ChartColumn size={17} />
           </button>
 
-          {/* The arrow to what's read next, and the node it lands on. Drawn only when
-           * asked for, since it says what's coming rather than what's here. */}
           <button
             class={`worry${showNext() ? " on" : ""}`}
             onClick={() => setShowNext((was) => !was)}
@@ -339,9 +290,6 @@ export function App(props: { raw: Raw }) {
             <Workflow size={17} />
           </button>
 
-          {/* How far out what the change reached is shown. The number is the point — a
-           * reader turning it down wants to know what they've turned it down to — so it
-           * sits beside the mark rather than hiding in a tooltip. */}
           <Show
             when={
               whole().ripples > 0 &&
@@ -395,9 +343,6 @@ export function App(props: { raw: Raw }) {
         />
       </main>
 
-      {/* A dialog rather than a floating box: the browser puts it above everything, traps
-       * the keyboard inside it, closes it on Escape and dims what's behind — all of which
-       * would otherwise be ours to get wrong. */}
       <Panel
         open={costOpen()}
         onClose={() => setCostOpen(false)}
@@ -440,8 +385,7 @@ export function App(props: { raw: Raw }) {
   );
 }
 
-/* Anything the page wants to say beside itself. Native, so Escape and the click outside are
- * the browser's job rather than ours to reimplement badly. */
+/* Native <dialog> so focus trapping, Escape and the backdrop come for free. */
 function Panel(props: {
   open: boolean;
   onClose: () => void;

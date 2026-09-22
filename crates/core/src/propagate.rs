@@ -4,16 +4,9 @@ use crate::model::{Identity, Part};
 use crate::reference::{Reference, Target};
 use std::collections::{BTreeMap, VecDeque};
 
-/// Definitions that didn't change but sit downstream of something that did, reached
-/// by following type parts only. A body can call whatever it likes without its own
-/// callers caring, so the trail stops at the first body.
-///
-/// Each comes back with how many hops away it is, because that's the thing a reader wants
-/// to turn down: the definitions that call a change directly are usually worth seeing, and
-/// the ones five removes away are the same news arriving for the fifth time. Told the
-/// distance, a page can show as much of it as somebody asks for.
-///
-/// `depth` is how far to follow. Nought means don't: what changed is the whole review.
+/// Unchanged definitions downstream of a contract break, each with how many hops away it
+/// is. Only type parts are followed: a body can call anything without its callers caring.
+/// `depth` is how far to follow; zero means not at all.
 pub fn affected(
     changes: &BTreeMap<Identity, Change>,
     references: &[Reference],
@@ -39,10 +32,8 @@ pub fn affected(
         .map(|(identity, _)| (*identity, 0))
         .collect();
 
-    /* Breadth first, so the first time a definition is reached is by the shortest way to
-     * it. Reached again further round, it keeps the nearer distance — which is the honest
-     * one: something both called directly and called again through a chain is, to a
-     * reader, called directly. */
+    // Breadth first so each definition keeps its shortest distance: something called
+    // directly and also through a chain is, to a reader, called directly.
     while let Some((broken, away)) = queue.pop_front() {
         if away >= depth {
             continue;
@@ -82,7 +73,7 @@ mod tests {
         )])
     }
 
-    /// As far as it goes, which is what these are about unless they say otherwise.
+    /// Everything reached at unlimited depth.
     fn reached(references: &[Reference]) -> BTreeSet<Identity> {
         affected(&broken_at_zero(), references, u32::MAX)
             .0
@@ -140,7 +131,6 @@ mod tests {
         assert!(affected(&untouched, &references, u32::MAX).0.is_empty());
     }
 
-    /* Round and back again without going round again. */
     #[test]
     fn a_cycle_settles() {
         let references = [reference(1, 0, Part::Type), reference(0, 1, Part::Type)];
@@ -151,7 +141,6 @@ mod tests {
         );
     }
 
-    /* The distance is what a reader turns down, so it has to be the honest one. */
     #[test]
     fn each_one_says_how_far_out_it_sits() {
         let references = [
@@ -188,8 +177,6 @@ mod tests {
         );
     }
 
-    /* Reached two ways, something is as near as the nearest way to it: a reader who asks
-     * for what calls the change directly wants this, whatever else also leads there. */
     #[test]
     fn the_shortest_way_is_the_one_that_counts() {
         let references = [

@@ -1,20 +1,13 @@
-//! Which group each definition belongs to, and what that's for.
+//! Which group each definition belongs to.
 //!
-//! A group is a box a reader can be drawn around several definitions: a bazel package, a
-//! crate, a workspace, whoever owns the code. Groups nest, so a group is named by a path
-//! from the outermost inwards.
-//!
-//! Only one grouping is in use at a time. Boxes have to nest to be drawn, and two ways of
-//! grouping the same definitions rarely nest inside each other — a package and an owner cut
-//! across one another. Rather than trying to draw both, a reader picks which one they're
-//! looking through, and the review is arranged along that one.
+//! A group is a box drawn around several definitions: a package, a crate, an owner. Only
+//! one grouping is in use at a time, since two groupings rarely nest inside each other.
 
 use crate::model::Identity;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Where one definition sits, outermost group first. Empty means the grouping has nothing
-/// to say about it, which is where anything unclaimed ends up.
+/// Where one definition sits, outermost group first. Empty means it's in no group.
 pub type Path = Vec<String>;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

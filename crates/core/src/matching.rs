@@ -21,9 +21,8 @@ pub struct Matched {
 /// Decide which definitions in the two snapshots are the same definition, then say
 /// everything else in terms of the identities that fall out.
 pub fn match_snapshots(before: Extraction, after: Extraction) -> Matched {
-    /* Checked before anything is done with them, because everything after this takes a
-     * name for an identity. Left unsaid, a repeated name doesn't fail — it quietly matches
-     * one of the twins and reports the others as arriving or leaving. */
+    // Checked first, because everything after this takes a name for an identity; a repeated
+    // name would quietly match one twin and report the rest as added or removed.
     let mut diagnostics = checked(&before.occurrences);
     diagnostics.append(&mut checked(&after.occurrences));
 
@@ -48,15 +47,9 @@ pub fn match_snapshots(before: Extraction, after: Extraction) -> Matched {
     }
 }
 
-/// What has to be true of what an extractor hands over, checked before anything leans on
-/// it.
-///
-/// An extractor is the one piece of this that can't be written once and left alone: there's
-/// a new one for every language, each reconstructing structure out of whatever its tools
-/// happen to say. The mistakes they make are quiet — a comment filed as a declaration, a
-/// line claimed twice — and they surface a long way from here, as a review that reads
-/// oddly rather than as anything failing. Said plainly at the boundary, they're a line in a
-/// panel instead of an afternoon.
+/// Sanity checks on what an extractor hands over. Extractor mistakes (a comment filed as
+/// a declaration, a line claimed twice) otherwise surface far away, as a review that
+/// reads oddly.
 fn checked(occurrences: &[Occurrence]) -> Vec<Diagnostic> {
     let mut found = twins(occurrences);
     found.extend(occurrences.iter().filter_map(tangled));
@@ -119,17 +112,8 @@ fn pair_up(before: &[Occurrence], after: &[Occurrence]) -> Vec<Option<usize>> {
     pairs
 }
 
-/// Pairs up what's left over by how alike it reads.
-///
-/// Whatever the locators didn't match is either something that arrived, something that
-/// left, or the same thing under a new name or in a new place. Text is the only evidence
-/// left, so the most alike pair goes together, then the next, until nothing left is alike
-/// enough to be worth claiming.
-///
-/// Insisting on identical text, which is what this did first, turned out to catch almost
-/// nothing: people rename a thing and adjust it in the same breath, and a definition that
-/// moved to another module usually picked up an edit on the way. Every rename in this
-/// project's own history read as an arrival and a departure.
+/// Pairs up the leftovers by text similarity, most alike first. Requiring identical text
+/// would catch almost nothing, since people rename and edit in the same commit.
 fn rescue_renames(
     before: &[Occurrence],
     after: &[Occurrence],
@@ -145,11 +129,8 @@ fn rescue_renames(
     let mut candidates: Vec<(usize, usize, usize)> = Vec::new();
     for &was in &earlier {
         for &is in &later {
-            /* A box and a thing are never the same thing, however alike they read. A
-             * module and a function of the same name would otherwise fold into one
-             * definition that changed its own nature, and everything drawn from it — what
-             * holds what, what gets a box — would be answered from whichever side was
-             * asked. */
+            // A container and an item are never the same definition, however alike the
+            // text; one that changed role would be drawn from whichever side was asked.
             if before[was].role != after[is].role {
                 continue;
             }
@@ -171,11 +152,8 @@ fn rescue_renames(
     }
 }
 
-/// How alike two definitions read, from nothing in common to word for word.
-///
-/// Lines shared over lines held, which is the same shape of measure version control uses
-/// to spot a renamed file. Counting lines rather than characters keeps a reformatting from
-/// looking like a rewrite, and keeps this cheap enough to run over every leftover pair.
+/// Shared lines over total lines, 0 to 1, like git's rename detection. Lines rather than
+/// characters, so a reformat doesn't look like a rewrite and it's cheap for every pair.
 fn likeness(before: &Occurrence, after: &Occurrence) -> f64 {
     let lines = |occurrence: &Occurrence| {
         let mut counted: BTreeMap<String, usize> = BTreeMap::new();
@@ -204,9 +182,7 @@ fn likeness(before: &Occurrence, after: &Occurrence) -> f64 {
     2.0 * shared as f64 / held as f64
 }
 
-/// Half the lines in common. The one number in dagger that is a matter of taste rather
-/// than a consequence of something: the same one git settled on for spotting a renamed
-/// file, and for the same reason — below it, two things being related is a guess.
+/// Half the lines in common: the threshold git uses for renames. A matter of taste.
 const ALIKE_ENOUGH: f64 = 0.5;
 
 fn text_of(occurrence: &Occurrence) -> Vec<(Part, String)> {
@@ -316,8 +292,6 @@ fn collect_references(
 mod tests {
     use crate::model::Span;
 
-    /* Each of these was a live bug in an extractor at some point, found by reading a
-     * review and wondering. Said here, they'd have been a line in a panel. */
     #[test]
     fn pieces_that_cover_each_other_are_reported() {
         let mut occurrence = crate::testing::occurrence("one", &[]);
@@ -347,10 +321,6 @@ mod tests {
         );
     }
 
-    /* A piece names its file only when it isn't the definition's own, so a piece saying
-     * nothing and one naming that same file are in the same place. Compared as written they
-     * looked like different files, and pieces in different files can't overlap — so the
-     * overlap went unreported. */
     #[test]
     fn an_overlap_is_found_however_the_file_is_spelled() {
         let mut occurrence = crate::testing::occurrence("one", &[]);
@@ -477,8 +447,7 @@ mod tests {
         assert!(!edits.worth_reading());
     }
 
-    /// Renaming and editing in the same breath is the usual way it happens, so this has to
-    /// land as one definition that changed rather than two that came and went.
+    /// Renaming and editing together is the usual case, so it must pair up as one definition.
     #[test]
     fn a_rename_with_an_edit_is_still_one_definition() {
         let before = "let sum = a + b;\nlog(sum);\nreturn sum;";
@@ -510,8 +479,7 @@ mod tests {
         assert_eq!(changes, vec![Change::Removed, Change::Added]);
     }
 
-    /// Identical leftovers could pair up either way round, and it makes no difference: each
-    /// pairing reads as the same two renames, with the same text on both sides.
+    /// Identical leftovers pair up either way round; it makes no difference which.
     #[test]
     fn identical_leftovers_pair_up_rather_than_being_given_up_on() {
         let changes = changes(

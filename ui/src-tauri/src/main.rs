@@ -1,9 +1,5 @@
-//! A window around the page that reads a review.
-//!
-//! It runs `dagger --json` and hands the answer over, and does nothing else. Keeping the
-//! reading of a repository in dagger rather than in here means the window can't drift from
-//! what the command line says, and that nothing about adapters or language servers has to
-//! be repeated on this side.
+//! The window around the review page. It runs `dagger --json` and hands the answer over,
+//! so nothing about adapters or language servers is repeated on this side.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -12,15 +8,9 @@ use tauri::Emitter;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-/// Runs a review and gives back what dagger said, verbatim.
-///
-/// `repo` is the directory to read, which is also where dagger looks for its own
-/// configuration. Revisions are left to dagger when the caller doesn't name any: it knows
-/// whether there's unfinished work worth looking at.
-/// Reading takes the better part of a minute on a cold tree, and a command that isn't
-/// asynchronous is run on the thread the window itself is drawn on — so the page couldn't
-/// paint, not even the line saying what it was waiting for. The work goes to a thread of
-/// its own and the window stays alive while it happens.
+/// Runs a review in `repo` and returns dagger's JSON verbatim. Done on a blocking thread,
+/// since a reading can take a minute and would otherwise block the thread the window
+/// paints on.
 #[tauri::command]
 async fn review(
     window: tauri::Window,
@@ -34,19 +24,14 @@ async fn review(
             .current_dir(&repo)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        /* Passed on as typed. What counts as a way of naming a change is the snapshot
-         * adapter's to say, so a window that read these would be a second opinion about
-         * it — and one that goes out of date the moment an adapter learns a new word. */
+        // Passed on as typed; what the words mean is the snapshot adapter's to say.
         dagger.args(&asked);
 
         let mut run = dagger
             .spawn()
             .map_err(|error| format!("couldn't run dagger in {repo}: {error}"))?;
 
-        /* Passed along as it arrives rather than kept until the end. A reading takes long
-         * enough that a window with nothing on it looks like a window that has stopped, and
-         * dagger already says what it's doing — which snapshot, which extractor, how far
-         * through. All that was missing was somewhere for it to go. */
+        // Streamed as it arrives, so the window has something to show during a long reading.
         let told = run.stderr.take().map(|stderr| {
             let window = window.clone();
             std::thread::spawn(move || {
@@ -81,11 +66,7 @@ async fn review(
     .map_err(|error| format!("the reading didn't finish: {error}"))?
 }
 
-/// Which dagger to run.
-///
-/// Whatever sits beside this window, when there is one — a window built from this repository
-/// should use the tool built alongside it rather than whichever version somebody installed
-/// years ago. Failing that, whatever is on PATH.
+/// Prefers the dagger built beside this window over whatever is on PATH.
 fn found() -> PathBuf {
     let beside = std::env::current_exe()
         .ok()
@@ -97,10 +78,7 @@ fn found() -> PathBuf {
     }
 }
 
-/// What this window was opened on, as the command line put it.
-///
-/// Whatever followed `--read` travels to dagger untouched. Named nothing and dagger
-/// decides, which means the working changes.
+/// What this window was opened on. Everything after `--read` goes to dagger untouched.
 #[derive(serde::Serialize)]
 struct Opened {
     repo: String,
@@ -119,7 +97,7 @@ fn opened() -> Opened {
     }
 }
 
-/// Everything after a flag, which is all of it: these are dagger's arguments, not ours.
+/// Everything after a flag; these are dagger's arguments, not ours.
 fn rest(flag: &str) -> Vec<String> {
     let mut args = std::env::args().skip_while(|arg| arg != flag);
     match args.next() {
@@ -128,7 +106,7 @@ fn rest(flag: &str) -> Vec<String> {
     }
 }
 
-/// What was written after a flag, when it was written at all.
+/// The value after a flag, if the flag was given.
 fn said(flag: &str) -> Option<String> {
     let mut args = std::env::args().skip_while(|arg| arg != flag);
     args.next()?;

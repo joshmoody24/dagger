@@ -13,7 +13,6 @@ import { stitch } from "./text.ts";
 import { colouring, painted, readied, speaks } from "./colouring.ts";
 import { dressing, wearing } from "./theme.ts";
 
-/** Which definitions a name leads to, for the ones a reader can follow. */
 type Names = Map<string, Identity>;
 
 interface ReadingProps {
@@ -30,13 +29,12 @@ interface ReadingProps {
   onOpen: (id: Identity) => void;
   onToggle: () => void;
   onWiden: (width: number) => void;
-  /** Handed the diff, so whoever owns the keyboard can scroll it. */
+  /** Exposes the diff pane so the parent's j/k keys can scroll it. */
   onPane: (pane: HTMLDivElement) => void;
   onExpand: () => void;
   onClose: () => void;
 }
 
-/* The definition in front of the reader: what it is, why it's here, and how it changed. */
 export function Reading(props: ReadingProps) {
   const definition = () =>
     props.here === null ? undefined : props.review.definitions.get(props.here);
@@ -50,8 +48,7 @@ export function Reading(props: ReadingProps) {
 
   let sheet: HTMLDivElement | undefined;
 
-  /* Held while the pointer is down, so letting go anywhere — over the graph, outside the
-   * window — ends the drag rather than leaving it stuck to the mouse. */
+  /* Pointer capture so releasing outside the handle still ends the drag. */
   const widen = (event: PointerEvent) => {
     const edge = event.currentTarget as HTMLElement;
     edge.setPointerCapture(event.pointerId);
@@ -69,9 +66,7 @@ export function Reading(props: ReadingProps) {
     edge.addEventListener("pointercancel", done);
   };
 
-  /* A long definition with one line changed near the bottom opens showing none of it. The
-   * top of the sheet says what this is and why it's here, which is worth seeing, so the
-   * first changed line is brought just under that rather than to the top of the pane. */
+  /* Scroll to the first changed line, or a long definition opens showing no change. */
   createEffect(() => {
     const here = definition();
     const pane = sheet;
@@ -99,8 +94,6 @@ export function Reading(props: ReadingProps) {
             : undefined
         }
       >
-        {/* Drag the edge to give the code more room. Only where it's a column — a drawer
-         * covers the width already. */}
         <Show when={props.sheet === "beside"}>
           <div class="wider" onPointerDown={widen} />
         </Show>
@@ -127,8 +120,6 @@ export function Reading(props: ReadingProps) {
           </button>
         </div>
 
-        {/* What this is and why it's here: fixed, so it's still there however far down the
-         * code the reader has scrolled. Only the code below scrolls. */}
         <div class="sm">
           <Show when={definition()}>
             {(one) => (
@@ -162,14 +153,6 @@ export function Reading(props: ReadingProps) {
           </Show>
         </div>
 
-        {/* Everything you can press sits together on the right, each wearing the key that
-         * does the same job — a hint is worth more on the thing it applies to than in a
-         * list somewhere else.
-         *
-         * Back and next are the same move in two directions, so they're said the same way
-         * and coloured the same: both mark as viewed, because both mean you're finished
-         * with what you're looking at. Moving without saying so is a quieter thing and
-         * looks it. */}
         <div class="nav">
           <div class="pair">
             <button
@@ -227,8 +210,6 @@ export function Reading(props: ReadingProps) {
   );
 }
 
-/* What a definition is and why it's here. Kept above the code rather than scrolling with
- * it: it's the part worth glancing back at from anywhere in the diff. */
 function About(props: {
   definition: Def;
   because: Identity[];
@@ -239,8 +220,6 @@ function About(props: {
 }) {
   return (
     <>
-      {/* What a definition is comes from a fixed set, so it reads as a label rather than as
-       * more of the sentence the path is. */}
       <p class="file">
         {props.definition.file}
         <span class="kind">{props.definition.kind}</span>
@@ -272,8 +251,6 @@ function About(props: {
   );
 }
 
-/* Names of other definitions, marked when the reader hasn't got to them yet — which is the
- * one thing they can't check for themselves. */
 function Names(props: {
   ids: Identity[];
   review: Review;
@@ -286,8 +263,7 @@ function Names(props: {
       .filter((one): one is Def => one !== undefined)
       .map((definition) => ({
         definition,
-        /* Only the reading order can say whether something is being taken on faith. Looked
-         * at on its own, out of order, there's no order for it to be out of. */
+        /* No step (viewing out of order) means nothing can be "not yet seen". */
         soon: (props.step?.on_faith || []).includes(definition.id),
       }));
 
@@ -314,14 +290,11 @@ function Diff(props: {
   names: Names;
   onOpen: (id: Identity) => void;
 }) {
-  /* Fetches the grammar for whatever this file is written in, once it's known. */
   createEffect(() =>
     readied(speaks(props.definition.file), dressing(), wearing()),
   );
 
-  /* Held rather than worked out again on each read: every one of these is walked once per
-   * line while the lines are drawn, and colouring a block is far too much work to repeat
-   * a hundred times over the same block. */
+  /* Memoised: read once per rendered line, and diffing/colouring is expensive. */
   const lines = createMemo(() => {
     const [was, is] = [
       stitch(props.definition.before),
@@ -336,13 +309,11 @@ function Diff(props: {
     return focused(all);
   });
 
-  /* Unchanged means unchanged: a definition in the review because something it depends on
-   * moved has no diff to show, only itself. */
   const unchanged = createMemo(
     () => lines().length > 0 && lines().every((one) => one.mark === " "),
   );
 
-  /* Coloured in one pass over the whole thing, so the grammar knows where it is. */
+  /* Highlighted in one pass so multi-line tokens (strings, comments) are handled. */
   const tinted = createMemo(() => {
     void colouring();
     return painted(
@@ -352,7 +323,6 @@ function Diff(props: {
     );
   });
 
-  /* Room for the largest line number this diff holds, and no more. */
   const gutter = () => {
     const most = Math.max(0, ...lines().map((one) => one.line.at ?? 0));
     return `${Math.max(3, String(most).length)}ch`;
@@ -369,9 +339,6 @@ function Diff(props: {
             class={`ln ${one.mark === "+" ? "a" : one.mark === "−" ? "r" : ""}`}
           >
             <i>{one.mark === " " ? "" : one.mark}</i>
-            {/* Where it is in the file, so a reader can say "line 31" and be understood.
-             * A gap stands between two pieces and is nowhere in the file, so it has no
-             * number to show. */}
             <u>{one.line.at ?? ""}</u>
             <Show
               when={one.line.at !== null}
@@ -391,18 +358,14 @@ function Diff(props: {
   );
 }
 
-/* Comments and strings step back, and a name that belongs to something else in this review
- * becomes a way to get there. That last part is why this isn't a highlighting library: no
- * library knows which words in this code the reader is about to meet. */
+/* Post-processes highlighter output to link names that are definitions in this review,
+ * which no highlighting library can do on its own. */
 function Code(props: {
   pieces: Painted[];
   names: Names;
   here: Identity;
   onOpen: (id: Identity) => void;
 }) {
-  /* Coloured by the grammar, then read again for names that go somewhere. A highlighter
-   * can't know which words in this code are definitions the reader is about to meet, and
-   * that's the one thing worth more than the colour. */
   const parts = (): Led[] =>
     props.pieces.flatMap((piece) =>
       piece.colour ? split(piece, props.names, props.here) : [piece],
@@ -434,10 +397,8 @@ function Code(props: {
   );
 }
 
-/** A coloured piece, and where its text leads if it names something else in the review. */
 type Led = Painted & { goes?: Identity };
 
-/* A coloured piece, cut around any names in it that lead somewhere else. */
 function split(piece: Painted, names: Names, here: Identity): Led[] {
   const goes = names.get(piece.text.trim());
   if (goes !== undefined && goes !== here && piece.text.trim() === piece.text) {

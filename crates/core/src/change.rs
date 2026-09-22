@@ -59,8 +59,8 @@ fn part_text(occ: &Occurrence, part: Part) -> Option<String> {
     occ.text_of(part)
 }
 
-/// Landed somewhere else, counting a part that moved out on its own the way a C
-/// declaration can migrate to a different header.
+/// Landed somewhere else. A part moving on its own counts too, the way a C declaration
+/// can migrate to a different header.
 fn moved(before: &Occurrence, after: &Occurrence) -> bool {
     let part_moved = before.parts.keys().chain(after.parts.keys()).any(|&part| {
         let (was, is) = (before.files_of(part), after.files_of(part));
@@ -80,15 +80,9 @@ fn changed_parts(before: &Occurrence, after: &Occurrence) -> BTreeSet<Part> {
         .collect()
 }
 
-/// Whether callers see something different. Any of three signals is enough: the name,
-/// the signature as written, or what the extractor's tooling says the thing looks like
-/// from outside.
-///
-/// Taking whichever fires rather than letting one overrule another is deliberate. A
-/// contract that came from a summary — an editor's hover text, say — can be identical on
-/// both sides while the declaration plainly changed, and letting that silence the written
-/// text would hide a real break. Reading a definition that turned out to be fine costs a
-/// moment; missing one that broke costs more.
+/// Whether callers see something different: the name, the written signature, or the
+/// tooling's contract. Any one is enough. The contract can be a summary (hover text) that
+/// stays the same while the declaration changed, so it must not overrule the written text.
 fn contract_changed(before: &Occurrence, after: &Occurrence) -> bool {
     let told = match (before.contract.as_deref(), after.contract.as_deref()) {
         (Some(before), Some(after)) => before != after,
@@ -184,8 +178,7 @@ mod tests {
         assert!(!edits.worth_reading());
     }
 
-    /// A module's imports sit wherever the language allows, which is rarely one stretch.
-    /// Editing the second one has to count the same as editing the first.
+    /// A module's imports are rarely one stretch; editing the second must count like the first.
     #[test]
     fn a_part_made_of_several_pieces_is_compared_as_a_whole() {
         let mut before = occurrence("money", &[(Part::Body, "use std::fmt;")]);
@@ -205,8 +198,7 @@ mod tests {
         assert!(edits(Sides::Kept { before, after }).changed(Part::Body));
     }
 
-    /// A declaration in a header and again in the file it belongs to: one part, two files,
-    /// and staying put in both means it hasn't moved.
+    /// A declaration in a header and again in its source file: one part, two files.
     #[test]
     fn a_part_can_sit_in_two_files_without_having_moved() {
         let split = || {
@@ -258,9 +250,7 @@ mod tests {
         assert!(!edits.changed(Part::Type));
     }
 
-    /// A signature reflowed by a formatter, which callers don't care about. We say they
-    /// might anyway: the alternative is trusting a contract that can be a summary, and a
-    /// summary that stays the same while the declaration changes would hide a real break.
+    /// A reflowed signature counts because the contract may be a summary that hides real breaks.
     #[test]
     fn a_rewritten_signature_counts_even_when_the_contract_agrees() {
         let mut before = occurrence("parseId", &[(Part::Type, "parseId(s: string)")]);
@@ -273,8 +263,6 @@ mod tests {
         assert!(edits.changed(Part::Type));
     }
 
-    /// The case the union exists for: a contract that summarises rather than spells out,
-    /// so only the written declaration shows the member arriving.
     #[test]
     fn a_summarising_contract_cannot_hide_a_changed_declaration() {
         let mut before = occurrence(

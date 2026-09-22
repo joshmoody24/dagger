@@ -1,8 +1,5 @@
-/* What dagger says while it works, read as the shape of the work.
- *
- * Plain functions, no components: this is the part worth testing without a browser, and the
- * part most likely to go quietly wrong — it reads lines written by another program, and a
- * misread line looks exactly like a slow one.
+/* Reads dagger's progress lines into phases. Plain functions so it can be tested without a
+ * browser: a misread line looks exactly like a slow one.
  */
 
 export interface Phase {
@@ -13,24 +10,14 @@ export interface Phase {
   going: boolean;
 }
 
-/* Done, being done, or not started. Taken from what each phase has said for itself rather
- * than from its place in the row, so a phase is under way exactly when there's something
- * saying so. */
+/* Taken from what each phase has said rather than from its position in the row. */
 export function standing(phases: Phase[], at: number) {
   return phases[at].done ? "was" : phases[at].going ? "at" : "yet";
 }
 
-/* The whole shape up front, filled in as it happens.
- *
- * There are always three stretches — laying both snapshots out, then reading each of them —
- * so all three are shown from the start and the reader can see how much is left rather than
- * watching steps appear one at a time with no idea how many are coming. Which revisions
- * they are comes from the first thing dagger says.
- *
- * Whose a line is comes from the line itself — dagger puts the side in front of everything
- * it says — rather than from what was said before it. Worked out from the order instead,
- * this reads any change to how the two are run as a change to what the reader is told.
- */
+/* All three phases are shown from the start so the reader can see how much is left. Which
+ * side a line belongs to comes from the line itself, never from what came before it, since
+ * the two readings interleave. */
 export function phases(said: string[]): Phase[] {
   const pair = said
     .map((line) => line.match(/^comparing (\S+) to (\S+)/))
@@ -48,8 +35,7 @@ export function phases(said: string[]): Phase[] {
   for (const line of said) {
     if (!line.trim()) continue;
 
-    /* "before · read 12 of 40 files", and anything without a side belongs to the laying
-     * out, which happens before either reading starts. */
+    /* A line with no side belongs to laying out, which happens before either reading. */
     const [side, rest] = told(line);
     if (!side) {
       found[0].detail = line.trim();

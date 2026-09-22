@@ -1,7 +1,5 @@
-//! Deciding who speaks for each file, before any adapter is started.
-//!
-//! Keeping this on our side means adapter authors never write glob matching, and a
-//! surprising assignment can be printed rather than guessed at.
+//! Decides which extractor gets each file before any adapter starts, so adapters never
+//! do glob matching and a surprising assignment can be printed.
 
 use anyhow::{Context, Result};
 use glob::Pattern;
@@ -16,10 +14,8 @@ pub struct Assignment {
     pub ignored: usize,
 }
 
-/// `claims` is one set of globs per extractor, already settled: whatever the repo
-/// asked for, or what the adapter said it reads. `listed` is what the snapshot adapter
-/// said is in there, which we trust over looking ourselves, since it's the only thing
-/// that knows a build directory from a source one.
+/// `claims` is one set of globs per extractor. `listed` is the snapshot adapter's file
+/// list, preferred over walking since only it knows a build directory from a source one.
 pub fn assign(
     ignore: &[String],
     claims: &[Vec<String>],
@@ -71,9 +67,8 @@ pub fn walk_all(dir: &Path) -> Result<Vec<String>> {
     walked(dir)
 }
 
-/// Drops whatever the repo asked to leave out. Ignoring a file means it isn't part of a
-/// review at all, so nothing downstream should hear about it — not the extractors, and not
-/// the check that complains about changes nobody accounted for.
+/// An ignored file is out of the review entirely, so neither the extractors nor the
+/// completeness check should see it.
 pub fn not_ignored(ignore: &[String], files: Vec<String>) -> Result<Vec<String>> {
     let ignore = patterns(ignore)?;
     Ok(files

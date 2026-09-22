@@ -1,12 +1,8 @@
 //! What dagger says to an adapter, and what it expects back.
 //!
-//! An adapter is any executable. It reads one request as JSON on stdin, writes one
-//! response as JSON on stdout, and exits. Whatever it puts on stderr reaches the
-//! user, so logging there is fine.
-//!
-//! Snapshots are handed over as a directory rather than served a file at a time,
-//! because real language tooling wants a project on disk: a tsconfig, a lockfile,
-//! the imports next door.
+//! An adapter is any executable: one JSON request on stdin, one JSON response on stdout,
+//! and stderr reaches the user. Snapshots are handed over as a directory because real
+//! language tooling wants a project on disk.
 
 use dagger_core::matching::Extraction;
 use dagger_core::model::Span;
@@ -15,24 +11,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
-    /// What this adapter can do, asked before anything else. An extractor answers with
-    /// the files it speaks for, so a repo doesn't have to spell out that a Rust adapter
-    /// reads Rust. A snapshot adapter can also say which two revisions to compare when
-    /// the user hasn't named any.
+    /// What this adapter can do, asked before anything else: the files it speaks for, and
+    /// for a snapshot adapter, which revisions to compare by default.
     Describe {
-        /// Whatever the repo wrote under this adapter's `settings`. Dagger doesn't read
-        /// it: an adapter that needs to be told which server to run, or which dialect to
-        /// expect, gets told here rather than through a pile of arguments.
+        /// Whatever the repo wrote under this adapter's `settings`. Dagger doesn't read it.
         #[serde(default)]
         settings: serde_json::Value,
     },
-    /// Turn what the user asked for on the command line into the two revisions to
-    /// compare.
-    ///
-    /// The words are the adapter's, not dagger's. "Branch", "commits", `main...HEAD` —
-    /// all of that is git's way of naming history, and a repository kept some other way
-    /// names it some other way. So the arguments travel exactly as typed and whoever
-    /// understands them says what they meant.
+    /// Turn the user's command-line arguments into the two revisions to compare. They
+    /// travel exactly as typed, since naming history (`main...HEAD`) is the adapter's business.
     Resolve {
         /// Everything after the flags, in order, untouched.
         asked: Vec<String>,
@@ -45,32 +32,18 @@ pub enum Request {
         #[serde(default)]
         settings: serde_json::Value,
     },
-    /// Read a snapshot and report what's defined in the files handed over.
-    ///
-    /// These are every file the adapter owns, not just the ones that changed: an
-    /// untouched helper can still be what joins two edits together. Reading other
-    /// files for context is fine and often necessary, but report only these, since
-    /// dagger has already decided who speaks for what.
+    /// Read a snapshot and report what's defined in `files`: every file the adapter owns,
+    /// not just the changed ones. Reading other files for context is fine; report only these.
     Extract {
         dir: String,
         files: Vec<String>,
-        /// Files that differ between the two snapshots, and where in each. A hint, not a
-        /// filter: an adapter may still report anything it likes, and one that ignores
-        /// this is merely slow rather than wrong. It lets an adapter work outward from a
-        /// change, and ask about only the definitions a change actually touches, rather
-        /// than reading a whole repository — or a whole changed file — to describe a few
-        /// lines.
-        ///
-        /// The ranges are for this side of the comparison: `dir` is one snapshot, and a
-        /// definition unchanged here can still be worth asking about because the other
-        /// snapshot moved it. What moved on the other side isn't this request's to say.
+        /// Files that differ between the snapshots, and where. A hint, not a filter: an
+        /// adapter may still report anything, and ignoring this is only slow, not wrong.
+        /// The ranges are for this side (`dir`) only.
         #[serde(default)]
         changed: Vec<Changed>,
-        /// How far past a changed file to follow what uses it. Nought means not at all.
-        ///
-        /// A hint like `changed`, and the one that decides what a reading costs: each hop
-        /// outward is every definition reached so far asking the whole repository who uses
-        /// it. An adapter that reads whole files regardless has nothing to do with this.
+        /// How far past a changed file to follow what uses it; zero means not at all. A
+        /// hint like `changed`, and the one that decides what a reading costs.
         #[serde(default)]
         ripples: u32,
         #[serde(default)]
@@ -83,21 +56,14 @@ pub enum Request {
 pub struct Revisions {
     pub before: String,
     pub after: String,
-    /// What the commit under review is called, when the adapter can say. A snapshot
-    /// adapter knows what "after" means in its own history — git reads it off the commit
-    /// message — and dagger's own model of a change has nothing of the kind to fall back
-    /// on, so this is only ever a suggestion, never required.
+    /// What the commit under review is called, when the adapter can say. Only ever a
+    /// suggestion, never required.
     #[serde(default)]
     pub title: Option<String>,
 }
 
-/// One file that differs, and the byte ranges inside it that do.
-///
-/// A whole file used to count as changed the moment one line in it did, which made a
-/// changed file and a rewritten one look the same request: an adapter had no way to tell
-/// "ask about everything here" from "ask about the four lines somebody touched", so it
-/// asked about everything either way. Redo's own self-review asked after 494 definitions
-/// in files that between them had a few dozen lines actually differ.
+/// One file that differs, and the byte ranges inside it that do. The ranges let an
+/// adapter tell a touched file from a rewritten one instead of asking about everything.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Changed {
     pub file: String,
@@ -106,10 +72,8 @@ pub struct Changed {
     pub at: Vec<Span>,
 }
 
-/// What an adapter says on stderr while a reading is under way, in place of one-off
-/// prose. A fixed vocabulary means the same event is worded the same way everywhere it
-/// happens, rather than each adapter inventing — and slowly drifting from — its own
-/// text for "started a server" or "here's what I found".
+/// What an adapter says on stderr while a reading is under way. A fixed vocabulary keeps
+/// the wording the same across adapters.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Progress {
     /// A server was started to answer what's ahead.
@@ -143,9 +107,8 @@ impl std::fmt::Display for Progress {
     }
 }
 
-/// Something an adapter wants the reader to know: a file it couldn't parse, a project
-/// it couldn't make sense of. Prose rather than a fixed set of cases, because dagger
-/// can't know in advance what a given language's tooling will run into.
+/// Something an adapter wants the reader to know, like a file it couldn't parse. Prose
+/// rather than fixed cases, because dagger can't know what a language's tooling will run into.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Note {
@@ -161,15 +124,12 @@ pub enum Response {
         /// Glob patterns this adapter claims by default. A repo that says `include`
         /// replaces this outright rather than adding to it.
         include: Vec<String>,
-        /// What to compare when the user named nothing. Only a snapshot adapter knows
-        /// what a sensible answer is, since only it knows whether there's uncommitted
-        /// work sitting around.
+        /// What to compare when the user named nothing. Only a snapshot adapter knows,
+        /// since only it knows whether there's uncommitted work around.
         #[serde(default)]
         revisions: Option<Revisions>,
-        /// The ways of naming a change this adapter answers to, a line each, for dagger
-        /// to show alongside its own help. Written here because the words are this
-        /// adapter's: dagger printing them itself would be a second copy of a list only
-        /// one of them can keep right.
+        /// The ways of naming a change this adapter accepts, a line each, for dagger's
+        /// help text. Kept here so there's only one copy of the list.
         #[serde(default)]
         usage: Vec<String>,
     },
@@ -181,10 +141,8 @@ pub enum Response {
         /// Whether dagger should delete the directory when it's done. An adapter that
         /// pointed at a path it doesn't own says false.
         temporary: bool,
-        /// What's in there worth reading, if the adapter knows. Left out means "have a
-        /// look yourself", which is the only option when the directory is just a
-        /// directory. A version control adapter does know, and saying so is how
-        /// ignored files stay out without every repo listing its build directory.
+        /// Which files are worth reading, if the adapter knows. Left out means look
+        /// yourself. A version control adapter knows, which keeps ignored files out.
         #[serde(default)]
         files: Option<Vec<String>>,
     },

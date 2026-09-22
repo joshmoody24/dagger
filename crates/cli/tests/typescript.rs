@@ -1,8 +1,5 @@
-//! Reads the TypeScript fixture the way a person would, and checks what comes back.
-//!
-//! The only test that exercises a language server, an adapter subprocess, and the reading
-//! order together. Everything else in the suite tests one of those apart from the others,
-//! and most of the mistakes so far have been in how they meet.
+//! The only test that runs a language server, an adapter subprocess, and the reading
+//! order together. Most mistakes so far have been where they meet.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -12,11 +9,8 @@ fn the_typescript_fixture_reads_as_expected() {
     let fixture = fixture();
     let adapter = target().join("dagger-lsp");
 
-    /* A skipped test looks exactly like a passing one, and this is the only test that puts
-     * the whole thing together — so it says so rather than going quiet. The dev shell
-     * provides the compiler, which means an absence here is a broken setup, not a fact
-     * about somebody's machine. Anyone genuinely without one can say so and get the rest of
-     * the suite. */
+    // Fails rather than skipping quietly: a skipped test looks like a passing one, and the
+    // dev shell provides tsc, so its absence is a broken setup. DAGGER_WITHOUT_TSC opts out.
     if !on_path("tsc") || !adapter.exists() {
         let missing = if on_path("tsc") {
             format!("{} hasn't been built — run ./build", adapter.display())

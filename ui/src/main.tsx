@@ -7,8 +7,7 @@ import "./style.css";
 
 await wear(themes[0]);
 
-/* Tauri puts this on the window when the page is running inside one; in a browser it
- * simply isn't there, which is how the page tells where it is. */
+/* Present only when running inside Tauri; its absence means we're in a browser. */
 declare global {
   interface Window {
     __TAURI__?: {
@@ -23,18 +22,12 @@ declare global {
   }
 }
 
-/* Where the review comes from.
- *
- * Either way it's dagger that's asked, and asked for the same thing: the working changes.
- * In a window that goes through Tauri; in a browser it goes to the dev server, which runs
- * the same command. Nothing here reads a saved review — one that's written down is out of
- * date as soon as anything changes, and the page can't tell.
- */
+/* Always runs dagger fresh (via Tauri or the dev server) rather than reading a saved
+ * review, which would silently go stale. */
 async function load() {
   const tauri = window.__TAURI__;
   if (!tauri) {
-    /* Whatever the address asks for is passed straight on, so a link to one change is a
-     * link somebody else can open. */
+    /* Query string is forwarded so a URL for one change is shareable. */
     const said = await fetch(`/review${window.location.search}`);
     if (!said.ok) throw new Error(await said.text());
     return await streamed(said);
@@ -54,7 +47,7 @@ async function load() {
   }
 }
 
-/* A line of JSON at a time: whatever dagger said as it said it, and the review last. */
+/* Newline-delimited JSON: progress notes, then the review last. */
 async function streamed(said: Response) {
   const reader = said.body!.getReader();
   const words = new TextDecoder();
@@ -78,7 +71,6 @@ async function streamed(said: Response) {
   }
 }
 
-/* What dagger has said so far, which is how far along it is. */
 const [said, setSaid] = createSignal<string[]>([]);
 
 function Root() {

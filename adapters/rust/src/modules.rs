@@ -1,9 +1,7 @@
-//! Working out a file's Rust module path, which is the address Rust itself would use.
+//! Works out a file's Rust module path.
 //!
-//! The directory a file sits in is not its module path: the crate name comes from the
-//! nearest Cargo.toml, everything above `src` is packaging rather than language, and
-//! `lib.rs`, `main.rs` and `mod.rs` name no module of their own. Getting this right is
-//! what makes a locator survive the crate being moved to a different directory.
+//! The crate name comes from the nearest Cargo.toml, and `src`, `lib.rs`, `main.rs` and
+//! `mod.rs` name no module, so a locator survives the crate moving directories.
 
 use dagger_protocol::Note;
 use serde::Deserialize;

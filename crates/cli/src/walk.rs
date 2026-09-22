@@ -1,11 +1,6 @@
-//! Stepping through a review one definition at a time.
-//!
-//! Deliberately thin. It exists to find out whether the reading order is any good, so
-//! anything fancier belongs in a real viewer rather than here.
-//!
-//! What it shows that a plain diff can't: which of the things this leans on you've
-//! already read, and which are still to come. That's the whole point of having
-//! bothered to work out an order.
+//! Steps through a review one definition at a time, showing which dependencies were
+//! already read and which are still to come. Deliberately thin: it exists to check
+//! whether the reading order is any good, so anything fancier belongs in a real viewer.
 
 use crate::diff::{self, BOLD, DIM, Paint};
 use crate::report;
@@ -108,14 +103,13 @@ fn show(
     print_parts(&definition.sides, paint);
 }
 
-/// Just the name. The module path is already on the line above, and these are things
-/// the reader saw minutes ago.
+/// Just the name, since the module path is already on the line above.
 fn short(name: &str) -> String {
     name.rsplit("::").next().unwrap_or(name).to_string()
 }
 
-/// Long lists stop being read, so say how many rather than all of them. Anything the
-/// reader hasn't got to yet is marked, since that's the bit they can't check.
+/// Long lists stop being read, so they're capped. Unread entries are marked since those
+/// are the ones the reader can't check.
 fn listed(names: &[(String, bool)]) -> String {
     const SHOWN: usize = 6;
     let written: Vec<String> = names
@@ -136,8 +130,8 @@ fn listed(names: &[(String, bool)]) -> String {
     format!("{}, and {} more", written.join(", "), names.len() - SHOWN)
 }
 
-/// What this leans on that changed shape underneath it. The whole reason an unchanged
-/// definition is worth a reader's time, so it shouldn't be left to them to work out.
+/// Dependencies that changed shape underneath this one, which is the reason an unchanged
+/// definition is worth reading at all.
 fn culprits(review: &Review, identity: Identity) -> Vec<Identity> {
     leaned_on(review, identity)
         .into_iter()
@@ -150,8 +144,7 @@ fn culprits(review: &Review, identity: Identity) -> Vec<Identity> {
         .collect()
 }
 
-/// What a definition leans on, going by the review's own edges so a chain through
-/// something the reader never sees still counts.
+/// Uses the review's edges so a chain through something the reader never sees still counts.
 fn leaned_on(review: &Review, identity: Identity) -> Vec<Identity> {
     review
         .edges
@@ -161,17 +154,13 @@ fn leaned_on(review: &Review, identity: Identity) -> Vec<Identity> {
         .collect()
 }
 
-/// The parts stitched back together in the order they appear in the file, which is
-/// how they were written and how they read. The split into parts is for deciding what
-/// breaks callers, not for showing people.
 fn print_parts(sides: &Sides, paint: &Paint) {
     let before = stitched(sides.before());
     let after = stitched(sides.after());
 
     let body = match (before.as_deref(), after.as_deref()) {
         (None, None) => return,
-        // Nothing of its own changed, so there's no diff to read. Show it as it stands,
-        // which is what the reader has to judge against whatever moved underneath.
+        // Unchanged, so show it as it stands to judge against whatever moved underneath.
         (Some(before), Some(after)) if before == after => {
             println!();
             print!("{}", diff::render_unchanged(after, paint));
@@ -186,9 +175,8 @@ fn print_parts(sides: &Sides, paint: &Paint) {
     print!("{body}");
 }
 
-/// Every piece of the definition run together in the order they appear, which is how they
-/// were written and how they read. Splitting into parts is for deciding what breaks
-/// callers, not for showing people.
+/// Pieces in file order. The split into parts is for deciding what breaks callers, not
+/// for showing people.
 fn stitched(occurrence: Option<&Occurrence>) -> Option<String> {
     let occurrence = occurrence?;
 

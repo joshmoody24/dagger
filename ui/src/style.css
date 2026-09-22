@@ -59,8 +59,7 @@ button {
   width: 1ch;
   text-align: center;
 }
-/* What's happening while there's nothing to show yet, in the middle of the page because
- * it's the only thing on it. */
+/* Centred: it's the only thing on the page. */
 .waiting {
   flex: 1;
   display: grid;
@@ -82,9 +81,6 @@ button {
   column-gap: 10px;
   row-gap: 4px;
 }
-/* A circle that fills when its stretch is finished, and beats while it's the one being
- * done. Nothing here is a percentage of the whole: only the stretch that can say how far
- * along it is says so, underneath. */
 .phase::before {
   content: "";
   grid-row: 1;
@@ -149,21 +145,17 @@ header {
   padding: 12px 16px 8px;
   flex: none;
 }
-/* Whatever the commit under review calls itself. Not every reading has one — dagger's own
- * model of a change has no commit message to read — so it's only ever here when there was
- * something to show. Kept quiet: it names the page, it isn't the point of it. */
+/* Commit title, kept quiet: it names the page, it isn't the point of it. */
 .rt {
   margin: 0 0 6px;
   font: 400 12.5px/1.6 var(--sans);
-  /* Muted, not ink: ink is a theme's colour for a name in code, which in a high-contrast
-   * theme is gold. Muted is its plain foreground — the white the count beside this wears. */
+  /* Muted rather than ink: in a high-contrast theme ink is gold, muted is plain white. */
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* One row, laid out rather than floated: the count and the warning sat on top of each
- * other when both were taken out of the flow. */
+/* Flex rather than floats, so the count and the warning can't stack on each other. */
 .t {
   display: flex;
   align-items: center;
@@ -179,8 +171,7 @@ header {
   min-width: 0;
 }
 
-/* Whatever dagger couldn't work out: out of the way until there's something to say. */
-/* Quiet by default. It only becomes a warning when something might actually be missing. */
+/* Quiet by default; only styled as a warning when something might actually be missing. */
 .worry {
   width: 30px;
   height: 30px;
@@ -190,8 +181,7 @@ header {
   border-radius: 8px;
   color: var(--muted);
 }
-/* The mark and how far out the ripples go, side by side: the number is what the reader
- * just changed, so it belongs where they're already looking. */
+/* The ripple count sits beside the mark: it's what the reader just changed. */
 .worry.steps {
   width: auto;
   padding: 0 7px;
@@ -210,8 +200,7 @@ header {
 .worry:hover {
   background: var(--raised);
 }
-/* What the page says beside itself. A dialog, so the browser handles being on top, the
- * keyboard staying inside it, and closing on Escape. */
+/* A <dialog>, so the browser handles stacking, focus trapping and Escape. */
 .panel {
   width: min(560px, calc(100vw - 32px));
   padding: 16px 18px;
@@ -256,8 +245,7 @@ main {
   position: relative;
 }
 
-/* The graph has a view of its own rather than being an image scaled to the pane: the reader
- * moves it about, and how far away it is has nothing to do with how big the window is. */
+/* The graph pans and zooms independently of the window size. */
 .canvas {
   position: absolute;
   inset: 0;
@@ -279,16 +267,13 @@ main {
   align-items: center;
   gap: 4px;
 }
-/* The drawing. Everything inside it is painted rather than built, so there are no rules
- * here for nodes, boxes or lines — those colours are read out of this stylesheet by the
- * code that paints them. */
+/* Nodes, boxes and lines are painted, not styled; the painting code reads their colours
+ * from this stylesheet. */
 .canvas canvas {
   display: block;
 }
 
-/* The same definitions as real buttons, for anything that reads a page rather than looks
- * at one. Taken out of sight without being taken out of the page: `display: none` would
- * hide it from a screen reader too, which is the one thing it's for. */
+/* Screen-reader only. `display: none` would hide it from screen readers too. */
 .spoken {
   position: absolute;
   width: 1px;
@@ -315,9 +300,7 @@ main {
   font: 13px var(--mono);
 }
 
-/* A drawer, until there's room for it to sit beside the graph. Three heights: away, half
- * the window, and all of it. Sliding rather than appearing is most of what makes it feel
- * like something you pulled up rather than something that happened to you. */
+/* A bottom drawer (away, half, full) until there's room for it beside the graph. */
 .sheet {
   position: fixed;
   left: 0;
@@ -344,11 +327,11 @@ main {
   height: 100dvh;
   border-radius: 0;
 }
-/* The graph keeps clear of the drawer so what's being read isn't hidden behind it. */
+/* Keep the graph clear of the drawer. */
 main.has-sheet.half .canvas {
   bottom: 58dvh;
 }
-/* The edge you drag. Wide enough to catch and invisible until you're on it. */
+/* Drag handle: wide enough to grab, invisible until hovered. */
 .wider {
   position: absolute;
   left: 0;
@@ -375,7 +358,7 @@ main.has-sheet.half .canvas {
   flex: 1;
   min-width: 0;
 }
-/* What the code is about, kept above it rather than scrolled away with it. */
+/* Stays above the code rather than scrolling with it. */
 .sm {
   flex: none;
   padding: 0 16px;
@@ -410,8 +393,6 @@ main.has-sheet.half .canvas {
   margin: 0 0 8px;
 }
 
-/* What a package holds, as a way in rather than as a reading order: it's a list of places
- * to go, not a list of things to do. */
 .held {
   list-style: none;
   margin: 0;
@@ -457,9 +438,8 @@ pre.code {
   font: 13px/1.6 var(--mono);
   padding: 6px 0;
 }
-/* A long line wraps rather than running off the side. Reading a diff sideways means
- * scrolling away from the column that says which lines changed, and a wrapped line is
- * indented past the mark so the continuation can't be mistaken for one of its own. */
+/* Long lines wrap: horizontal scrolling loses the change marks. The hanging indent keeps a
+ * continuation from looking like a line of its own. */
 pre.code .ln {
   display: block;
   padding: 0 12px 0 calc(32px + var(--gutter, 3ch));
@@ -468,12 +448,8 @@ pre.code .ln {
   overflow-wrap: anywhere;
   text-indent: 12px hanging;
 }
-/* Where the line is in the file. Held apart from the code and dim enough to read past,
- * since it's there to be quoted rather than read.
- *
- * As wide as the largest number it has to hold, which the page works out and sets: a fixed
- * width fits until a file is long enough that it doesn't, and then the digits pile up on
- * each other in the one place a reader goes to be precise. */
+/* Line numbers. The page sets --gutter to fit the largest number, since a fixed width
+ * overflows on long files. */
 pre.code .ln u {
   position: absolute;
   left: 22px;
@@ -514,8 +490,6 @@ pre.code .lnk {
   color: var(--lean);
 }
 
-/* Anything that takes you to another definition looks the same wherever it turns up, and
- * says so under the pointer rather than all the time. */
 .why b,
 pre.code .lnk {
   cursor: pointer;
@@ -526,8 +500,8 @@ pre.code .lnk:hover {
   text-decoration: underline dotted;
 }
 
-/* 44px is the smallest a finger can be relied on to hit. The bottom padding clears the
- * home indicator on a phone, where the drawer sits against the very bottom of the screen. */
+/* 44px is the smallest reliable touch target. Bottom padding clears the phone home
+ * indicator. */
 .nav {
   flex: none;
   display: flex;
@@ -555,8 +529,6 @@ pre.code .lnk:hover {
   justify-content: center;
   gap: 2px;
 }
-/* Moving without marking: the same shape, said quietly, so the pair that matters stays the
- * pair you see first. */
 .nav .by {
   height: 50px;
   padding: 0 12px;
@@ -592,7 +564,6 @@ pre.code .lnk:hover {
   font-size: 14.5px;
 }
 
-/* The key that does what the button does, worn by the button. */
 kbd {
   font: 10.5px/1.4 var(--mono);
   border: 1px solid currentColor;
@@ -601,8 +572,8 @@ kbd {
   opacity: 0.6;
   font-weight: 400;
 }
-/* The solid button's text is already dark on bright, which is as much contrast as there is
- * to have. Anything behind the key can only eat into it, so nothing goes behind it. */
+/* Dark on bright is already maximum contrast; a background behind the key could only
+ * reduce it. */
 .nav .go kbd {
   opacity: 1;
   border-color: currentColor;
@@ -617,7 +588,7 @@ kbd {
   flex: none;
 }
 
-/* Room enough for the sheet to stop being a drawer and just sit there. */
+/* Wide enough for the sheet to sit beside the graph instead of being a drawer. */
 @media (min-width: 900px) {
   .sheet {
     position: relative;
@@ -628,9 +599,8 @@ kbd {
     max-width: 80vw;
     flex: none;
     border-radius: 0;
-    /* Beside the graph, the window frames its right and bottom and the left edge is
-     * drawn — so without this the top was the one edge left open, sitting against the
-     * header with nothing to say where the sheet began. */
+    /* The window frames the right and bottom edges; the top needs a border of its own
+     * against the header. */
     border-top: 1px solid var(--rule);
     border-left: 1px solid var(--rule);
     box-shadow: none;
@@ -639,8 +609,7 @@ kbd {
   .sheet.full {
     height: auto;
   }
-  /* Put away and nothing left in its place: a strip saying "there's a thing here" is the
-   * thing, taking up room. d brings it back, and so does anything else you do. */
+  /* Hidden entirely: a collapsed strip would only take up room. d brings it back. */
   .sheet.away {
     display: none;
   }

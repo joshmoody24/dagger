@@ -1,12 +1,10 @@
 import type { Line, Shown } from "./dagger.ts";
 
-/* Comparing two versions of a definition's text, line by line. Kept apart from the rest of
- * the page's work because it's the one part worth guarding for speed: a definition can be
- * a whole file, and a file can be six thousand lines long.
+/* Line-by-line diff of two versions of a definition. Kept separate because it's the one
+ * part where speed matters: a definition can be a 6000-line file.
  */
 
-/* How big a table of lines against lines is worth building. A hundred against a hundred is
- * instant; six thousand against six thousand is not. */
+/* Largest a×b table worth building; 6000×6000 is not. */
 const EXACT = 40_000;
 
 /** Line by line, marked as kept, gone, or new. */
@@ -14,17 +12,8 @@ export function compare(before: Line[] | null, after: Line[] | null): Shown[] {
   return diffing(before ?? [], after ?? []);
 }
 
-/* Lines against lines.
- *
- * The exact answer — the longest run of lines both sides share — costs a table of every
- * line against every other. That's fine until a definition is a whole file: six thousand
- * lines against six thousand is thirty-eight million cells, built to find sixteen changed
- * lines, and the page stops answering while it counts them.
- *
- * So the easy agreements are taken first. Matching ends line up and can't be anything else.
- * Then lines that appear exactly once on each side: a line with one home in each version
- * can only be that same line, wherever it has moved to. What's left between those is small,
- * and the exact answer is cheap on small things.
+/* The exact LCS table is quadratic, so the common head and tail are stripped first and the
+ * middle is split at lines unique to both sides. What's left is small enough for the table.
  */
 function diffing(a: Line[], b: Line[]): Shown[] {
   let head = 0;
@@ -55,11 +44,8 @@ function diffing(a: Line[], b: Line[]): Shown[] {
   ];
 }
 
-/* Split around the lines that can only be themselves, and work on what's between them.
- *
- * A line appearing exactly once in each version is a place the two certainly meet, whatever
- * happened around it. Taking those as fixed turns one enormous comparison into many small
- * ones — and where there are none to be had, there's nothing for it but the table.
+/* A line appearing exactly once on each side must match itself, so those lines split one
+ * big comparison into many small ones.
  */
 function split(a: Line[], b: Line[]): Shown[] {
   const counted = (lines: Line[]) => {
@@ -96,13 +82,8 @@ function split(a: Line[], b: Line[]): Shown[] {
   return shown;
 }
 
-/* Lined up where they sit, when there's nothing to line them up by.
- *
- * Last resort, for a stretch too big to weigh line against line and with no line in it
- * distinctive enough to anchor on. Comparing position against position is the one thing
- * left that's honest: where two versions of a repeated structure agree at a spot they are
- * almost certainly the same line, and where they don't the reader is shown both. Not the
- * shortest answer, but a true one, and it costs a single pass.
+/* Position-by-position fallback for a stretch too big for the table with no unique line to
+ * anchor on. Not the shortest diff, but a correct one in a single pass.
  */
 function abreast(a: Line[], b: Line[]): Shown[] {
   const shown: Shown[] = [];
@@ -112,19 +93,15 @@ function abreast(a: Line[], b: Line[]): Shown[] {
       shown.push({ mark: " ", line: is });
       continue;
     }
-    /* Gone before arrived, so reading past the additions still gives back the older
-     * version and reading past the removals the newer. */
+    /* Removals before additions, so filtering out either mark rebuilds the other side. */
     if (was) shown.push({ mark: "−", line: was });
     if (is) shown.push({ mark: "+", line: is });
   }
   return shown;
 }
 
-/* The longest run of meeting points that moves forwards on both sides.
- *
- * Lines that meet in both versions can still have swapped places, and a pair that goes
- * backwards would have the diff crossing over itself. The longest run that doesn't is the
- * most of the file that can be left alone.
+/* Longest increasing subsequence: an anchor that goes backwards would make the diff cross
+ * over itself.
  */
 function rising(pairs: [number, number][]): [number, number][] {
   const ends: number[] = [];
@@ -152,14 +129,8 @@ function rising(pairs: [number, number][]): [number, number][] {
   return found.reverse();
 }
 
-/* Every line against every other: the exact answer, for when there's little enough left to
- * ask for it. This is what the whole comparison used to be.
- *
- * Guarded here rather than at each place it's called, so nothing can reach the table by a
- * route that forgot to check. Nothing should arrive too big — the ends are matched off
- * first and the middle split at lines that can only be themselves — but a stretch with no
- * line appearing exactly once on each side has nothing to split on, and a file of repeated
- * punctuation is exactly that. */
+/* Guarded here rather than at each caller. A stretch with no line unique to both sides (a
+ * file of repeated punctuation, say) can't be split, so it can still arrive too big. */
 function exactly(a: Line[], b: Line[]): Shown[] {
   if (a.length * b.length > EXACT) return abreast(a, b);
 
@@ -195,19 +166,14 @@ function exactly(a: Line[], b: Line[]): Shown[] {
   return shown;
 }
 
-/* How much of a file to show around a change.
- *
- * A definition can be a whole file, and a file can be ten thousand lines: a module holds
- * its own prose and every import, and a generated one holds all of it. Drawing that to
- * explain a change of four lines is slow to put on the page and slower to find anything
- * in. Far enough away, unchanged code stops being context and becomes the haystack. */
+/* Lines of context around a change. A definition can be a 10,000-line file, and far from a
+ * change unchanged code is just noise. */
 const REACH = 100;
 
 /** What's worth showing: everything near a change, and a mark where the rest was. */
 export function focused(lines: Shown[], reach = REACH): Shown[] {
   const changed = lines.flatMap((one, at) => (one.mark === " " ? [] : [at]));
-  /* Nothing changed at all — a definition here because something it leans on moved — so
-   * there's no change to sit near. The top of it is the part worth having. */
+  /* Nothing changed (it's here because a dependency changed), so show the top. */
   const anchors = changed.length ? changed : [0];
 
   const near = new Set<number>();

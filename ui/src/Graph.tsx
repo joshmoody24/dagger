@@ -14,37 +14,17 @@ import { MARK, TINT } from "./digest.ts";
 import { NODE_H, RADIUS, shorten } from "./layout.ts";
 import { wearing } from "./theme.ts";
 
-/* Breathing room around the whole drawing when it's sat in the window. */
 const EDGE = 24;
-/* How far in a reader can go. Past this the text is bigger than anything worth reading. */
+/* Max zoom. Past this the text is too big to be useful. */
 const CLOSEST = 4;
 const FONT = 14;
 const BOX_FONT = 12.5;
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
-/* The shape of the change: a box for every place code lives, nested as deep as the
- * grouping goes, a node for each definition, and lines for what leans on what.
- *
- * Lines run upwards, because whatever holds something up is drawn above it. A line that has
- * to run the other way is something the reader will be asked to take on faith, so it swings
- * out to the side where it can't be mistaken for the ordinary case.
- *
- * Drawn on a canvas rather than as elements. As elements this was a shape and a name for
- * every definition and a path for every line — some nine hundred things for the engine to
- * lay out, rasterise and hit-test, all of it again at each new size. Chrome has the room to
- * hide that. The webview the window is built on does not: measured on the same picture, ten
- * frames a second as elements against sixty here.
- *
- * What that costs is what a browser gives an element for free — nothing drawn here can be
- * tabbed to or read aloud. The list underneath makes up for it: the same definitions, in
- * reading order, as real buttons that nobody can see.
- *
- * One thing owns where the view is, and it's the zoom behaviour. Nothing here sets the
- * transform itself — moving the view means asking the behaviour to move, so what the reader
- * is doing and what the page wants to show can't end up disagreeing.
- */
-/* What the pointer found: a definition, or the box around some, and the file either way —
- * which is what lights up, since a box is a file and a node lives in one. */
+/* Drawn on a canvas rather than DOM elements: hundreds of SVG nodes ran at ~10fps in the
+ * Tauri webview versus 60fps here. The hidden list below keeps it keyboard/screen-reader
+ * accessible. The d3 zoom behaviour is the single owner of the view transform; nothing
+ * sets it directly. */
 interface Point {
   x: number;
   y: number;
@@ -70,16 +50,11 @@ export function Graph(props: GraphProps) {
   let paper!: HTMLCanvasElement;
   let ink!: CanvasRenderingContext2D;
 
-  /* What the pointer is over: a definition, or the box around some.
-   *
-   * Worked out by asking where things are rather than by asking the page. That's the other
-   * half of what a canvas buys — there's no element to hit-test, and no flicker when the
-   * answer is a node sitting on top of the box it belongs to. */
   const [over, setOver] = createSignal<string | null>(null);
   const [touching, setTouching] = createSignal<Identity | null>(null);
 
   const behaviour = zooming<HTMLCanvasElement, unknown>()
-    /* Wheels are handled below instead. */
+    /* Wheel is handled by onWheel instead. */
     .filter(
       (event: Event & { ctrlKey?: boolean; button?: number }) =>
         event.type !== "wheel" && !event.ctrlKey && !event.button,
@@ -91,8 +66,7 @@ export function Graph(props: GraphProps) {
 
   /* ---------------- where the view is ---------------- */
 
-  /* The whole drawing, in the middle, as large as it goes. Also the furthest out a reader
-   * can pull: there's nothing to see beyond the edges of the drawing. */
+  /* Fit-all transform. Also the minimum zoom. */
   const whole = () => {
     const room = pane();
     const k = Math.min(
@@ -107,10 +81,8 @@ export function Graph(props: GraphProps) {
       .scale(k);
   };
 
-  /* How far the reader may pull out and push around, both of which are answers about this
-   * drawing and not about zooming in general. The drawing changes size — putting the
-   * ripples away makes it smaller — so these have to be asked again when it does, or the
-   * view stays penned in by the shape of a graph that isn't on screen any more. */
+  /* Re-run whenever the layout changes size (e.g. ripples toggled), or the old extents
+   * keep constraining the view. */
   const bounded = () => {
     behaviour.translateExtent([
       [0, 0],
@@ -124,7 +96,6 @@ export function Graph(props: GraphProps) {
     select(paper).call(behaviour.transform, whole());
   };
 
-  /* The same view, moved so one definition sits in the middle of it. */
   const onto = (spot: Spot, k: number) =>
     zoomIdentity
       .translate(pane().width / 2, pane().height / 2)
@@ -136,13 +107,9 @@ export function Graph(props: GraphProps) {
     if (spot) select(paper).call(behaviour.transform, onto(spot, CLOSEST / 2));
   };
 
-  /* A touchpad reports a wheel far faster than anything can be drawn, and the zoom that
-   * ships with d3 works out a whole new view for each report — while holding the browser
-   * up, because it has to say whether the page should scroll before the page can move.
-   * Hundreds of those a second is the lag: not the drawing, the answering.
-   *
-   * So the reports are added up and turned into one change of size per frame, and nothing
-   * is held up in the meantime — this page doesn't scroll, so there's nothing to prevent. */
+  /* Touchpads fire wheel events far faster than we can draw, and d3's built-in wheel
+   * handling is non-passive and recomputes per event, which lags. Batch deltas into one
+   * scale change per frame; passive is fine since the page never scrolls. */
   let wheeled = 0;
   let towards: [number, number] = [0, 0];
   let turning = 0;
@@ -163,8 +130,6 @@ export function Graph(props: GraphProps) {
 
   /* ---------------- what is where ---------------- */
 
-  /* Where a definition sits, whether or not it has a node. A module is drawn as its box
-   * rather than a node of its own, so anything pointing at one has to point at the box. */
   const spotOf = (id: Identity | null): Spot | null => {
     if (id === null) return null;
     const node = props.laid.at.get(id);
@@ -174,8 +139,7 @@ export function Graph(props: GraphProps) {
   const every = (boxes: Box[]): Box[] =>
     boxes.flatMap((box) => [box, ...every(box.boxes)]);
 
-  /* What's under a point, in the drawing's own units. A definition wins over the box it's
-   * in, and the innermost box wins over the ones around it. */
+  /* Nodes win over boxes; the innermost box wins over its parents. */
   const at = ({ x, y }: { x: number; y: number }): Touched | null => {
     for (const [id, spot] of props.laid.at) {
       if (
@@ -225,8 +189,7 @@ export function Graph(props: GraphProps) {
 
   /* ---------------- drawing ---------------- */
 
-  /* The palette, as the page has it. Read from the stylesheet so a theme is still the one
-   * place colours are decided, even though nothing drawn here is styled by a rule. */
+  /* Read from CSS variables so the theme stays the one place colours are defined. */
   let paint: Record<string, string> = {};
   const readPaint = () => {
     const had = getComputedStyle(document.documentElement);
@@ -255,8 +218,7 @@ export function Graph(props: GraphProps) {
     });
   };
 
-  /* A canvas has a size in pixels of its own, and it isn't the size it's shown at: on a
-   * dense screen the two differ, and drawing at the wrong one is how text goes soft. */
+  /* Backing store scaled by devicePixelRatio, or text is blurry on dense screens. */
   const sized = () => {
     const room = pane();
     const dense = window.devicePixelRatio || 1;
@@ -291,19 +253,15 @@ export function Graph(props: GraphProps) {
     for (const [id, spot] of props.laid.at) node(id, spot, near);
   }
 
-  /* Only what the pointer is actually in, and only the innermost of those. Lighting every
-   * box around it too made a stack of ever-paler grounds, and lighting the box holding
-   * whatever is selected left a patch of the page bright for as long as you read — which is
-   * a lot of lightness to say something the outline round the node already says. */
+  /* Only the innermost hovered box; highlighting ancestors or the selected node's box
+   * was too visually noisy. */
   const lit = (box: Box) => box.key === over();
 
   function place(box: Box, deep: number) {
     const radius = Math.max(RADIUS.node, RADIUS.box - deep * RADIUS.step);
     const under = lit(box);
 
-    /* Nothing is filled, here or anywhere. A drawing whose only bright things are edges and
-     * words stays legible however many boxes are stacked up, and leaves the page its own
-     * colour rather than a pile of ever-paler grounds. */
+    /* Boxes are outline-only so nested boxes don't stack into ever-paler fills. */
     ink.setLineDash(deep ? [3, 3] : []);
     ink.lineWidth = under ? 1.4 : 1;
     ink.strokeStyle = under ? paint.muted : paint.rule;
@@ -327,15 +285,11 @@ export function Graph(props: GraphProps) {
     const dim = near.size > 0 && !near.has(id) && !here && !soon;
     const tint = paint[TINT[definition.mark]];
 
-    /* Filled with the page's own colour, which adds no light but stops the lines running
-     * behind a node from crossing its name. Nodes are drawn last, so they're the only thing
-     * that hides anything. */
+    /* Filled with the page colour so edges drawn behind don't cross the name. */
     ink.fillStyle = paint.paper;
     round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);
     ink.fill();
 
-    /* Under the pointer it comes back to full strength and thickens, which is all a shape
-     * with nothing bright inside it has to say with. */
     const under = id === touching();
     ink.globalAlpha =
       here || soon || under
@@ -348,9 +302,7 @@ export function Graph(props: GraphProps) {
               ? 0.55
               : 1;
 
-    /* The outline and the name are the same colour: a node is a word in a box, and two
-     * colours there read as two things being said. Read ones fade by alpha instead, which
-     * takes the whole node down together rather than greying the name off its own edge. */
+    /* Outline and name share a colour; read nodes fade via alpha so both dim together. */
     const edge = here ? paint.lean : soon ? paint.path : tint;
 
     ink.setLineDash(soon ? [5, 3] : []);
@@ -394,8 +346,7 @@ export function Graph(props: GraphProps) {
     ink.globalAlpha = 1;
   }
 
-  /* Where the reading goes next. Nothing else in the drawing has an arrowhead, because
-   * nothing else is about which way time runs. */
+  /* Arrow from the current definition to the next one in reading order. */
   function ahead() {
     const from = spotOf(props.here);
     const to = spotOf(props.next);
@@ -483,14 +434,9 @@ export function Graph(props: GraphProps) {
     frame.addEventListener("wheel", onWheel, { passive: true });
     fit();
 
-    /* A resized window changes how far out the whole drawing sits, so the limit has to
-     * move with it or the reader gets stuck too close in.
-     *
-     * Drawn here rather than through redraw(): sizing the canvas clears it, and a browser
-     * runs its animation frame callbacks before it runs a resize observer's — so a redraw
-     * asked for from in here waits a whole frame to happen, and that frame paints whatever
-     * was cleared. Dragging the sidebar resizes every frame, so that one blank frame became
-     * every frame: a flicker for as long as the drag lasted. */
+    /* draw() directly, not redraw(): sizing clears the canvas, and rAF callbacks run
+     * before ResizeObserver callbacks, so a deferred redraw would leave a blank frame
+     * (visible as flicker while dragging the sidebar). */
     const resized = new ResizeObserver(() => {
       sized();
       bounded();
@@ -499,8 +445,7 @@ export function Graph(props: GraphProps) {
     });
     resized.observe(frame);
 
-    /* A different graph — the ripples going away, a reload — is a different set of limits
-     * and a view worth starting over from. */
+    /* A new layout gets fresh extents and a fit-all view. */
     createEffect(() => {
       void props.laid;
       untrack(fit);
@@ -514,9 +459,7 @@ export function Graph(props: GraphProps) {
     });
   });
 
-  /* Everything the drawing depends on, watched in one place: read it here, and a change to
-   * it draws again. A stylesheet can't reach what's painted, so a change of theme is read
-   * the same way and the palette is fetched afresh. */
+  /* Every reactive input to draw() is read here so changes trigger a redraw. */
   createEffect(() => {
     void [
       props.here,
@@ -530,16 +473,14 @@ export function Graph(props: GraphProps) {
     redraw();
   });
 
-  /* Asking the page for its colours means asking it to settle its styles first, which is
-   * not a thing to do on every move of the mouse. Only a change of theme changes them. */
+  /* getComputedStyle forces a style flush, so only re-read the palette on theme change. */
   createEffect(() => {
     void wearing();
     readPaint();
     redraw();
   });
 
-  /* Reading moves the view, but only when what's being read has gone off screen, and only
-   * ever in answer to the reading. */
+  /* Pan to the current definition only when it's off screen. */
   createEffect(() => {
     const spot = spotOf(props.here);
     if (!spot || !paper) return;
@@ -570,7 +511,7 @@ export function Graph(props: GraphProps) {
     >
       <canvas ref={paper} />
 
-      {/* What a canvas can't be: something to tab through, and something to read aloud. */}
+      {/* Keyboard and screen-reader access, since the canvas has none. */}
       <ul class="spoken" aria-label="What changed, and what holds up what">
         <For each={props.review.steps}>
           {(step) => (
@@ -606,8 +547,6 @@ function neighbours(review: Review, here: Identity | null) {
   return near;
 }
 
-/* From the definition being read to the one after it: between whichever pair of faces sits
- * closest together. */
 function closest(from: Spot, to: Spot): [Point, Point] {
   let best: { far: number; a: Point; b: Point } | null = null;
   for (const a of faces(from)) {

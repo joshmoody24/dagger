@@ -1,7 +1,5 @@
-//! Turning a before and an after into lines a reader can scan.
-//!
-//! The model never diffs anything: it holds both texts and leaves this to whoever is
-//! showing them. So this is the one place that decides what a change looks like.
+//! Renders a before and after as diff lines. The model never diffs anything, so this is
+//! the one place that decides what a change looks like.
 
 use similar::{ChangeTag, TextDiff};
 use std::fmt::Write as _;
@@ -17,7 +15,7 @@ pub struct Paint {
 }
 
 impl Paint {
-    /// Honours NO_COLOR, and gives up when nobody's watching.
+    /// Honours NO_COLOR, and stays off when not on a terminal.
     pub fn new(terminal: bool) -> Self {
         Self {
             on: terminal && std::env::var_os("NO_COLOR").is_none(),
@@ -60,7 +58,7 @@ pub fn render(before: &str, after: &str, paint: &Paint) -> String {
     out
 }
 
-/// As it stands, for a definition that didn't change but has to be read anyway.
+/// For a definition that didn't change but has to be read anyway.
 pub fn render_unchanged(text: &str, paint: &Paint) -> String {
     text.lines()
         .map(|line| format!("  {}\n", paint.wrap(DIM, &format!("  {line}"))))

@@ -13,22 +13,13 @@ export type Span = { start: number, end: number, };
 
 export type Piece = { text: string, span: Span, 
 /**
- * Which line of the file this starts on, counting from one.
- *
- * A span is where the bytes are, which is what the machinery needs and nothing a
- * person can use. A reader points at a line — "the check on line 31" — and only
- * whoever read the file can say which line that is, so it's said here rather than
- * worked out later from text nobody kept.
+ * Line this starts on, from one. Spans are byte offsets, which readers can't use, and
+ * only the extractor that read the file knows the line.
  */
 line: number, 
 /**
- * Which file this stretch is in.
- *
- * Always said, even when it's the definition's own. It used to be set only when it
- * differed, which made one place spell itself two ways — and everything comparing two
- * pieces had to know that, or quietly decide that a piece saying nothing and a piece
- * naming its own file were in different files. Two bugs came of it: an overlap that
- * went unreported, and a part that read as having moved when it hadn't.
+ * Always set, even when it's the definition's own file, so two pieces can be compared
+ * without knowing about a default.
  */
 file: string, };
 
@@ -42,13 +33,9 @@ export type Occurrence = { locator: Locator,
  */
 role: Role, 
 /**
- * What it's written inside, in the language's own structure: a method's impl, an
- * impl's module, a module's module. `None` at the root.
- *
- * Said by whoever parsed the file, because only they know. Worked out afterwards from
- * the scope and the kind, it comes out wrong in the ordinary cases — a method's scope
- * names its type, not the impl block it sits in — and it costs fifty lines to be wrong
- * in.
+ * What it's written inside: a method's impl, an impl's module. `None` at the root.
+ * Set by the extractor, because deriving it from scope and kind gets ordinary cases
+ * wrong (a method's scope names its type, not its impl block).
  */
 parent: Locator | null, 
 /**
@@ -60,19 +47,14 @@ kind: string,
  */
 file: string, 
 /**
- * The source, split up for the reader. Only used for display and for checking that
- * every changed byte belongs somewhere. Each part's pieces are in the order they
- * appear, which is the order a reader would meet them.
+ * The source, split up for display and for checking that every changed byte belongs
+ * somewhere. Each part's pieces are in source order.
  */
 parts: { [key in Part]?: Array<Piece> }, 
 /**
- * How the definition looks from outside, according to the compiler. Not found
- * anywhere in the source, which is why it sits apart from the parts.
- *
- * This decides whether callers broke, so when it's here it beats the type part,
- * and a change to an inferred return type can't pass as a body change. An
- * extractor that supplies it can dump the whole definition into one part and
- * still get every downstream answer right. It just won't read as nicely.
+ * The compiler's view of the definition from outside; not in the source, so kept
+ * apart from the parts. When present it overrides the type part for deciding whether
+ * callers broke, so an inferred return type change can't pass as a body change.
  */
 contract: string | null, };
 
@@ -92,8 +74,7 @@ sides: Sides,
  */
 change: Change, 
 /**
- * How many hops away the nearest change that reached it is. Never nought: whether it
- * changed on its own account is what `change` is for, and a definition can be both.
+ * Hops from the nearest change that reached it. Never zero: its own change is `change`.
  */
 reached: number | null, 
 /**
@@ -103,8 +84,7 @@ parent: Identity | null, };
 
 export type Group = { "type": "group", name: string, 
 /**
- * How far down its holder it sits: nought for whatever leans on nothing else
- * there, one more than the furthest thing it leans on otherwise.
+ * Zero if it depends on nothing else in its holder, else one more than its deepest dependency.
  */
 tier: number, 
 /**
@@ -116,8 +96,8 @@ export type Impact = "incomplete" | "degraded";
 
 export type Warning = { impact: Impact, 
 /**
- * Worded here rather than on the page, so there's one wording rather than one per
- * reader, and so the names in it can be looked up while they're still to hand.
+ * Worded here rather than on the page, so there's one wording and names can be
+ * looked up while they're still to hand.
  */
 message: string, 
 /**
@@ -156,9 +136,7 @@ at: Array<number>, } };
 
 export type Review = { 
 /**
- * What the commit under review is called, when whoever laid out the snapshots could
- * say. Not dagger's to work out — a directory has no commit message, only the
- * adapter that read the history knows whether there was one.
+ * The commit's title, when the adapter knows one. A directory has no commit message.
  */
 title: string | null, definitions: { [key in Identity]: Definition }, 
 /**
@@ -167,8 +145,7 @@ title: string | null, definitions: { [key in Identity]: Definition },
  */
 reading: Array<Step>, edges: Array<Edge>, 
 /**
- * Everything drawn, as it nests and stacks: the page's whole arrangement short of
- * pixels, so the reading and the page can't disagree about it.
+ * Everything drawn, as it nests and stacks, so the reading and the page can't disagree.
  */
 groups: Array<Group>, 
 /**
@@ -182,31 +159,27 @@ ripples: number, cost: Cost, warnings: Array<Warning>, };
 
 export type Cost = { 
 /**
- * The most that was in the reader's head at once.
+ * The most open at once.
  */
 peak_open: number, 
 /**
- * Added up over every step, so a long shallow reading can be told apart from a
- * short deep one.
+ * Summed over every step, to tell a long shallow reading from a short deep one.
  */
 total_open: number, taken_on_faith: number, 
 /**
- * Steps that landed somewhere other than the one before: another package, or failing
- * a grouping, another file.
+ * Steps that moved to another package, or without a grouping, another file.
  */
 jumps: number, };
 
 export type Step = { definition: Identity, 
 /**
- * What this leans on that hasn't been read yet. Only ever non-empty inside a
- * circle, and kept as short as we can manage.
+ * Dependencies not yet read. Only non-empty inside a cycle.
  */
 on_faith: Array<Identity>, };
 
 export type Ordering = { steps: Array<Step>, 
 /**
- * How this reading went, so one rule can be argued against another with numbers
- * from real changes rather than taste.
+ * Numbers for comparing one ordering rule against another on real changes.
  */
 cost: Cost, };
 

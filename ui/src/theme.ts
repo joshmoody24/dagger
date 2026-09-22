@@ -1,23 +1,12 @@
 import { createSignal } from "solid-js";
 
-/* The colours, taken from an editor theme rather than picked by hand.
- *
- * Every colour the page uses is named for what it's for — the ground, a rule, the thing that
- * broke — and this is the one place those names are given values. Editor themes already
- * answer the same questions (what's a background, what's a comment, what's a deletion), and
- * hundreds of them exist, so wearing a different one is a question of which, not of editing
- * anything.
- *
- * Only what this page needs is read; the rest of a theme describes syntax we don't colour.
- */
+/* Colours come from an editor theme rather than being picked by hand: themes already answer
+ * the same questions (background, comment, deletion) and there are hundreds to choose from.
+ * Only the roles this page uses are read. */
 
-/* The ones worth looking at, brought in one at a time — each is a separate import so only
- * the one being worn is ever fetched.
- *
- * All of them sit on something close to black. A theme built on a lighter grey has to keep
- * its text away from white to look considered, and what's left is a narrow band that tires
- * the eye: measured across every dark theme available, the near-black ones run 13 to 18
- * times the contrast of their own background, and the grey ones around 8. */
+/* Separate dynamic imports so only the theme being worn is fetched. All near-black: grey
+ * dark themes have far less contrast against their own background (about 8x vs 13-18x)
+ * and tire the eye. */
 const WEARING: Record<string, () => Promise<{ default: Theme }>> = {
   "github-dark-high-contrast": () =>
     import("@shikijs/themes/github-dark-high-contrast"),
@@ -30,8 +19,7 @@ const WEARING: Record<string, () => Promise<{ default: Theme }>> = {
   "dark-plus": () => import("@shikijs/themes/dark-plus"),
 };
 
-/* Shiki's own shape, loosely: a theme may leave out anything, which is why every role
- * below says what it will settle for. */
+/* Shiki's shape, loosely. A theme may leave out anything. */
 interface Theme {
   type?: string;
   colors?: Record<string, string>;
@@ -43,12 +31,11 @@ interface Theme {
 
 export const themes = Object.keys(WEARING);
 
-/* Which one is on. Read it and a change to it redraws, which is how the graph — painted
- * rather than styled — hears about a colour it can't be told by a stylesheet. */
+/* A signal so the canvas, which is painted rather than styled, redraws on a theme change. */
 const [worn, setWorn] = createSignal(themes[0]);
 export const wearing = worn;
 
-/* The theme itself, kept so whatever colours code can use the same one. */
+/* Kept so the code highlighter can use the same theme. */
 const [dressed, setDressed] = createSignal<Theme | null>(null);
 export const dressing = dressed;
 
@@ -63,8 +50,7 @@ export async function wear(name: string, root = document.documentElement) {
 export const next = (name: string) =>
   themes[(themes.indexOf(name) + 1) % themes.length];
 
-/* Themes don't all set every key, so each colour says what it would rather have first, and
- * what it will settle for. */
+/* Themes don't set every key, so each role lists keys in order of preference. */
 const ROLES: Record<string, string[]> = {
   paper: [
     "sideBar.background",
@@ -79,8 +65,7 @@ const ROLES: Record<string, string[]> = {
   ],
   ink: ["editor.foreground", "foreground"],
   muted: ["editor.foreground", "peekViewResult.lineForeground", "foreground"],
-  /* Decoration only — an edge, a guide. Never text: this is the colour an editor uses for
-   * line numbers, which it means you not to notice. */
+  /* Decoration only, never text: this is the line-number colour, meant not to be noticed. */
   faint: [
     "editorLineNumber.foreground",
     "editorIndentGuide.activeBackground1",
@@ -97,8 +82,7 @@ const ROLES: Record<string, string[]> = {
     "textLink.foreground",
     "editorLink.activeForeground",
   ],
-  /* Kept apart from lean on purpose: one says where you are, the other where you're going,
-   * and they're side by side on screen. */
+  /* Distinct from lean on purpose: the two sit side by side on screen. */
   path: [
     "terminal.ansiMagenta",
     "textLink.activeForeground",
@@ -129,8 +113,7 @@ const ROLES: Record<string, string[]> = {
   ],
 };
 
-/* When a theme says nothing at all about a role, something still has to be there: a colour
- * left unset isn't a plainer page, it's whichever colour the last theme put in its place. */
+/* A role left unset would keep whatever colour the previous theme put there. */
 const INSTEAD: Record<string, string> = {
   paper: "#111111",
   surface: "#161616",
@@ -154,14 +137,13 @@ function paint(theme: Theme, root: HTMLElement) {
     root.style.setProperty(`--${name}`, found || INSTEAD[name]);
   }
 
-  /* The colour of an ordinary name in code — brighter than editor.foreground in every
-   * theme that distinguishes them, and the one a reader's eye is calibrated to. */
+  /* The plain variable colour is brighter than editor.foreground in most themes, and it's
+   * what readers are used to. */
   const plain = scoped(theme, "variable");
   if (plain) root.style.setProperty("--ink", plain);
 
-  /* Comments recede in an editor because bright syntax surrounds them. Here they sit in a
-   * small block on their own, so the editor's dimmest readable grey serves better than its
-   * comment colour, which is dimmer still. */
+  /* The theme's comment colour is too dim once comments aren't surrounded by bright
+   * syntax, so use the editor's dimmest readable grey instead. */
   root.style.setProperty(
     "--quiet",
     theme.colors?.["editorLineNumber.activeForeground"] ||
@@ -171,8 +153,7 @@ function paint(theme: Theme, root: HTMLElement) {
   root.style.colorScheme = theme.type === "light" ? "light" : "dark";
 }
 
-/* What the theme paints one kind of token. A scope is listed against several settings and
- * only some of them say a colour, so the first one that does wins. */
+/* First rule for the scope that actually sets a foreground. */
 function scoped(theme: Theme, scope: string) {
   for (const rule of theme.tokenColors || []) {
     const scopes = ([] as string[]).concat(rule.scope || []);

@@ -1,12 +1,8 @@
 //! A generic walk outward from what changed, for any source that can find a file's
-//! definitions and answer what a hover says about one.
+//! definitions and read a hover.
 //!
-//! One driver for every adapter that talks to a language server this way, because the walk
-//! itself — spread from a change, ask what a definition looks like and who uses it, follow
-//! whatever can carry a break onward — has nothing to do with which language is being read.
-//! What differs is how a file's definitions are found: parsing a syntax tree costs nothing,
-//! asking a server for `documentSymbol` costs a round trip. That's the one thing a [`Source`]
-//! is asked to say, alongside how its server's hover answers are worded.
+//! The walk is the same for every language; only how definitions are found and how hover
+//! is worded differ, which is what a [`Source`] says.
 
 use crate::frontier::{Frontier, Wanted};
 use crate::{Lines, Server};
@@ -19,18 +15,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
-/// One definition, as far as the walk needs to know about it. A source's own type carries
-/// everything else the resulting review wants — this is only what's shared between asking a
-/// server about a spot and deciding whether a spot is worth asking about at all.
+/// One definition, as far as the walk needs to know: enough to ask a server about a spot
+/// and to decide whether it's worth asking.
 pub trait Item {
     fn locator(&self) -> Locator;
     fn name(&self) -> &str;
     fn whole(&self) -> Range<usize>;
     /// Where the name itself sits, which is where a server has to be asked about it.
     fn name_at(&self) -> Range<usize>;
-    /// Whether a server can be asked about this by name. Some things a reader looks at
-    /// aren't things code refers to — Rust's modules and `impl` blocks, say — and asking
-    /// about one of those lands on whatever happens to be nearby.
+    /// Whether a server can be asked about this by name. Rust's modules and `impl` blocks
+    /// aren't referred to by code, and asking about one lands on whatever is nearby.
     fn referenceable(&self) -> bool {
         true
     }
@@ -41,9 +35,8 @@ pub trait Item {
 pub trait Source {
     type Item: Item;
 
-    /// Reads or opens one file, returning what it defines. Cost is the implementation's
-    /// business: free and local for a syntax-tree parser, one round trip for a language
-    /// server that has to be told about a file before it can be asked anything about it.
+    /// Reads or opens one file, returning what it defines. Free for a syntax-tree parser;
+    /// one round trip for a language server.
     fn open(
         &mut self,
         server: &mut Server,
@@ -65,10 +58,8 @@ pub struct Reach {
     /// How far past a changed file to carry on. Walking a file at one remove is what turns
     /// up what sits at two, so the walk stops one short of what's asked for.
     pub ripples: u32,
-    /// Files whose users are chased, and files opened at all. Two budgets because they cost
-    /// wildly different amounts for a source that opens a file over the wire; for one that
-    /// parses, opening is free and the second never binds. Backstops rather than settings
-    /// anybody should reach for: how far a reading goes is `ripples`.
+    /// Backstops on files whose users are chased and files opened at all; how far a reading
+    /// goes is `ripples`. Two because opening a file is far cheaper than chasing its users.
     pub walk_limit: usize,
     pub open_limit: usize,
 }
@@ -95,9 +86,7 @@ pub struct Walk<S: Source> {
     ripples: u32,
 }
 
-/// What a walk found, and the source it found it with — an adapter that opened files of
-/// its own to build a full structural picture, rather than only what the walk touched,
-/// gets its source's own state back to read out of.
+/// What a walk found, plus the source, since a source may hold state of its own to read out.
 pub struct Walked<S: Source> {
     pub source: S,
     pub seen: BTreeMap<String, (Lines, Vec<S::Item>)>,
@@ -124,9 +113,8 @@ impl<S: Source> Walk<S> {
         }
     }
 
-    /// Opens a file once, keeping what was found. Whether it worked. Cheap to call again: a
-    /// file already open is a lookup, not a re-read — which is how a source that opens
-    /// everything up front and a walk that opens lazily end up sharing the same cache.
+    /// Opens a file once, keeping what was found; returns whether it worked. A file already
+    /// open is a lookup, so calling again is cheap.
     pub fn look(&mut self, path: &str) -> bool {
         if self.seen.contains_key(path) {
             return true;
@@ -146,12 +134,9 @@ impl<S: Source> Walk<S> {
         }
     }
 
-    /// Starts at the files that differ and spreads to whatever a break could reach.
-    ///
-    /// A file is asked who uses it only if something can travel onward from it: because it
-    /// changed, or because it mentions a changed definition somewhere its own callers can
-    /// see. Spreading through every reference instead is what made a nine file change
-    /// unreadable — one widely used name answers with a thousand places.
+    /// Starts at the files that differ and spreads to whatever a break could reach. A file
+    /// is asked who uses it only if a break can travel onward from it; following every
+    /// reference lets one widely used name answer with a thousand places.
     pub fn spread(&mut self, changed: &[Changed]) {
         let mut front = Frontier::default();
         for one in changed
@@ -161,18 +146,16 @@ impl<S: Source> Walk<S> {
             front.want(&one.file, Wanted::from_spans(&one.at), 0);
         }
 
-        /* Which files changed is the same list on both snapshots, so opening them and
-         * nobody else — regardless of what a reference walk turns up — is a rule that
-         * lands the same way twice. */
+        /* The changed files are the same list on both snapshots, so opening exactly those
+         * gives the same result on each side. */
         let changed: BTreeSet<String> = changed
             .iter()
             .map(|one| one.file.clone())
             .filter(|file| self.ours.contains(file.as_str()))
             .collect();
 
-        // Open every changed file before asking anything about any of them. A server
-        // answers "who uses this" out of the projects it has loaded, and telling it about
-        // a file is what loads that file's project.
+        // Open every changed file before asking about any: a server answers "who uses this"
+        // from the projects it has loaded, and opening a file is what loads its project.
         for path in changed.iter() {
             self.look(path);
         }
@@ -201,9 +184,8 @@ impl<S: Source> Walk<S> {
                 continue;
             }
 
-            /* Walking a file one step out is what turns up what sits two steps out, so the
-             * walk stops one short of how far the reading was asked to go. Everything
-             * reached from the last step is still recorded — it just isn't followed. */
+            /* Walking a file one step out is what finds what sits two out, so the walk stops
+             * one short; the last step is recorded but not followed. */
             if away + 1 < self.ripples {
                 for (path, definition) in self.ask_about(&path, &wanted, &changed, away) {
                     front.want(&path, Wanted::named(definition), away + 1);
@@ -241,9 +223,7 @@ impl<S: Source> Walk<S> {
 
         let mut onward = Vec::new();
         for (at, to, name) in questions {
-            // Hover is a summary written for a person, so it's worth having but not worth
-            // trusting on its own — an adapter takes it alongside the written declaration
-            // rather than instead of it, which is the source's own business.
+            // Hover is written for a person, so the source decides how far to trust it.
             if let Ok(hover) = self.server.request("textDocument/hover", at.clone())
                 && let Some(contract) = self.source.contract(&hover)
             {
@@ -296,10 +276,7 @@ impl<S: Source> Walk<S> {
         let mut onward = Vec::new();
         for (path, line, column) in places {
             /* Opening a file is how a mention gets the name of the definition it sits in.
-             * Worth doing where the mention can end up in the review — inside a file that
-             * changed, or near enough to be reached at the distance asked for — and free
-             * where the file is open regardless, which for a source that opens everything
-             * up front is every file it claims. */
+             * Only worth it where the mention can reach the review, and free if already open. */
             let already = self.seen.contains_key(&path);
             let worth_opening = already || changed.contains(&path) || away < self.ripples;
             if !worth_opening || (!already && self.seen.len() >= self.open_limit) {
@@ -332,9 +309,8 @@ impl<S: Source> Walk<S> {
                 },
             });
 
-            // Callers of this one can be broken by what broke it, so the trail carries on
-            // — through this definition, and not through everything else sharing its file.
-            // A mention inside a body stops here: nobody outside can tell it changed.
+            // Callers of this one can be broken too, so the trail carries on through it.
+            // A mention inside a body stops here: nobody outside can see it.
             if part == Part::Type {
                 onward.push((path, inside));
             }
@@ -408,10 +384,8 @@ mod tests {
         }
     }
 
-    /* A mention lands on the tightest thing written around it: inside a container, the item
-     * it sits in; in the container's own text between its items, the container. That takes
-     * `whole` to be everything a thing is written across, contents included. A span cut down
-     * to a container's own parts left those spots belonging to nothing, and lost the mention. */
+    /* `whole` must cover everything a thing is written across, contents included, or spots
+     * between a container's items belong to nothing. */
     #[test]
     fn a_mention_lands_on_the_tightest_thing_around_it() {
         let found = [Spot("module", 0..100), Spot("inner", 40..60)];

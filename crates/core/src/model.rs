@@ -22,31 +22,19 @@ pub struct Span {
     pub end: u32,
 }
 
-/// One stretch of source belonging to a part.
-///
-/// A part is made of these rather than being one of them, because the source a part
-/// covers isn't always in one stretch. A module's imports can sit wherever the language
-/// allows them, which in most languages is anywhere. A C function can be declared at the
-/// top of a file and again further down.
+/// One stretch of source belonging to a part. A part is a list of these because its
+/// source isn't always contiguous: imports can sit anywhere, and a C function can be
+/// declared in a header and defined elsewhere.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Piece {
     pub text: String,
     pub span: Span,
-    /// Which line of the file this starts on, counting from one.
-    ///
-    /// A span is where the bytes are, which is what the machinery needs and nothing a
-    /// person can use. A reader points at a line — "the check on line 31" — and only
-    /// whoever read the file can say which line that is, so it's said here rather than
-    /// worked out later from text nobody kept.
+    /// Line this starts on, from one. Spans are byte offsets, which readers can't use, and
+    /// only the extractor that read the file knows the line.
     pub line: u32,
-    /// Which file this stretch is in.
-    ///
-    /// Always said, even when it's the definition's own. It used to be set only when it
-    /// differed, which made one place spell itself two ways — and everything comparing two
-    /// pieces had to know that, or quietly decide that a piece saying nothing and a piece
-    /// naming its own file were in different files. Two bugs came of it: an overlap that
-    /// went unreported, and a part that read as having moved when it hadn't.
+    /// Always set, even when it's the definition's own file, so two pieces can be compared
+    /// without knowing about a default.
     pub file: String,
 }
 
@@ -60,16 +48,9 @@ pub struct Locator {
     pub name: String,
 }
 
-/// Whether a definition can hold others.
-///
-/// Told apart because a page draws the two differently: a container is the box, and what it
-/// holds are the things in it. Intrinsic, and the extractor's to say — a module is a
-/// container whether or not anything inside it changed, and the empty box drawn around
-/// nothing is exactly the case that needs saying out loud.
-///
-/// This used to be a string comparison against `"module"`, in four places across a protocol
-/// boundary, which meant every language had to spell its containers that one way or go
-/// undrawn.
+/// Whether a definition can hold others. The page draws containers as boxes. The
+/// extractor says which is which, since a module is a container even if nothing inside
+/// it changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
@@ -89,36 +70,26 @@ pub struct Occurrence {
     /// Whether this holds other definitions.
     #[serde(default)]
     pub role: Role,
-    /// What it's written inside, in the language's own structure: a method's impl, an
-    /// impl's module, a module's module. `None` at the root.
-    ///
-    /// Said by whoever parsed the file, because only they know. Worked out afterwards from
-    /// the scope and the kind, it comes out wrong in the ordinary cases — a method's scope
-    /// names its type, not the impl block it sits in — and it costs fifty lines to be wrong
-    /// in.
+    /// What it's written inside: a method's impl, an impl's module. `None` at the root.
+    /// Set by the extractor, because deriving it from scope and kind gets ordinary cases
+    /// wrong (a method's scope names its type, not its impl block).
     #[serde(default)]
     pub parent: Option<Locator>,
     /// What the extractor calls this, like "function" or "test". Display only.
     pub kind: String,
     /// Where the definition lives, and where its parts live unless they say otherwise.
     pub file: String,
-    /// The source, split up for the reader. Only used for display and for checking that
-    /// every changed byte belongs somewhere. Each part's pieces are in the order they
-    /// appear, which is the order a reader would meet them.
+    /// The source, split up for display and for checking that every changed byte belongs
+    /// somewhere. Each part's pieces are in source order.
     pub parts: BTreeMap<Part, Vec<Piece>>,
-    /// How the definition looks from outside, according to the compiler. Not found
-    /// anywhere in the source, which is why it sits apart from the parts.
-    ///
-    /// This decides whether callers broke, so when it's here it beats the type part,
-    /// and a change to an inferred return type can't pass as a body change. An
-    /// extractor that supplies it can dump the whole definition into one part and
-    /// still get every downstream answer right. It just won't read as nicely.
+    /// The compiler's view of the definition from outside; not in the source, so kept
+    /// apart from the parts. When present it overrides the type part for deciding whether
+    /// callers broke, so an inferred return type change can't pass as a body change.
     pub contract: Option<String>,
 }
 
 impl Occurrence {
-    /// The part's text, its pieces run together. What a reader would see if the stretches
-    /// were laid end to end, and what comparing two sides comes down to.
+    /// The part's text, its pieces joined.
     pub fn text_of(&self, part: Part) -> Option<String> {
         let pieces = self.parts.get(&part)?;
         Some(
@@ -140,10 +111,7 @@ impl Occurrence {
             .flatten()
             .map(|piece| piece.file.as_str())
             .collect();
-        /* Sorted before the duplicates come out, since `dedup` only drops the ones next to
-         * each other. A part whose pieces sit in one file, then another, then the first
-         * again came back naming three files, and two of them the same — which reads as a
-         * part that moved when nothing moved at all. */
+        // `dedup` only drops adjacent duplicates.
         files.sort_unstable();
         files.dedup();
         files
@@ -162,12 +130,8 @@ impl Occurrence {
     }
 }
 
-/// Handed out by matching. Means nothing on its own.
-///
-/// Written as a string, because that's what it becomes. JSON has no number for an object
-/// key, so every one of these used to arrive at the page spelled differently depending on
-/// whether it was a key or a value — and the page turned the keys back into numbers to
-/// match. A handle that means nothing may as well be the shape it travels in.
+/// Handed out by matching. Means nothing on its own. Serialized as a string, since JSON
+/// object keys are strings and the page shouldn't have to convert between the two.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS), ts(type = "string"))]
 pub struct Identity(pub u32);
@@ -258,8 +222,7 @@ mod tests {
         }
     }
 
-    /* A part that leaves its own file and comes back sits in two files, not three. Counted
-     * as three, comparing one side against the other says it moved when nothing did. */
+    /// A part that leaves its file and comes back is in two files, not three.
     #[test]
     fn a_part_that_returns_to_a_file_is_not_in_it_twice() {
         let occurrence = spread(vec![

@@ -1,9 +1,7 @@
-//! Turning a language server's document symbols into definitions.
+//! Turns a language server's document symbols into definitions.
 //!
-//! A server reports where each definition starts and ends, and where its name sits, but
-//! not which part of it is the contract and which is the workings. That split has to be
-//! guessed, and the guess is made from the symbol's kind: something callable has a
-//! signature and then a body, while a type is contract all the way through.
+//! A server doesn't say which part of a symbol is contract and which is body; that is
+//! guessed from the symbol's kind.
 
 use dagger_core::model::{Locator, Part};
 use dagger_lsp_client::Lines;
@@ -15,8 +13,7 @@ pub struct Symbol {
     pub name: String,
     /// Enclosing symbol names, outermost first. A method carries its class.
     pub scope: Vec<String>,
-    /// The name a break travels by, which is the file's own path folded in ahead of
-    /// `scope`: nothing downstream of here knows what file a symbol came from otherwise.
+    /// The name a break travels by: the file's path folded in ahead of `scope`.
     pub locator: Locator,
     pub kind: &'static str,
     pub whole: Range<usize>,
@@ -24,11 +21,8 @@ pub struct Symbol {
     pub name_at: Range<usize>,
     /// The signature, when the kind is one that has a body to be told apart from.
     pub signature: Option<Range<usize>>,
-    /// What this is written inside, when it's written inside anything.
-    ///
-    /// A server answers with a tree and this is where the tree went: flattening it threw
-    /// away the one thing only the server knew, and anything downstream then had to guess
-    /// it back from names. `None` at the top of a file — the file's own module takes those.
+    /// What this is written inside. `None` at the top of a file; the file's own module
+    /// takes those.
     pub parent: Option<Locator>,
 }
 
@@ -44,8 +38,7 @@ impl Symbol {
         (signature.end < self.whole.end).then_some(signature.end..self.whole.end)
     }
 
-    /// A declaration wins where parts overlap: it's the half a caller can see, and the
-    /// question being asked is whether a caller could be broken.
+    /// The declaration wins where parts overlap, since it's the half a caller can see.
     pub fn part_at(&self, at: usize) -> Option<Part> {
         if self.declaration().contains(&at) {
             return Some(Part::Type);
@@ -78,20 +71,16 @@ impl walk::Item for Symbol {
     }
 }
 
-/// Flattens the tree a server reports, keeping enclosing names as scope. `file_scope` is the
-/// file's own path, folded into every symbol's locator — the one thing a server's tree never
-/// says, because it was never asked about more than one file.
+/// Flattens the tree a server reports, keeping enclosing names as scope. `file_scope` is
+/// the file's own path, folded into every symbol's locator.
 pub fn read(symbols: &Value, lines: &Lines, file_scope: &[String]) -> Vec<Symbol> {
     let mut found = Vec::new();
     collect(symbols, file_scope, &[], None, lines, &mut found);
     found
 }
 
-/// Whether this kind of thing can hold others.
-///
-/// The same question as whether to descend into it, which is why it's the same answer: if a
-/// server's children are worth reading as definitions of their own, the thing holding them
-/// is a box around them rather than a thing on its own.
+/// Whether this kind of thing can hold others. Same answer as whether to descend into it:
+/// if its children are definitions of their own, it's a box around them.
 pub fn holds(kind: &str) -> bool {
     holds_definitions(kind)
 }
@@ -164,28 +153,15 @@ fn collect(
     }
 }
 
-/// Whether this is a thing with a name, rather than something a server described in
-/// passing.
-///
-/// Servers report anonymous functions too, under invented labels: `lazyRouter() callback`,
-/// `() => {}`, `<anonymous>`. A file wiring up a web server has dozens, all sharing a
-/// label, and dagger needs a definition to be addressable by name — two things answering
-/// to the same one can't be told apart between snapshots, so they read as a wall of
-/// arrivals and departures that nobody wrote.
-///
-/// Nothing is lost by leaving those out. A reader gets to them through the definition that
-/// contains them, which is named.
-///
-/// Spaces are fine, though. A test is named by the sentence it was given — `applies stacked
-/// promos` — and an implementation by what it implements, like `impl Display for Money`.
-/// Both are as addressable as any identifier, and both are worth reading.
+/// Whether this is a named thing rather than one a server labelled itself, like
+/// `lazyRouter() callback` or `<anonymous>`. Those can't be told apart between snapshots.
+/// Spaces are fine: `applies stacked promos` and `impl Display for Money` are real names.
 fn nameable(name: &str) -> bool {
     !name.is_empty() && !name.starts_with('<') && !name.contains(['(', ')'])
 }
 
-/// Where the signature ends: at the brace that opens the body. Fine for the C-like
-/// languages, and for anything else the whole definition stays the contract, which
-/// over-reports rather than under-reports.
+/// The signature ends at the brace that opens the body. For languages without one the
+/// whole definition stays contract, which over-reports rather than under-reports.
 fn signature(whole: &Range<usize>, name_at: &Range<usize>, lines: &Lines) -> Option<Range<usize>> {
     let text = lines.slice(whole);
     let after_name = name_at.end.saturating_sub(whole.start);
@@ -199,21 +175,9 @@ fn splits(kind: &str) -> bool {
     matches!(kind, "function" | "method" | "constructor")
 }
 
-/// Whether what a server reports inside this are definitions of their own, or parts of it.
-///
-/// A class holds methods, and a method is a thing somebody reviews. An interface holds
-/// fields, and a field is not: it's part of what the interface promises, so changing one
-/// changes the interface's contract and breaks whoever relied on it. Reported separately,
-/// a field becomes a node with no visible connection to the callers it just broke, and
-/// they arrive by the hundred — an interface of a dozen fields is a dozen nodes saying
-/// nothing that the interface doesn't say better.
-///
-/// The extractor for Rust has always worked this way: a struct is one definition covering
-/// its whole declaration. This is the same rule, said to a language server.
-///
-/// It catches a subtler case too. `const faces = (box) => [{ x, y }]` is a variable rather
-/// than a function as far as the protocol is concerned, so descending into it turned the
-/// keys of the object it returns into definitions.
+/// Whether a server's children of this kind are definitions of their own. A class's methods
+/// are; an interface's fields are part of its contract, and listing them separately hides
+/// the callers a change broke. Variables are out so an arrow function's returned keys aren't listed.
 fn holds_definitions(kind: &str) -> bool {
     matches!(kind, "class" | "namespace" | "module" | "package" | "file")
 }
@@ -333,9 +297,6 @@ export function addMoney(a: Money, b: Money): Money {
         );
     }
 
-    /* A field is part of what its interface promises, not a definition beside it. Reported
-     * separately, a dozen fields become a dozen nodes that say nothing the interface
-     * doesn't say better — and none of them show the callers the change just broke. */
     #[test]
     fn what_an_interface_holds_is_part_of_it() {
         let lines = Lines::new(SOURCE);
@@ -363,8 +324,6 @@ export function addMoney(a: Money, b: Money): Money {
         assert_eq!(names, vec!["addMoney"]);
     }
 
-    /// A test is named by its sentence and an implementation by what it implements. Both
-    /// have spaces in them, and both are things a reader came to look at.
     #[test]
     fn a_name_with_spaces_in_it_is_still_a_name() {
         let lines = Lines::new(SOURCE);

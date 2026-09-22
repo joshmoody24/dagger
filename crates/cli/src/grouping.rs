@@ -1,12 +1,6 @@
-//! Working out which group each definition is in, from marker files.
-//!
-//! Almost every real grouping turns out to be "the nearest directory above this one holding
-//! a particular file". A bazel package is the nearest `BUILD.bazel`, a crate the nearest
-//! `Cargo.toml`, a workspace package the nearest `package.json`. One line of configuration
-//! covers all of them, and no subprocess has to be started to answer it.
-//!
-//! What a marker can't express — who owns a directory, what a build graph says — is what an
-//! adapter would be for. Nothing needs one yet.
+//! Works out each definition's group from marker files: the nearest directory above it
+//! holding a `BUILD.bazel`, `Cargo.toml`, `package.json`, and so on. Anything a marker
+//! can't express would need an adapter; nothing needs one yet.
 
 use crate::config::GroupingConfig;
 use dagger_core::group::{Grouping, Path as GroupPath};
@@ -35,18 +29,9 @@ pub fn of(config: &GroupingConfig, dir: &Path, definitions: &[Definition]) -> Gr
     }
 }
 
-/// The directory of the nearest marker at or above the file, as the group's path.
-///
-/// Where nothing says otherwise, a file's own directory is its group. Plenty of code isn't
-/// packaged at all — a repository of C with no manifest anywhere in it — and left ungrouped
-/// every file in it would sit in one bin, which tells a reader nothing about what's near
-/// what. A directory is a weaker claim than a package, but it's the one people make when
-/// they put files beside each other.
-///
-/// The odds and ends at the top of a repository fall out of the same rule: they share the
-/// directory above them, which is nothing, so they're read together. They have nothing to
-/// do with each other, and that's the reason to see them in one sitting rather than to
-/// keep coming back to them between packages.
+/// The nearest marker's directory, or the file's own directory when there is none, so
+/// unpackaged code (plain C, say) isn't all lumped into one bin. Top-level files share
+/// the empty directory and so are read together.
 fn group_of(markers: &[String], dir: &Path, file: &str) -> GroupPath {
     let mut at = Path::new(file).parent();
 

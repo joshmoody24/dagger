@@ -15,36 +15,24 @@ pub struct Found {
     /// Where the name itself sits, which is where rust-analyzer has to be asked about it.
     pub name_at: Range<usize>,
     pub kind: &'static str,
-    /// Each part as the stretches of source it covers. Several stretches, because a
-    /// module's imports sit wherever the language allows them, which in Rust is anywhere.
+    /// Several ranges per part, because Rust allows imports anywhere in a module.
     pub parts: Parts,
-    /// Everything this is written across, its contents included.
-    ///
-    /// Wider than the parts, and that's the point: a module's parts are its prose and its
-    /// imports, but a module is written across the whole file. What sits inside what can be
-    /// read straight off these, since Rust nests, and it's the one question a syntax tree
-    /// can answer for nothing that nobody downstream can answer at all.
+    /// The whole span, contents included. Wider than the parts on purpose: nesting is read
+    /// off these ranges.
     pub covers: Range<usize>,
 }
 
 pub type Parts = BTreeMap<Part, Vec<Range<usize>>>;
 
 impl Found {
-    /// Whether a language server can be asked about this by name.
-    ///
-    /// A module and an implementation block are things a reader looks at, but not things
-    /// code refers to: nothing writes the name of a file, and nothing calls an `impl`.
-    /// Neither has a name written down to point at either, so asking about one lands on
-    /// whatever happens to be nearby — for an `impl` that's the type it's about, which
-    /// comes back with the type's documentation and the type's callers, both filed under
-    /// the wrong definition.
+    /// Modules and `impl` blocks have no name in the source to ask a language server about.
+    /// Asking anyway lands on the nearby type and misfiles its docs and callers.
     pub fn referenceable(&self) -> bool {
         !matches!(self.kind, "module" | "impl")
     }
 
     pub fn part_at(&self, at: usize) -> Option<Part> {
-        // A declaration wins where parts overlap: it's the half a caller can see, and the
-        // question being asked is whether a caller could be broken.
+        // Declarations win on overlap: the question is whether a caller could break.
         [Part::Type, Part::Body, Part::Docs]
             .into_iter()
             .find(|part| {
@@ -84,8 +72,7 @@ impl walk::Item for Found {
     }
 }
 
-/// Parts from stretches, leaving out the ones a definition doesn't have. A type alias has
-/// no body, and most things have no prose.
+/// Leaves out parts a definition doesn't have, like the body of a type alias.
 fn parts(spans: [(Part, Vec<Range<usize>>); 3]) -> Parts {
     spans
         .into_iter()
@@ -97,13 +84,9 @@ fn one(range: Range<usize>) -> Vec<Range<usize>> {
     vec![range]
 }
 
-/// What a caller can see, which is the whole of an item but its prose and its workings.
-///
-/// Taken from where the item starts rather than from where its name does, because what sits
-/// between the two is `pub` — and losing that means making something public reads as a
-/// change to its documentation, which is the mildest mark there is standing in for the most
-/// breaking edit there is. An attribute written above the prose is kept for the same reason:
-/// it's part of the declaration, and left out it would belong to nothing at all.
+/// The declaration: everything but docs and body. Starts at the item rather than its name
+/// so `pub` is included; otherwise making something public would read as a docs change.
+/// Attributes above the docs are kept for the same reason.
 fn declared(outer: &Range<usize>, prose: &[Range<usize>], until: usize) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     if let Some(first) = prose.first().filter(|first| first.start > outer.start) {
@@ -130,13 +113,8 @@ pub fn find(items: &[Item], scope: &[String]) -> Vec<Found> {
     )
 }
 
-/// Anything answering to the same name becomes one definition holding both stretches.
-///
-/// A type's methods can be split across as many `impl` blocks as somebody felt like, and
-/// each one is a stretch of the same thing rather than a thing of its own. Leaving them as
-/// two definitions with one name would mean neither could be told from the other between
-/// snapshots, which is the rule extractors are asked to keep: a definition has to be
-/// addressable by name.
+/// Several `impl` blocks for one type become one definition: two definitions with the same
+/// name can't be told apart between snapshots.
 fn merged(found: Vec<Found>) -> Vec<Found> {
     let mut out: Vec<Found> = Vec::with_capacity(found.len());
 
@@ -152,8 +130,6 @@ fn merged(found: Vec<Found>) -> Vec<Found> {
                 for ranges in kept.parts.values_mut() {
                     ranges.sort_by_key(|range| range.start);
                 }
-                // Two blocks becoming one definition are written across both, and whatever
-                // sits between them now sits inside it.
                 kept.covers =
                     kept.covers.start.min(one.covers.start)..kept.covers.end.max(one.covers.end);
             }
@@ -164,16 +140,8 @@ fn merged(found: Vec<Found>) -> Vec<Found> {
     out
 }
 
-/// The module itself, as a definition.
-///
-/// Without one, a file's imports and its own prose belong to nothing, and a change that
-/// only touches those produces a review with nothing in it. With one they land where they
-/// belong, and the parts sort out what they mean:
-///
-/// - `//!` prose is documentation, so it reads as a change without breaking anyone.
-/// - `use foo::Bar;` is workings. Callers can't see what a module pulls in for itself.
-/// - `pub use foo::Bar;` is contract. Taking one away breaks everyone importing through it,
-///   so it belongs where a break can travel from.
+/// The module as a definition, so its imports and `//!` docs belong to something. `use` is
+/// body; `pub use` is contract, since removing one breaks everyone importing through it.
 pub fn module(
     attrs: &[Attribute],
     items: &[Item],
@@ -196,10 +164,8 @@ pub fn module(
         _ => told,
     };
 
-    /* A module written out in braces closes with one, the way an impl block does, and
-     * that brace is the module's own. Left unclaimed it belongs to nobody, which is a
-     * changed line the review can't account for — and the only thing on its line, so
-     * nothing else covers it either. A file has no brace to claim. */
+    // A braced module's closing brace is alone on its line, so claim it or the review
+    // can't account for that line.
     let contract = match braced {
         true => {
             let mut ranges = contract;
@@ -212,8 +178,7 @@ pub fn module(
     Some(Found {
         scope: scope.to_vec(),
         name: name.clone(),
-        // A file's module has no name written in it. The start is as good a spot as any to
-        // ask about, and nothing asks about a module anyway.
+        // A module has no name in the source, and nothing asks about one anyway.
         name_at: extent.start..extent.start,
         kind: "module",
         parts: parts([
@@ -221,14 +186,12 @@ pub fn module(
             (Part::Body, workings),
             (Part::Docs, told),
         ]),
-        // A module's parts are its prose and its imports; a module is written across
-        // everything it holds, which is what says those things are inside it.
         covers: extent,
     })
 }
 
-/// What a module says about what it brings in and passes on. A `mod` declaration counts
-/// too: making one public is publishing whatever is inside it.
+/// Public and private imports. A `mod` declaration counts too: making one public publishes
+/// whatever is inside it.
 fn imports(items: &[Item]) -> (Vec<Range<usize>>, Vec<Range<usize>>) {
     let mut found: Vec<(usize, bool, Range<usize>)> = Vec::new();
 
@@ -236,8 +199,7 @@ fn imports(items: &[Item]) -> (Vec<Range<usize>>, Vec<Range<usize>>) {
         let (visibility, span) = match item {
             Item::Use(item) => (&item.vis, range(item.span())),
             Item::ExternCrate(item) => (&item.vis, range(item.span())),
-            // The header, not everything inside it: what's inside has its own definitions,
-            // and its own module.
+            // Just the header: the contents have their own definitions and module.
             Item::Mod(item) => {
                 let whole = range(item.span());
                 let header = match &item.content {
@@ -252,10 +214,8 @@ fn imports(items: &[Item]) -> (Vec<Range<usize>>, Vec<Range<usize>>) {
         found.push((at, matches!(visibility, syn::Visibility::Public(_)), span));
     }
 
-    // A run of declarations is one stretch of the file, so each reaches the next rather than
-    // stopping at its own semicolon. Left tight, the line ending between two of them belongs
-    // to nothing, and a reader is told something was left out between every pair of imports.
-    // Only a run: anything else in between is somebody else's, and the gap there is real.
+    // Consecutive declarations reach each other, or the newline between them belongs to
+    // nothing and reads as a gap. Anything else in between makes the gap real.
     for at in 0..found.len().saturating_sub(1) {
         let (here, next) = (found[at].0, found[at + 1].0);
         let (ends, starts) = (found[at].2.end, found[at + 1].2.start);
@@ -348,8 +308,6 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
 
             found
         }
-        // An inline module is a module like any other, so it gets a definition of its own
-        // alongside whatever it holds.
         Item::Mod(item) => match &item.content {
             Some((_, items)) => {
                 let path = nest(scope, &item.ident.to_string());
@@ -365,15 +323,9 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
     }
 }
 
-/// An implementation block, as a definition.
-///
-/// `impl Display for Money` is a claim about Money that callers rely on: it makes Money
-/// usable wherever something displayable is wanted, and taking it away breaks them. It can
-/// also sit in a different file from Money, or a different crate, so it can't just be
-/// folded into what Money says about itself.
-///
-/// The braces are claimed along with the header so that nothing in the file belongs to
-/// nobody. What's between them has definitions of its own.
+/// An `impl` block is its own definition: callers rely on it, and it can live in another
+/// file or crate from the type. The braces are claimed with the header so no line belongs
+/// to nobody; what's between them has definitions of its own.
 fn implementation(block: &syn::ItemImpl, scope: &[String]) -> Found {
     let header = range(block.impl_token.span()).start;
     let signed = block
@@ -407,12 +359,7 @@ fn implementation(block: &syn::ItemImpl, scope: &[String]) -> Found {
     }
 }
 
-/// What the block implements, written the way Rust writes it when it has to say which of
-/// two implementations it means: `Money as Display`.
-///
-/// Spelling out the trait is what keeps `Display::fmt` and `Debug::fmt` apart. Scoping both
-/// under plain `Money` gives them one name between them, and two definitions answering to
-/// one name can't be told apart between snapshots.
+/// Written as `Money as Display` so `Display::fmt` and `Debug::fmt` don't share a name.
 fn implementing(block: &syn::ItemImpl) -> String {
     let subject = type_name(&block.self_ty);
     match &block.trait_ {
@@ -424,13 +371,8 @@ fn implementing(block: &syn::ItemImpl) -> String {
     }
 }
 
-/// Something with a signature and, usually, a body behind it.
-///
-/// The parts are butted up against each other rather than each being as tight as it could
-/// be. A tight range leaves the newline between a doc comment and the signature belonging to
-/// nothing, and a reader shown the definition afterwards is told there's something missing
-/// in the gap. There isn't: it's a line ending. Parts divide a definition up; they aren't
-/// supposed to leave crumbs between them.
+/// Parts are butted up against each other rather than kept tight, so the newline between
+/// a doc comment and the signature doesn't read as a gap.
 fn callable(
     outer: Range<usize>,
     signature: &syn::Signature,
@@ -491,8 +433,7 @@ fn nest(scope: &[String], name: &str) -> Vec<String> {
     nested
 }
 
-/// Doc comments only. An `#[derive]` belongs to the declaration, not the prose. Runs of
-/// them are joined up, since `///` lines are one comment as far as a reader is concerned.
+/// Doc attributes only, joined into one range; `#[derive]` belongs to the declaration.
 fn docs(attrs: &[Attribute]) -> Vec<Range<usize>> {
     let spans: Vec<Range<usize>> = attrs
         .iter()
@@ -528,8 +469,6 @@ fn type_name(ty: &syn::Type) -> String {
 mod tests {
     use super::*;
 
-    /// Everything one file yields, the way the adapter asks for it: the module first, then
-    /// whatever it holds.
     fn read(source: &str) -> Vec<Found> {
         let file = syn::parse_file(source).expect("the source should parse");
         let scope = vec!["thing".to_string()];
@@ -552,8 +491,7 @@ mod tests {
         found.iter().map(|one| one.name.as_str()).collect()
     }
 
-    /// What a reader would be shown, with a marker wherever the parts don't meet. Anything
-    /// between two pieces of the same definition is a hole the page has to explain.
+    /// The source a reader is shown, with `…` wherever the parts don't meet.
     fn shown(source: &str, found: &Found) -> String {
         let mut pieces: Vec<&Range<usize>> = found.parts.values().flatten().collect();
         pieces.sort_by_key(|range| range.start);
@@ -570,9 +508,6 @@ mod tests {
         out
     }
 
-    /* The bug this file kept having: a part stopping exactly where the text of the thing
-     * stops, leaving the newline between it and the next part belonging to nobody. A reader
-     * is then told something was left out, and nothing was. */
     #[test]
     fn the_parts_of_a_definition_meet() {
         let source = "/// Adds them up.\npub fn add(a: u8, b: u8) -> u8 {\n    a + b\n}\n";
@@ -592,8 +527,6 @@ mod tests {
         assert!(source[add.parts[&Part::Body][0].clone()].starts_with('{'));
     }
 
-    /* A struct is all contract: change any of it and a caller can break, so there's no
-     * body to tell apart. */
     #[test]
     fn a_struct_has_no_workings() {
         let source = "/// Money.\npub struct Money {\n    pub pence: u8,\n}\n";
@@ -605,16 +538,12 @@ mod tests {
         assert_eq!(shown(source, money), source.trim_end());
     }
 
-    /* A field is part of the struct, not a definition beside it. */
     #[test]
     fn a_struct_holds_no_definitions_of_its_own() {
         let found = read("pub struct Money {\n    pub pence: u8,\n}\n");
         assert_eq!(names(&found), vec!["thing", "Money"]);
     }
 
-    /* Declarations one after another are one stretch of the file. Claiming only the name of
-     * each left the `;` and the newline between them belonging to nobody, so a module of
-     * twenty of them read as twenty fragments. */
     #[test]
     fn a_run_of_declarations_is_one_stretch() {
         let source = "pub mod one;\npub mod two;\npub mod three;\n";
@@ -623,7 +552,6 @@ mod tests {
         assert_eq!(shown(source, named(&found, "thing")), source.trim_end());
     }
 
-    /* Prose at the top of a file introduces whatever comes next, so it reaches it. */
     #[test]
     fn a_modules_prose_reaches_what_it_introduces() {
         let source = "//! About this.\n\nuse std::fmt;\n";
@@ -632,7 +560,6 @@ mod tests {
         assert_eq!(shown(source, named(&found, "thing")), source.trim_end());
     }
 
-    /* What a module passes on is contract; what it keeps for itself is workings. */
     #[test]
     fn a_public_import_is_contract_and_a_private_one_is_not() {
         let source = "pub use one::Thing;\nuse two::Other;\n";
@@ -643,9 +570,7 @@ mod tests {
         assert!(source[module.parts[&Part::Body][0].clone()].contains("use two::Other"));
     }
 
-    /* An implementation is a claim about a type that callers rely on, so it's a definition.
-     * What's between its braces has definitions of its own, so it claims the header and the
-     * closing brace and leaves the middle alone — the one place a gap is honest. */
+    // The middle of an impl has definitions of its own, so the gap there is real.
     #[test]
     fn an_implementation_claims_its_header_and_its_brace() {
         let source = "impl Money {\n    pub fn pence(&self) -> u8 {\n        0\n    }\n}\n";
@@ -655,9 +580,6 @@ mod tests {
         assert_eq!(shown(source, named(&found, "impl Money")), "impl Money…}");
     }
 
-    /* Spelling out the trait is what keeps `Display::fmt` and `Debug::fmt` apart: scoped
-     * under plain `Money` they'd share one name, and two definitions answering to one name
-     * can't be told apart between snapshots. */
     #[test]
     fn an_implementation_says_what_it_implements() {
         let found = read("impl fmt::Display for Money {\n    fn fmt(&self) {}\n}\n");
@@ -669,8 +591,6 @@ mod tests {
         );
     }
 
-    /* A type's methods can be split across as many blocks as somebody felt like. Left as
-     * two definitions with one name, neither could be told from the other. */
     #[test]
     fn two_blocks_for_one_type_are_one_definition() {
         let found =
@@ -683,10 +603,6 @@ mod tests {
         assert_eq!(names(&found), vec!["thing", "impl Money", "a", "b"]);
     }
 
-    /* Nothing writes the name of a file and nothing calls an `impl`, so neither has a name
-     * written down to ask a language server about. Asking anyway lands on whatever is
-     * nearby — for an `impl`, the type it's about, whose documentation and callers then
-     * arrive filed under the wrong definition. */
     #[test]
     fn a_module_and_an_implementation_cant_be_asked_about() {
         let found = read("impl Money {\n    fn a(&self) {}\n}\n");
@@ -696,8 +612,6 @@ mod tests {
         assert!(named(&found, "a").referenceable());
     }
 
-    /* An inline module is a module like any other, and what's inside it is scoped under it
-     * rather than beside it. */
     #[test]
     fn an_inline_module_holds_its_own() {
         let found = read("mod inner {\n    pub fn deep() {}\n}\n");
@@ -706,7 +620,6 @@ mod tests {
         assert_eq!(named(&found, "deep").scope, vec!["thing", "inner"]);
     }
 
-    /* Where a caller can see it and where it can't. */
     #[test]
     fn a_declaration_wins_where_parts_overlap() {
         let source = "pub fn add(a: u8) -> u8 {\n    a\n}\n";

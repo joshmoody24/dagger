@@ -6,14 +6,12 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// Settings travel as JSON, since that's what the wire speaks, but a repo writes them
-/// as TOML.
+/// Settings are written as TOML but sent to adapters as JSON.
 fn json(settings: &toml::Value) -> serde_json::Value {
     serde_json::to_value(settings).unwrap_or(serde_json::Value::Null)
 }
 
-/// An adapter is a command, read the way a shell would read it: a slash makes it a
-/// path in the repo, anything else comes off PATH.
+/// Shell rules: a slash makes it a path in the repo, anything else comes off PATH.
 fn resolve(repo: &Path, adapter: &str) -> PathBuf {
     if adapter.contains('/') {
         repo.join(adapter)
@@ -22,12 +20,9 @@ fn resolve(repo: &Path, adapter: &str) -> PathBuf {
     }
 }
 
-/// Asks an adapter one thing and waits for the answer.
-///
-/// `saying` names whoever wants to know, when more than one of these is running at a time:
-/// an adapter talks to the user on its way through, and two of them sharing a terminal
-/// produce a progress report that belongs to nobody. Named, each line says whose it is.
-/// Unnamed, the adapter writes straight to the terminal as any command would.
+/// Asks an adapter one thing and waits for the answer. `saying` prefixes the adapter's
+/// stderr lines so several adapters sharing a terminal can be told apart; unnamed,
+/// stderr goes straight through.
 fn ask(
     repo: &Path,
     adapter: &str,
@@ -55,8 +50,7 @@ fn ask(
         .expect("stdin was piped")
         .write_all(&payload)?;
 
-    /* Read as it arrives and passed on at once. Held until the end it would be a report of
-     * what already happened, and the waiting it exists to fill would be spent in silence. */
+    // Relayed as it arrives, since progress output is there to fill the wait.
     let output = match saying {
         Some(name) => {
             let said = child.stderr.take().expect("stderr was piped");
@@ -75,16 +69,15 @@ fn ask(
         .with_context(|| format!("{} said something we couldn't read", program.display()))
 }
 
-/// Passes on what an adapter says, one line at a time, with whose it is in front of it.
+/// Forwards an adapter's stderr, one prefixed line at a time.
 fn relay(said: std::process::ChildStderr, name: &str) {
     for line in std::io::BufReader::new(said).lines().map_while(Result::ok) {
-        // One write, so two of these can't land inside each other's line.
+        // One write per line, so two relays can't interleave mid-line.
         eprintln!("{name} · {line}");
     }
 }
 
-/// What an adapter says about itself. Asking beats guessing from its name, which would
-/// break the moment someone renamed theirs.
+/// Asks an adapter what it does, rather than guessing from its name.
 pub fn describe(
     repo: &Path,
     adapter: &str,
@@ -118,25 +111,20 @@ pub struct Described {
     pub include: Vec<String>,
     /// Only a snapshot adapter fills this in.
     pub revisions: Option<Revisions>,
-    /// How this adapter lets a change be named, a line each. Only a snapshot adapter has
-    /// anything to say here.
+    /// Help lines for naming a change. Only a snapshot adapter fills this in.
     pub usage: Vec<String>,
 }
 
-/// A revision sitting on disk, whether clearing it up is our job, and what the
-/// adapter says is in there. No listing means we have to look for ourselves.
+/// A revision on disk, whether we clean it up, and the adapter's file listing.
+/// No listing means we walk the directory ourselves.
 pub struct Snapshot {
     pub dir: PathBuf,
     pub temporary: bool,
     pub files: Option<Vec<String>>,
 }
 
-/// A laid-out snapshot takes itself away.
-///
-/// Tidying up by hand means every path out of the reading has to remember to do it, and the
-/// ones that don't are the paths nobody walks on purpose: the second snapshot failing to
-/// lay out leaves the first sitting in the temporary directory, and an error anywhere after
-/// leaves both. A copy of a repository is not a small thing to leave behind.
+/// Cleaned up on drop so every error path removes the copy, including the second
+/// snapshot failing to lay out after the first succeeded.
 impl Drop for Snapshot {
     fn drop(&mut self) {
         if self.temporary {
@@ -145,8 +133,7 @@ impl Drop for Snapshot {
     }
 }
 
-/// What the user asked for on the command line, turned into two revisions by whoever
-/// knows what the words mean.
+/// Turns the command-line words into two revisions via the snapshot adapter.
 pub fn revisions(repo: &Path, snapshots: &Adapter, asked: &[String]) -> Result<Revisions> {
     let request = Request::Resolve {
         asked: asked.to_vec(),
@@ -154,7 +141,7 @@ pub fn revisions(repo: &Path, snapshots: &Adapter, asked: &[String]) -> Result<R
     };
     match ask(repo, &snapshots.adapter, &snapshots.args, &request, None)? {
         Response::Resolved { revisions } => Ok(revisions),
-        // Worded by whoever understands the words, so it's passed on as it came.
+        // The adapter's wording is passed through as is.
         Response::Failed { message } => bail!("{message}"),
         other => bail!("asked {} what to read and got {other:?}", snapshots.adapter),
     }

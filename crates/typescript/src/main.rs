@@ -1,15 +1,7 @@
-//! Writes the TypeScript for everything dagger says, so the page doesn't have to guess.
+//! Writes the TypeScript types for everything dagger emits, generated from the Rust types
+//! so the page and the JSON can't drift apart. `./check` fails when the output is stale.
 //!
-//! The page used to describe these shapes itself, and nothing checked the two agreed. A
-//! renamed field doesn't fail there: TypeScript is satisfied by the declaration it was
-//! given, and the value simply arrives undefined at the one moment nobody is watching. So
-//! the declarations come from the types that produce the JSON, and `./check` fails when
-//! what's written down stops matching them.
-//!
-//! Only what dagger emits, all the way out: `Said` is the whole document, so nothing is
-//! left for the page to describe by hand. The shapes the page makes for itself — a laid-out
-//! box, a node's place on screen — are its own business, and describing those in Rust would
-//! mean inventing types to describe a drawing.
+//! Only what dagger emits: the shapes the page makes for itself live in dagger.ts.
 
 use anyhow::{Context, Result};
 use dagger_core::change::{Change, Edits};

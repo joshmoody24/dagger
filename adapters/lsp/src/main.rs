@@ -7,10 +7,8 @@
 //! server = ["tsc", "--lsp", "--stdio"]
 //! ```
 //!
-//! Works outward from the files that differ rather than reading a whole repository: ask
-//! who refers to a changed definition, and whoever does is worth reading too, and worth
-//! asking the same question of. That closure is exactly the set a reviewer has to look
-//! at, so being lazy and being right turn out to be the same thing.
+//! Works outward from the changed files rather than reading the whole repository: find
+//! who refers to a changed definition, read those files, and repeat.
 
 mod symbols;
 
@@ -40,18 +38,12 @@ struct Settings {
     /// Files this adapter speaks for, when the repo hasn't said.
     #[serde(default)]
     include: Vec<String>,
-    /// How many files to chase users of before giving up and saying so.
-    ///
-    /// A backstop, not a setting anybody should have to reach for: how far a reading goes
-    /// is `--ripples`, and someone who asks for ten steps and gets six because of a number
-    /// they never chose has been told something untrue about their own change. So this
-    /// sits high enough to catch a runaway and nothing else.
+    /// Backstop on how many files to chase users of. How far a reading goes is
+    /// `--ripples`; this only catches a runaway.
     #[serde(default = "files_to_walk")]
     max_walk: usize,
-    /// How many files to open at all. Opening is cheap — it buys the name of whichever
-    /// definition a mention sits inside — and a change of any size reaches far more files
-    /// this way than it ever walks, so this sits well above `max_walk`. It's here to stop
-    /// a runaway rather than to shape the reading.
+    /// Backstop on how many files to open at all. Opening is cheap and reaches far more
+    /// files than walking does, so this sits well above `max_walk`.
     #[serde(default = "files_to_open")]
     max_open: usize,
 }
@@ -202,11 +194,10 @@ fn extract(
     ))
 }
 
-/// Discovers a TypeScript-or-whatever file's definitions by asking the language server
-/// about it, and reads a contract back out of what it says on hover.
+/// Finds a file's definitions with `documentSymbol` and reads a contract out of hover.
 #[derive(Default)]
 struct LspSource {
-    /// What was left out of a file and why, for whoever reads the review.
+    /// What was left out of a file and why.
     notes: Vec<Note>,
 }
 
@@ -231,25 +222,17 @@ impl Source for LspSource {
         fenced(hover)
     }
 }
-/// Whether this name belongs to something defined elsewhere. An import is reported as a
-/// symbol like any other, but it's a mention of a definition rather than one itself, and
-/// counting it would put the same thing in the review twice under two names.
-///
-/// Asking where the name is defined settles it: a real definition points at itself. `None`
-/// when the server has no answer at all, which is an import of something never built — a
-/// package's compiled output missing from the tree — as often as it's anything else. Read
-/// as "defined here", every name in such an import became a definition of its own, one line
-/// each; so no answer is no definition, and the caller says so.
+/// Whether this name is defined elsewhere. Imports are reported as symbols too, and
+/// counting one as a definition puts the same thing in the review twice. `None` when the
+/// server has no answer, usually an import of something never built; the caller leaves those out.
 fn borrowed(
     server: &mut Server,
     at: &Value,
     file: &Opened,
     symbol: &symbols::Symbol,
 ) -> Option<bool> {
-    /* An import binding is reported as a symbol that is nothing but its name, where a
-     * definition has something after its name. Asked where an import of something never
-     * built is defined, the server points at the import itself — so this has to be settled
-     * before asking. */
+    /* An import binding is a symbol that is only its name. Asked about an import of
+     * something never built, the server points at the import itself, so check first. */
     if symbol.whole == symbol.name_at {
         return Some(true);
     }
@@ -327,9 +310,8 @@ fn open(server: &mut Server, root: &Path, path: &str, notes: &mut Vec<Note>) -> 
     let mut keep = asked.iter();
     file.symbols.retain(|_| keep.next() == Some(&Some(false)));
 
-    // A definition has to be addressable by name. Two answering to the same one can't be
-    // told apart between snapshots, so the first keeps the name and the rest are dropped
-    // rather than left to read as things arriving and departing that nobody wrote.
+    // Two definitions with the same name can't be told apart between snapshots, so only
+    // the first keeps it.
     let mut taken = BTreeSet::new();
     file.symbols
         .retain(|symbol| taken.insert((symbol.scope.clone(), symbol.name.clone())));
@@ -345,8 +327,7 @@ fn position(root: &Path, file: &Opened, symbol: &symbols::Symbol) -> Value {
     })
 }
 
-/// A file's own scope, its own name a break travels by: its path without the extension,
-/// split into segments the way a locator's scope is written everywhere else.
+/// The file's own scope: its path without the extension, split into segments.
 fn path_scope(path: &str) -> Vec<String> {
     path.trim_end_matches(|character: char| character != '.')
         .trim_end_matches('.')
@@ -364,10 +345,8 @@ fn definitions(
             let lines = claimed(file);
 
             let symbols = file.symbols.iter().map(move |symbol| {
-                /* Shown from the start of its line, because that's where the reader's eye
-                 * starts and because what a server leaves out is what matters most: `export`
-                 * in front of a definition is the difference between a change nobody can see
-                 * and one that breaks every caller. */
+                /* Start from the line start so a leading `export` the server leaves out is
+                 * included; it decides whether a change is visible to callers. */
                 let text = file.lines.text();
                 let body = symbol.body();
                 let from = line_start(text, symbol.whole.start);
@@ -394,9 +373,7 @@ fn definitions(
                         true => Role::Container,
                         false => Role::Item,
                     },
-                    /* Whatever the server said held it, and failing that the file's own
-                     * module — which is what holds everything a file defines at the top
-                     * level, the same way a class holds its methods. */
+                    // The file's module holds everything defined at the top level.
                     parent: symbol.parent.clone().or_else(|| module_of(file)),
                     kind: symbol.kind.to_string(),
                     file: file.path.clone(),
@@ -409,15 +386,9 @@ fn definitions(
         .collect()
 }
 
-/// The file itself, holding whatever none of its definitions do.
-///
-/// A server reports what a file defines, not what else is in it: the imports at the top, a
-/// comment sitting between two functions, a statement run at load time. Left out, those
-/// belong to nothing, and a change that only touches them produces a review with nothing in
-/// it — which for a language whose files start with a dozen imports is most days.
-///
-/// It goes in as workings rather than contract, because that's what nearly all of it is,
-/// and because nothing refers to a file by name for a break to travel through.
+/// The file itself, holding whatever none of its definitions do: imports, stray comments,
+/// load-time statements. Without it a change that only touches those has nothing to show.
+/// It's all body, since nothing refers to a file by name.
 fn module(file: &Opened) -> Option<Occurrence> {
     let leftovers = leftovers(file);
     if leftovers.is_empty() {
@@ -427,8 +398,7 @@ fn module(file: &Opened) -> Option<Occurrence> {
     Some(Occurrence {
         locator: module_of(file)?,
         role: Role::Container,
-        // A file is the outermost thing there is here. Whatever holds the file is a
-        // question about the project, which a document symbol request never asked.
+        // What holds a file is a project-level question a document symbol request never answers.
         parent: None,
         kind: "module".to_string(),
         file: file.path.clone(),
@@ -450,16 +420,9 @@ fn module_of(file: &Opened) -> Option<Locator> {
     Some(Locator { scope, name })
 }
 
-/// The lines each definition sits on, which is more than the span a server reports.
-///
-/// A server describes a definition from its name outwards — `EDGE = 24` — and leaves the
-/// `const` in front of it and the `;` behind it belonging to nobody. Those crumbs fall to
-/// the module, which ends up holding a heap of punctuation with holes where the definitions
-/// were. Worse, the line above one definition is then unclaimed, so the line before it
-/// reads as its documentation: an import turning up as prose about the thing below it.
-///
-/// A line is the smallest thing anybody writes on purpose, so a line is what a definition
-/// holds.
+/// The whole lines each definition sits on. A server's span starts at the name, which
+/// would leave `const` and `;` to the module and let the line above read as the
+/// definition's documentation.
 fn claimed(file: &Opened) -> Vec<Range<usize>> {
     let text = file.lines.text();
     file.symbols
@@ -468,8 +431,7 @@ fn claimed(file: &Opened) -> Vec<Range<usize>> {
         .collect()
 }
 
-/// The stretches of a file no definition covers, blank ones left out. A definition can't be
-/// asked to account for the space around it.
+/// The non-blank stretches of a file no definition covers.
 fn leftovers(file: &Opened) -> Vec<Range<usize>> {
     let lines = claimed(file);
 
@@ -513,8 +475,8 @@ fn pieces(file: &Opened, ranges: &[Range<usize>]) -> Vec<Piece> {
         .collect()
 }
 
-/// Servers want to be told what they're looking at. The extension is as good a guess as
-/// any, and a wrong guess only costs us that file.
+/// Servers need a language id. The extension is a good enough guess; a wrong one only
+/// costs that file.
 fn language_of(path: &str) -> &'static str {
     match path.rsplit('.').next().unwrap_or("") {
         "ts" => "typescript",
@@ -530,13 +492,9 @@ fn language_of(path: &str) -> &'static str {
     }
 }
 
-/// The declaration out of a hover's markdown.
-///
-/// Servers put the signature in a fenced block, sometimes after a block naming the
-/// module it lives in, and then a rule followed by documentation. Documentation is where
-/// code examples live, and an example is fenced code too, so anything past the rule is
-/// left alone: otherwise editing an example in a doc comment reads as breaking every
-/// caller.
+/// The declaration out of a hover's markdown: the last fenced block before the `---` rule.
+/// Past the rule is documentation, whose code examples are fenced too, and editing an
+/// example must not read as breaking every caller.
 fn fenced(hover: &Value) -> Option<String> {
     let markdown = hover["contents"]["value"].as_str()?;
     let declaration = markdown.split("\n---").next().unwrap_or(markdown);
@@ -572,8 +530,7 @@ mod tests {
         (line, column)
     }
 
-    /// A symbol as a server reports one, found by looking for its own text in the source so
-    /// a test can be written as the code a reader would recognise.
+    /// A symbol as a server reports one, located by searching for its text in the source.
     fn reported(source: &str, name: &str, kind: u64, whole: &str) -> Value {
         let from = source.find(whole).expect("the source should hold it");
         let (line, column) = spot(source, from);
@@ -633,8 +590,6 @@ mod tests {
         assert_eq!(preambles(&file), vec!["/** Money. */\n"]);
     }
 
-    /* A blank line stops it, which is how anybody writes: prose is against the thing it
-     * describes and away from whatever came before. */
     #[test]
     fn a_blank_line_ends_the_preamble() {
         let source = "// About the file.\n\n/** Money. */\nexport interface Money {}\n";
@@ -646,9 +601,6 @@ mod tests {
         assert_eq!(preambles(&file), vec!["/** Money. */\n"]);
     }
 
-    /* The part that makes it safe in a language nobody wrote a rule for: a line that
-     * belongs to another definition stops the run, so this can never swallow the statement
-     * above it. */
     #[test]
     fn a_preamble_never_takes_another_definitions_line() {
         let source = "export const one = 1;\nexport const two = 2;\n";
@@ -663,11 +615,6 @@ mod tests {
         assert!(preambles(&file).is_empty());
     }
 
-    /* What the module is left holding: the file's own prose and its imports, and not the
-     * comments that belong to the definitions below them. */
-    /* A server reports a definition from its own name, which on a destructured binding
-     * sits in the middle of its line. Ending the prose there handed `const [` to the
-     * comment above and left the declaration to claim the line a second time. */
     #[test]
     fn a_preamble_stops_at_the_line_not_the_name() {
         let source = "/** Both. */\nconst [one, two] = pair();\n";
@@ -682,8 +629,6 @@ mod tests {
         assert_eq!(preambles(&file), vec!["/** Both. */\n", "/** Both. */\n"]);
     }
 
-    /* Prose sits where the thing it describes sits, so what's taken keeps its indentation
-     * and doesn't reach back to the margin. */
     #[test]
     fn a_preamble_inside_something_else_keeps_its_place() {
         let source = "class Money {\n  /** Pence. */\n  pence() {}\n}\n";
@@ -694,8 +639,6 @@ mod tests {
         assert_eq!(preambles(&file), vec!["  /** Pence. */\n"]);
     }
 
-    /* Two definitions written one after the other with nothing between them: the second
-     * takes nothing, because the line above it belongs to the first. */
     #[test]
     fn nothing_is_taken_from_the_definition_above() {
         let source = "/** One. */\nconst one = 1;\nconst two = 2;\n";
@@ -734,8 +677,6 @@ mod tests {
         assert_eq!(module.locator.scope, vec!["src"]);
     }
 
-    /* Nothing to say, nothing to report: a file where every line belongs to a definition
-     * has no module of its own to read. */
     #[test]
     fn a_file_with_nothing_left_over_has_no_module() {
         let source = "export interface Money {}\n";
@@ -747,9 +688,6 @@ mod tests {
         assert!(module(&file).is_none());
     }
 
-    /* Hover is markdown: the signature in a fenced block, then a rule, then documentation.
-     * Documentation is where examples live, and an example is fenced code too — so reading
-     * past the rule means editing an example reads as breaking every caller. */
     #[test]
     fn a_contract_stops_at_the_documentation() {
         let hover = json!({
@@ -762,7 +700,7 @@ mod tests {
         );
     }
 
-    /* Servers often put the module the definition lives in in a block of its own first. */
+    /* Servers often put the definition's module in a block of its own first. */
     #[test]
     fn the_last_block_before_the_rule_is_the_declaration() {
         let hover = json!({

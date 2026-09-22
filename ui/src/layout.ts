@@ -8,15 +8,9 @@ import type {
   Spot,
 } from "./dagger.ts";
 
-/* Pixels for the shape dagger sends.
- *
- * What nests in what, which tier each thing sits on, and the order along a tier all arrive
- * decided — the reading goes by the same numbers, and a page that worked them out again for
- * itself agreed until it didn't. What's left is geometry: how wide a box has to be for what
- * it holds, where each node lands.
- *
- * Plain functions, no components: this is the part worth testing without a browser.
- */
+/* Geometry for the shape dagger sends. Nesting, tiers and order along a tier arrive
+ * decided; this only works out widths and positions. Plain functions so it can be tested
+ * without a browser. */
 
 export const NODE_H = 28;
 const ROW_GAP = 22,
@@ -28,22 +22,18 @@ const PAD_X = 12,
   NODE_GAP = 10,
   MARGIN = 16;
 
-/* How wide a character is in the graph's font, which has to agree with style.css: a
- * monospace advance is 0.6 of its size, and the boxes are drawn from this rather than
- * measured, since there's no page to measure against when this is tested. */
+/* Must agree with style.css. Monospace advance is 0.6 of the font size; widths are computed
+ * rather than measured so tests can run without a page. */
 const FONT = 14;
 const CHAR = FONT * 0.6;
-/* Past this a name is cut short. A test is a sentence with underscores in it, and one of
- * them is as wide as a dozen ordinary definitions put together — which buries them. */
+/* Test names are sentences with underscores; one can be as wide as a dozen ordinary nodes. */
 const LONGEST = 22;
 
-/* Kept in one place so a node and the boxes around it can't drift apart. Each box inside
- * another is a touch tighter, down to the radius a node has — concentric corners would want
- * the padding added at every level, which on boxes this big comes out far too round. */
+/* Each nested box is slightly tighter, down to the node radius. Concentric corners (padding
+ * added at every level) come out far too round at this size. */
 export const RADIUS = { node: 5, box: 9, step: 2 };
 
-/* A box wears its name along the top, so it can't be narrower than the name. Smaller than
- * the nodes' font, and it has to agree with style.css the same way. */
+/* A box can't be narrower than its label. Must agree with style.css. */
 const BOX_FONT = 12.5;
 const labelWidth = (text: string) =>
   Math.ceil(text.length * BOX_FONT * 0.6) + 22;
@@ -52,13 +42,13 @@ const labelWidth = (text: string) =>
 export const shorten = (name: string) =>
   name.length > LONGEST ? `${name.slice(0, LONGEST - 1)}…` : name;
 
-/* Rounded up, never down: a box half a pixel too small is a name poking out of it. The 34
- * is the space either side plus the mark and the gap after it. */
+/* Rounded up: half a pixel short and the name pokes out. 34 is the side padding plus the
+ * mark and its gap. */
 export const widthOf = (text: string) =>
   Math.ceil(shorten(text).length * CHAR) + 34;
 
-/* One band of a box: side by side, in the order they arrived. A run of nodes is one block,
- * folded to about as wide as it is tall; a box inside is a block of its own. */
+/* One band of a box. A run of nodes is folded into one block; a nested box is a cell of its
+ * own. */
 type Cell = { box: Sized } | { lines: Definition[][] };
 interface Sized {
   label: string;
@@ -70,9 +60,6 @@ interface Sized {
 export function layout(review: Review): Laid {
   const at = new Map<Identity, Spot>();
 
-  /* Whatever the page has been asked not to show is gone from the definitions, and a box
-   * left holding nothing goes with it: an empty box labelled after a module nothing in the
-   * reading mentions. */
   const kept = (group: Group): Group | null => {
     if (group.type === "node")
       return review.definitions.has(group.id) ? group : null;
@@ -99,7 +86,6 @@ export function layout(review: Review): Laid {
 
   return { at, boxes, w: widest, h: y + MARGIN };
 
-  /* Room for whatever a box holds, a band at a time, and never narrower than its own name. */
   function sized(group: Group & { type: "group" }): Sized {
     const bands: Cell[][] = [];
     let tier = -1;
@@ -123,7 +109,7 @@ export function layout(review: Review): Laid {
         sum + bandHeight(band) + (index ? gapAbove(bands[index - 1], band) : 0),
       0,
     );
-    /* A box with nothing in it is its own name and no more. */
+    /* An empty box is just its label. */
     return {
       label: group.name,
       bands,
@@ -133,8 +119,6 @@ export function layout(review: Review): Laid {
   }
 }
 
-/* Placing a box is placing what it holds, a band at a time and along each band in turn:
- * the same job one level in for the boxes, and the end of it for the nodes. */
 function placed(
   box: Sized,
   x: number,
@@ -180,10 +164,9 @@ function spots(
   return lines.flat().map((node) => node.id);
 }
 
-/* A row of peers folded into a block about as wide as it is tall, so a file with a dozen
- * tests in it grows downwards instead of off the side of the page. Nothing in a row leans
- * on anything else in it — an edge would have put one of them a tier lower — so they can be
- * split across lines without a line ever pointing the wrong way. */
+/* Fold a row into a roughly square block so a file with a dozen tests grows down, not
+ * sideways. Nothing in a row depends on anything else in it (an edge would have put one a
+ * tier lower), so splitting it can't make an edge point the wrong way. */
 function folded(row: Definition[]) {
   const across = Math.ceil(Math.sqrt(row.length));
   const lines = [];
@@ -205,7 +188,7 @@ const bandWidth = (band: Cell[]) =>
   band.reduce((sum, cell) => sum + cellWidth(cell), 0) +
   BOX_GAP * (band.length - 1);
 const bandHeight = (band: Cell[]) => Math.max(...band.map(cellHeight));
-/* Lines of definitions sit closer to each other than a box sits to anything. */
+/* Rows of nodes sit closer together than anything sits to a box. */
 const gapAbove = (above: Cell[], band: Cell[]) =>
   [above, band].every((one) => one.every((cell) => "lines" in cell))
     ? ROW_GAP
