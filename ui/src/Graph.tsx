@@ -527,12 +527,18 @@ export function Graph(props: GraphProps) {
     fit();
 
     /* A resized window changes how far out the whole drawing sits, so the limit has to
-     * move with it or the reader gets stuck too close in. */
+     * move with it or the reader gets stuck too close in.
+     *
+     * Drawn here rather than through redraw(): sizing the canvas clears it, and a browser
+     * runs its animation frame callbacks before it runs a resize observer's — so a redraw
+     * asked for from in here waits a whole frame to happen, and that frame paints whatever
+     * was cleared. Dragging the sidebar resizes every frame, so that one blank frame became
+     * every frame: a flicker for as long as the drag lasted. */
     const resized = new ResizeObserver(() => {
       sized();
       bounded();
       if (seen().k < whole().k) fit();
-      else redraw();
+      draw();
     });
     resized.observe(frame);
 
