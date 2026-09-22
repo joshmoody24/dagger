@@ -70,7 +70,7 @@ dependencies = [
 
 [[package]]
 name = "dagger"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -91,7 +91,7 @@ dependencies = [
 
 [[package]]
 name = "dagger-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "serde",
  "ts-rs",
@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "dagger-git-adapter"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "dagger-protocol",
@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "dagger-lsp-adapter"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "dagger-core",
@@ -121,7 +121,7 @@ dependencies = [
 
 [[package]]
 name = "dagger-lsp-client"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "dagger-core",
@@ -131,7 +131,7 @@ dependencies = [
 
 [[package]]
 name = "dagger-protocol"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "dagger-core",
@@ -142,7 +142,7 @@ dependencies = [
 
 [[package]]
 name = "dagger-rust-adapter"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "dagger-core",
@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "dagger-typescript"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "dagger-core",
