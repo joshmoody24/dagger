@@ -8,7 +8,7 @@ import type {
   Spot,
 } from "../dagger.ts";
 import { MARK, TINT } from "../digest.ts";
-import { FONT, RADIUS, shorten } from "../layout.ts";
+import { FONT, shorten } from "../layout.ts";
 
 /* What the graph shows, as plain data: geometry and class names, never colours. Colours
  * live in Graph.css so a theme change needs nothing here. Plain functions so it can be
@@ -43,7 +43,6 @@ export interface SceneGroup {
   y: number;
   w: number;
   h: number;
-  radius: number;
   depth: number;
   lit: boolean;
 }
@@ -128,7 +127,6 @@ function placed(
       y: group.y,
       w: group.w,
       h: group.h,
-      radius: Math.max(RADIUS.definition, RADIUS.group - depth * RADIUS.step),
       depth,
       /* Only the innermost hovered group; lighting ancestors or the current definition's group was
        * too visually noisy. */

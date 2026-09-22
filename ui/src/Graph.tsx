@@ -12,7 +12,6 @@ import type { Identity, Laid, Review } from "./dagger.ts";
 import { scene, BOX_TEXT_Y, NODE_TEXT_Y } from "./graph/scene.ts";
 import { CLOSEST, viewport } from "./graph/viewport.ts";
 import { editing } from "./keys.ts";
-import { RADIUS } from "./layout.ts";
 import { wearing } from "./theme.ts";
 import "./Graph.css";
 
@@ -119,7 +118,6 @@ export function Graph(props: GraphProps) {
                   y={group.y}
                   width={group.w}
                   height={group.h}
-                  rx={group.radius}
                   onPointerEnter={() => setOver(group.key)}
                   onPointerLeave={() => setOver(null)}
                 />
@@ -168,7 +166,6 @@ export function Graph(props: GraphProps) {
                   y={definition.y}
                   width={definition.w}
                   height={definition.h}
-                  rx={RADIUS.definition}
                 />
                 <text
                   class="mark"

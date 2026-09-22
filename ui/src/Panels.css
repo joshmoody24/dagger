@@ -5,7 +5,7 @@
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: var(--corner-panel);
 }
 .panel::backdrop {
   background: rgb(0 0 0 / 45%);

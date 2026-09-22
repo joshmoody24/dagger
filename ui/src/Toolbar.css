@@ -38,7 +38,7 @@ header {
   width: 9em;
   padding: 3px 8px;
   border: 1px solid var(--raised);
-  border-radius: 8px;
+  border-radius: var(--corner);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -58,7 +58,7 @@ header {
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--corner);
   color: var(--muted);
 }
 /* The ripple count sits beside the mark: it's what the reader just changed. */

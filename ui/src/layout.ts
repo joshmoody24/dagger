@@ -29,10 +29,6 @@ const CHAR = FONT * 0.6;
 /* Test names are sentences with underscores; one can be as wide as a dozen ordinary definitions. */
 const LONGEST = 22;
 
-/* Each nested group is slightly tighter, down to the definition radius. Concentric corners (padding
- * added at every level) come out far too round at this size. */
-export const RADIUS = { definition: 5, group: 9, step: 2 };
-
 /* A group can't be narrower than its label. Must agree with style.css. */
 export const BOX_FONT = 12.5;
 const labelWidth = (text: string) =>

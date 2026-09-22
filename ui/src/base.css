@@ -2,6 +2,10 @@
 :root {
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* One knob for how rounded the page is. Panels and groups round more, marks less. */
+  --corner: 2px;
+  --corner-panel: calc(var(--corner) * 1.5);
+  --corner-small: calc(var(--corner) * 0.5);
 }
 
 * {
@@ -50,7 +54,7 @@ main {
 kbd {
   font: 10.5px/1.4 var(--mono);
   border: 1px solid currentColor;
-  border-radius: 3px;
+  border-radius: var(--corner-small);
   padding: 0 3px;
   opacity: 0.6;
   font-weight: 400;

@@ -55,14 +55,14 @@
   display: block;
   height: 2px;
   background: var(--rule);
-  border-radius: 2px;
+  border-radius: var(--corner-small);
   max-width: 240px;
 }
 .phase .through i {
   display: block;
   height: 100%;
   background: var(--lean);
-  border-radius: 2px;
+  border-radius: var(--corner-small);
 }
 
 @keyframes beating {

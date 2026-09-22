@@ -1,7 +1,7 @@
 pre.code {
   margin: 0 0 10px;
   background: var(--paper);
-  border-radius: 6px;
+  border-radius: var(--corner);
   font: 13px/1.6 var(--mono);
   padding: 6px 0;
 }
@@ -58,7 +58,7 @@ pre.code button.fold:focus-visible {
 }
 /* The words that differ, on a darker ground than the line they sit in. */
 pre.code .changed {
-  border-radius: 2px;
+  border-radius: var(--corner-small);
 }
 pre.code .line.added .changed {
   background: color-mix(in srgb, var(--add) 30%, transparent);

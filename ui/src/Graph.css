@@ -34,6 +34,7 @@
  * still takes the pointer so the innermost group under it lights up. */
 .group rect {
   fill: none;
+  rx: var(--corner-panel);
   stroke: var(--rule);
   stroke-width: 1;
   pointer-events: all;
@@ -118,6 +119,7 @@
 /* Filled with the page colour so edges drawn behind don't cross the name. */
 .definition rect {
   fill: var(--paper);
+  rx: var(--corner);
   stroke: var(--tone);
   stroke-width: 1.2;
 }

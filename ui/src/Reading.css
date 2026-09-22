@@ -26,7 +26,7 @@
   height: 58dvh;
   background: var(--surface);
   border-top: 1px solid var(--rule);
-  border-radius: 12px 12px 0 0;
+  border-radius: var(--corner-panel) var(--corner-panel) 0 0;
   box-shadow: 0 -6px 24px rgb(0 0 0 / 28%);
   transform: translateY(105%);
   transition:
@@ -124,7 +124,7 @@ main.has-sheet.half .graph {
 .icon-button {
   width: 38px;
   height: 38px;
-  border-radius: 8px;
+  border-radius: var(--corner);
   color: var(--muted);
   font-size: 18px;
   flex: none;
