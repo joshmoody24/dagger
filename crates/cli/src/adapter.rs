@@ -1,7 +1,7 @@
 use crate::config::{Adapter, Extractor};
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_protocol::{Changed, Described, Note, Request, Response, Revisions};
+use dagger_protocol::{Changed, Described, Note, Request, Response, Snapshots};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -107,7 +107,7 @@ pub fn describe(
     }
 }
 
-/// A revision on disk, whether we clean it up, and the adapter's file listing.
+/// A snapshot on disk, whether we clean it up, and the adapter's file listing.
 /// No listing means we walk the directory ourselves.
 pub struct Snapshot {
     pub dir: PathBuf,
@@ -125,26 +125,26 @@ impl Drop for Snapshot {
     }
 }
 
-/// Turns the command-line words into two revisions via the snapshot adapter.
-pub fn revisions(repo: &Path, snapshots: &Adapter, asked: &[String]) -> Result<Revisions> {
+/// Turns the command-line words into two snapshots via the snapshot adapter.
+pub fn snapshots(repo: &Path, adapter: &Adapter, asked: &[String]) -> Result<Snapshots> {
     let request = Request::Resolve {
         asked: asked.to_vec(),
-        settings: json(&snapshots.settings),
+        settings: json(&adapter.settings),
     };
-    match ask(repo, &snapshots.adapter, &snapshots.args, &request, None)? {
-        Response::Resolved { revisions } => Ok(revisions),
+    match ask(repo, &adapter.adapter, &adapter.args, &request, None)? {
+        Response::Resolved { snapshots } => Ok(snapshots),
         // The adapter's wording is passed through as is.
         Response::Failed { message } => bail!("{message}"),
-        other => bail!("asked {} what to read and got {other:?}", snapshots.adapter),
+        other => bail!("asked {} what to read and got {other:?}", adapter.adapter),
     }
 }
 
-pub fn materialize(repo: &Path, snapshots: &Adapter, rev: &str) -> Result<Snapshot> {
+pub fn materialize(repo: &Path, adapter: &Adapter, snapshot: &str) -> Result<Snapshot> {
     let request = Request::Materialize {
-        rev: rev.to_string(),
-        settings: json(&snapshots.settings),
+        snapshot: snapshot.to_string(),
+        settings: json(&adapter.settings),
     };
-    match ask(repo, &snapshots.adapter, &snapshots.args, &request, None)? {
+    match ask(repo, &adapter.adapter, &adapter.args, &request, None)? {
         Response::Materialized {
             dir,
             temporary,
@@ -154,11 +154,8 @@ pub fn materialize(repo: &Path, snapshots: &Adapter, rev: &str) -> Result<Snapsh
             temporary,
             files,
         }),
-        Response::Failed { message } => bail!("couldn't lay out {rev}: {message}"),
-        other => bail!(
-            "asked {} for a snapshot and got {other:?}",
-            snapshots.adapter
-        ),
+        Response::Failed { message } => bail!("couldn't lay out {snapshot}: {message}"),
+        other => bail!("asked {} for a snapshot and got {other:?}", adapter.adapter),
     }
 }
 

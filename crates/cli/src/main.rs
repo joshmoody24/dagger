@@ -20,7 +20,7 @@ use dagger_core::matching::{Extraction, match_snapshots};
 use dagger_core::model::Span;
 use dagger_core::prose::line_starts;
 use dagger_core::review::{Impact, Warning, review};
-use dagger_protocol::{Changed, Note, Revisions};
+use dagger_protocol::{Changed, Note, Snapshots};
 use std::collections::BTreeSet;
 use std::io::{IsTerminal, Write};
 use std::path::Path;
@@ -186,14 +186,14 @@ fn main() -> Result<()> {
     }
 
     let claims = claims(&repo, &config)?;
-    let revisions = revisions(&repo, &config, &args)?;
+    let snapshots = snapshots(&repo, &config, &args)?;
     status(&format!(
         "comparing {} to {}",
-        revisions.before, revisions.after
+        snapshots.before, snapshots.after
     ));
 
-    let before = lay_out(&repo, &config, &revisions.before)?;
-    let after = lay_out(&repo, &config, &revisions.after)?;
+    let before = lay_out(&repo, &config, &snapshots.before)?;
+    let after = lay_out(&repo, &config, &snapshots.after)?;
 
     // Temporary snapshots are removed on drop, whichever way this ends.
     if args.explain {
@@ -203,22 +203,22 @@ fn main() -> Result<()> {
             &repo,
             &config,
             &claims,
-            (&revisions.before, &before),
-            (&revisions.after, &after),
+            (&snapshots.before, &before),
+            (&snapshots.after, &after),
             &args,
-            revisions.title,
+            snapshots.title,
         )
     }
 }
 
 /// What to compare: the user's choice, else the snapshot adapter's suggestion, else the last commit.
-fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<Revisions> {
+fn snapshots(repo: &Path, config: &Config, args: &Args) -> Result<Snapshots> {
     match (args.asked.as_slice(), &config.snapshots) {
         ([], _) => {}
-        (asked, Some(snapshots)) => return adapter::revisions(repo, snapshots, asked),
+        (asked, Some(snapshots)) => return adapter::snapshots(repo, snapshots, asked),
         // Without an adapter the arguments can only be two directories.
         ([before, after], None) => {
-            return Ok(Revisions {
+            return Ok(Snapshots {
                 before: before.clone(),
                 after: after.clone(),
                 title: None,
@@ -238,12 +238,12 @@ fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<Revisions> {
                 &snapshots.args,
                 &snapshots.settings,
             )?
-            .revisions
+            .snapshots
         }
         None => None,
     };
 
-    Ok(suggested.unwrap_or_else(|| Revisions {
+    Ok(suggested.unwrap_or_else(|| Snapshots {
         before: "HEAD~1".to_string(),
         after: "HEAD".to_string(),
         title: None,
@@ -514,19 +514,14 @@ fn read(
     repo: &Path,
     config: &Config,
     claims: &[Vec<String>],
-    (rev, snapshot): (&str, &adapter::Snapshot),
+    (named, laid): (&str, &adapter::Snapshot),
     changed: &[Changed],
     ripples: u32,
     // Labels progress output so the two readings can be told apart.
-    side: &str,
+    snapshot: &str,
 ) -> Result<(Extraction, Vec<Note>)> {
-    let dir = &snapshot.dir;
-    let assignment = assign::assign(
-        &config.review.ignore,
-        claims,
-        dir,
-        snapshot.files.as_deref(),
-    )?;
+    let dir = &laid.dir;
+    let assignment = assign::assign(&config.review.ignore, claims, dir, laid.files.as_deref())?;
     // Only files that differ: an unchanged file reads the same on both sides, and reading a
     // whole repository twice to say nothing was most of the run's cost.
     let differs: std::collections::BTreeSet<&str> =
@@ -547,12 +542,12 @@ fn read(
             continue;
         }
         status(&format!(
-            "{side} · reading {} files of {rev} with {}",
+            "{snapshot} · reading {} files of {named} with {}",
             files.len(),
             extractor.adapter
         ));
         let (mut extracted, mut said) =
-            adapter::extract(repo, extractor, dir, files, changed, ripples, side)?;
+            adapter::extract(repo, extractor, dir, files, changed, ripples, snapshot)?;
         merged.occurrences.append(&mut extracted.occurrences);
         merged.mentions.append(&mut extracted.mentions);
         notes.append(&mut said);
@@ -561,15 +556,15 @@ fn read(
     Ok((merged, notes))
 }
 
-/// Without a snapshot adapter, a revision is just a directory.
-fn lay_out(repo: &Path, config: &Config, rev: &str) -> Result<adapter::Snapshot> {
+/// Without a snapshot adapter, a snapshot is just a directory.
+fn lay_out(repo: &Path, config: &Config, snapshot: &str) -> Result<adapter::Snapshot> {
     match &config.snapshots {
-        Some(snapshots) => adapter::materialize(repo, snapshots, rev),
+        Some(snapshots) => adapter::materialize(repo, snapshots, snapshot),
         None => {
-            let dir = repo.join(rev);
+            let dir = repo.join(snapshot);
             if !dir.is_dir() {
                 bail!(
-                    "no snapshot adapter is configured in {}, so {rev} has to be a directory",
+                    "no snapshot adapter is configured in {}, so {snapshot} has to be a directory",
                     config::FILE
                 );
             }

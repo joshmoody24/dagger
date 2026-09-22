@@ -59,7 +59,7 @@ pub fn answer(request: Request) -> Result<Response> {
     match request {
         Request::Describe { settings } => Ok(Response::Described(Described {
             include: settings_of(settings)?.include,
-            revisions: None,
+            snapshots: None,
             usage: Vec::new(),
         })),
         Request::Extract {

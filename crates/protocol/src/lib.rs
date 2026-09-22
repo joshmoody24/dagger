@@ -40,13 +40,13 @@ pub fn settings<T: DeserializeOwned>(value: serde_json::Value, context: &str) ->
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Request {
     /// What this adapter can do, asked before anything else: the files it speaks for, and
-    /// for a snapshot adapter, which revisions to compare by default.
+    /// for a snapshot adapter, which snapshots to compare by default.
     Describe {
         /// Whatever the repo wrote under this adapter's `settings`. Dagger doesn't read it.
         #[serde(default)]
         settings: serde_json::Value,
     },
-    /// Turn the user's command-line arguments into the two revisions to compare. They
+    /// Turn the user's command-line arguments into the two snapshots to compare. They
     /// travel exactly as typed, since naming history (`main...HEAD`) is the adapter's business.
     Resolve {
         /// Everything after the flags, in order, untouched.
@@ -54,9 +54,9 @@ pub enum Request {
         #[serde(default)]
         settings: serde_json::Value,
     },
-    /// Put this revision somewhere on disk and say where.
+    /// Put this snapshot somewhere on disk and say where.
     Materialize {
-        rev: String,
+        snapshot: String,
         #[serde(default)]
         settings: serde_json::Value,
     },
@@ -79,9 +79,9 @@ pub enum Request {
     },
 }
 
-/// Two revisions to compare.
+/// The two snapshots to compare.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Revisions {
+pub struct Snapshots {
     pub before: String,
     pub after: String,
     /// What the commit under review is called, when the adapter can say. Only ever a
@@ -154,7 +154,7 @@ pub struct Described {
     /// What to compare when the user named nothing. Only a snapshot adapter knows,
     /// since only it knows whether there's uncommitted work around.
     #[serde(default)]
-    pub revisions: Option<Revisions>,
+    pub snapshots: Option<Snapshots>,
     /// The ways of naming a change this adapter accepts, a line each, for dagger's
     /// help text. Kept here so there's only one copy of the list.
     #[serde(default)]
@@ -166,7 +166,7 @@ pub struct Described {
 pub enum Response {
     Described(Described),
     Resolved {
-        revisions: Revisions,
+        snapshots: Snapshots,
     },
     Materialized {
         dir: String,

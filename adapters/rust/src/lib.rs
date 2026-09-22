@@ -25,7 +25,7 @@ pub fn answer(request: Request) -> Result<Response> {
         Request::Describe { settings } => Ok(Response::Described(Described {
             // Settings are checked here so a bad one is reported before any snapshot is laid out.
             include: settings_of(settings).map(|_| vec!["**/*.rs".to_string()])?,
-            revisions: None,
+            snapshots: None,
             usage: Vec::new(),
         })),
         Request::Extract {

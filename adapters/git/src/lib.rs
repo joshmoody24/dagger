@@ -4,7 +4,7 @@
 //! touched. The revision `current` is the working tree itself, so it needs no copying.
 
 use anyhow::{Context, Result, bail};
-use dagger_protocol::{Described, Request, Response, Revisions};
+use dagger_protocol::{Described, Request, Response, Snapshots};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::fs;
@@ -34,18 +34,20 @@ impl Default for Settings {
 
 pub fn answer(request: Request) -> Result<Response> {
     match request {
-        Request::Materialize { rev, .. } if rev == CURRENT => Ok(Response::Materialized {
-            dir: std::env::current_dir()?
-                .canonicalize()?
-                .to_string_lossy()
-                .into_owned(),
-            temporary: false,
-            files: Some(current_files()?),
-        }),
-        Request::Materialize { rev, settings } => {
+        Request::Materialize { snapshot, .. } if snapshot == CURRENT => {
+            Ok(Response::Materialized {
+                dir: std::env::current_dir()?
+                    .canonicalize()?
+                    .to_string_lossy()
+                    .into_owned(),
+                temporary: false,
+                files: Some(current_files()?),
+            })
+        }
+        Request::Materialize { snapshot, settings } => {
             let settings = settings_of(settings)?;
-            let dir = materialize(&rev, settings.carry_ignored)?;
-            let files = Some(listing(&["ls-tree", "-r", "--name-only", "-z", &rev])?);
+            let dir = materialize(&snapshot, settings.carry_ignored)?;
+            let files = Some(listing(&["ls-tree", "-r", "--name-only", "-z", &snapshot])?);
             Ok(Response::Materialized {
                 dir: dir.to_string_lossy().into_owned(),
                 temporary: true,
@@ -58,13 +60,13 @@ pub fn answer(request: Request) -> Result<Response> {
                 settings_of(settings)?;
                 Vec::new()
             },
-            revisions: Some(worth_reviewing()?),
+            snapshots: Some(worth_reviewing()?),
             usage: UNDERSTOOD.lines().map(str::to_string).collect(),
         })),
         Request::Resolve { asked, settings } => {
             let settings = settings_of(settings)?;
             Ok(Response::Resolved {
-                revisions: resolve(&asked, &settings)?,
+                snapshots: resolve(&asked, &settings)?,
             })
         }
         Request::Extract { .. } => bail!("git only lays snapshots out, it doesn't read them"),
@@ -85,17 +87,17 @@ const CURRENT: &str = "current";
 
 /// Unfinished work is what someone is most likely to want to look at, so that wins
 /// when there is any. Failing that, the last thing they committed.
-fn worth_reviewing() -> Result<Revisions> {
+fn worth_reviewing() -> Result<Snapshots> {
     let dirty = !listing(&["status", "--porcelain", "-z"])?.is_empty();
     Ok(if dirty {
         // `current` isn't a commit, so there's no subject to read.
-        Revisions {
+        Snapshots {
             before: "HEAD".to_string(),
             after: CURRENT.to_string(),
             title: None,
         }
     } else {
-        Revisions {
+        Snapshots {
             before: "HEAD~1".to_string(),
             after: "HEAD".to_string(),
             title: subject("HEAD"),
@@ -157,7 +159,7 @@ fn span(range: &str) -> Ends<'_> {
 
 /// Both ends come back as commits so nothing downstream resolves a name a second time,
 /// possibly differently.
-fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> {
+fn resolve(asked: &[String], settings: &Settings) -> Result<Snapshots> {
     let Ends {
         left,
         right,
@@ -184,7 +186,7 @@ fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> {
         base_commit
     };
 
-    Ok(Revisions {
+    Ok(Snapshots {
         before,
         title: subject(&tip),
         after: tip,
@@ -313,8 +315,8 @@ fn listing(args: &[&str]) -> Result<Vec<String>> {
         .collect())
 }
 
-fn materialize(rev: &str, carry_ignored: bool) -> Result<PathBuf> {
-    let commit = rev_parse(rev)?;
+fn materialize(snapshot: &str, carry_ignored: bool) -> Result<PathBuf> {
+    let commit = rev_parse(snapshot)?;
     let dir = std::env::temp_dir().join(format!("dagger-{}-{}", std::process::id(), commit));
     fs::create_dir_all(&dir).with_context(|| format!("couldn't make {}", dir.display()))?;
     // Canonical, so it matches the paths a language server reports: on macOS the temp
@@ -419,8 +421,9 @@ fn holds_a_way_home(carry: &Carry, dir: &Path, deep: u32) -> Result<bool> {
     Ok(false)
 }
 
-fn rev_parse(rev: &str) -> Result<String> {
-    say(&["rev-parse", rev]).with_context(|| format!("git doesn't know the revision {rev}"))
+fn rev_parse(snapshot: &str) -> Result<String> {
+    say(&["rev-parse", snapshot])
+        .with_context(|| format!("git doesn't know the revision {snapshot}"))
 }
 
 /// `git archive | tar -x`, wired up directly so no shell gets involved.
