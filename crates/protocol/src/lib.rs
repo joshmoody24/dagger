@@ -1,4 +1,5 @@
-//! What dagger says to an adapter, and what it expects back.
+//! What dagger says to an adapter, and what it expects back — and, in `said`, what dagger
+//! says once they have all answered.
 //!
 //! An adapter is any executable. It reads one request as JSON on stdin, writes one
 //! response as JSON on stdout, and exits. Whatever it puts on stderr reaches the
@@ -7,6 +8,8 @@
 //! Snapshots are handed over as a directory rather than served a file at a time,
 //! because real language tooling wants a project on disk: a tsconfig, a lockfile,
 //! the imports next door.
+
+pub mod said;
 
 use dagger_core::matching::Extraction;
 use serde::{Deserialize, Serialize};

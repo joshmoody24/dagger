@@ -27,14 +27,13 @@ export type Note = said.Note;
 /** One definition as it arrives: an identity, and what it was on each side. */
 export type RawDefinition = said.Definition;
 
-/** Everything one reading of a repository comes to. */
-export interface Raw {
-  definitions: said.Definition[];
-  review: said.Review;
-  ordering: said.Ordering;
-  grouping: said.Grouping;
-  notes: said.Note[];
-}
+/* Everything one reading of a repository comes to.
+ *
+ * Named here rather than described here. This used to be written out by hand, which left
+ * the outermost shape — the one every other shape arrives inside — as the one thing nothing
+ * checked. A renamed field doesn't fail in TypeScript: the declaration is satisfied and the
+ * value turns up undefined. */
+export type Raw = said.Said;
 
 /* ---------------- what the page makes of it ---------------- */
 

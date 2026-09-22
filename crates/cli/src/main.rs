@@ -20,6 +20,7 @@ use dagger_core::matching::{Extraction, match_snapshots};
 use dagger_core::order::order;
 use dagger_core::review::review;
 use dagger_protocol::Note;
+use dagger_protocol::said::Said;
 use std::io::{IsTerminal, Write};
 use std::path::Path;
 
@@ -288,9 +289,9 @@ fn compare(
     let matched = match_snapshots(before, after);
     let mut review = review(&matched.definitions, &matched.references, ripples);
 
-    // One grouping at a time, and for now the first one written down. The reading order
-    // leans on it to know whether the next definition takes the reader somewhere else.
-    let mut grouping = match config.groupings.first() {
+    // The reading order leans on this to know whether reading the next definition takes
+    // the reader somewhere else.
+    let mut grouping = match config.grouping.as_ref() {
         Some(wanted) => grouping::of(wanted, &after_dir, &matched.definitions),
         None => Grouping::default(),
     };
@@ -313,33 +314,11 @@ fn compare(
     ));
 
     if args.json {
-        // The definitions belong in the output too: everything else talks in identities,
-        // and without these there's nothing to turn one back into a name, a file, or the
-        // text a reader came to see.
-        //
-        // Only what the page will draw, though — the members and the modules around them.
-        // Handing over every definition means handing over the whole repository twice, since
-        // the fallback reading holds a copy of each file it covers whether anything changed
-        // in it or not.
-        let shown: Vec<_> = matched
-            .definitions
-            .iter()
-            .filter(|definition| {
-                review.members.contains(&definition.identity)
-                    || review.context.contains(&definition.identity)
-            })
-            .collect();
-
+        let said = Said::of(&matched.definitions, review, ordering, grouping, notes);
         let _ = writeln!(
             std::io::stdout().lock(),
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
-                "definitions": shown,
-                "review": review,
-                "ordering": ordering,
-                "grouping": grouping,
-                "notes": notes,
-            }))?
+            serde_json::to_string_pretty(&said)?
         );
     } else {
         report::print(&review, &ordering, &matched.definitions, &notes);

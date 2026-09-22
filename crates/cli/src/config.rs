@@ -12,10 +12,13 @@ pub struct Config {
     pub snapshots: Option<Adapter>,
     #[serde(default)]
     pub extractors: Vec<Extractor>,
-    /// Ways of grouping the files, of which one is used at a time. Boxes have to nest to be
-    /// drawn, and two groupings of the same code rarely nest inside one another.
-    #[serde(default)]
-    pub groupings: Vec<GroupingConfig>,
+    /// How to group the files, if they should be grouped at all.
+    ///
+    /// One, not a list. Boxes have to nest to be drawn and two groupings of the same code
+    /// rarely nest inside one another, so only one was ever used — a repository could write
+    /// down three and dagger would quietly read the first. A setting that accepts more than
+    /// it obeys is a setting that lies.
+    pub grouping: Option<GroupingConfig>,
     #[serde(default)]
     pub review: ReviewConfig,
 }
@@ -88,7 +91,12 @@ impl Config {
         let path = repo.join(FILE);
         match std::fs::read_to_string(&path) {
             Ok(text) => {
-                toml::from_str(&text).with_context(|| format!("{} doesn't parse", path.display()))
+                /* The reason comes first, because it's the part anybody can act on: a
+                 * misspelled key, a string where a list belongs. Left as context the error
+                 * said only that the file doesn't parse, which is the one thing already
+                 * obvious from being told at all. */
+                toml::from_str(&text)
+                    .map_err(|why| anyhow::anyhow!("{} doesn't parse: {}", path.display(), why))
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(error) => Err(error).with_context(|| format!("couldn't read {}", path.display())),

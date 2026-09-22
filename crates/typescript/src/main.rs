@@ -6,9 +6,10 @@
 //! the declarations come from the types that produce the JSON, and `./check` fails when
 //! what's written down stops matching them.
 //!
-//! Only what dagger emits. The shapes the page makes for itself — a laid-out box, a node's
-//! place on screen — are the page's business, and describing them in Rust would mean
-//! inventing types to describe a drawing.
+//! Only what dagger emits, all the way out: `Said` is the whole document, so nothing is
+//! left for the page to describe by hand. The shapes the page makes for itself — a laid-out
+//! box, a node's place on screen — are its own business, and describing those in Rust would
+//! mean inventing types to describe a drawing.
 
 use anyhow::{Context, Result};
 use dagger_core::change::{Change, Edits};
@@ -18,6 +19,7 @@ use dagger_core::model::{Definition, Identity, Locator, Occurrence, Part, Piece,
 use dagger_core::order::{Cost, Ordering, Step};
 use dagger_core::review::{Edge, Review};
 use dagger_protocol::Note;
+use dagger_protocol::said::Said;
 use std::io::Write;
 use ts_rs::{Config, TS};
 
@@ -51,6 +53,7 @@ fn main() -> Result<()> {
         Ordering::decl(&how),
         Grouping::decl(&how),
         Note::decl(&how),
+        Said::decl(&how),
     ] {
         out.push_str("export ");
         out.push_str(declaration.trim_end_matches(';'));

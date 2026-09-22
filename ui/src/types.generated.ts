@@ -185,3 +185,10 @@ export type Note = { message: string,
  */
 file: string | null, };
 
+export type Said = { 
+/**
+ * Everything else talks in identities. Without these there's nothing to turn one back
+ * into a name, a file, or the text a reader came to see.
+ */
+definitions: Array<Definition>, review: Review, ordering: Ordering, grouping: Grouping, notes: Array<Note>, };
+

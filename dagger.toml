@@ -19,6 +19,6 @@ settings = { server = ["tsc", "--lsp", "--stdio"] }
 [review]
 ignore = ["Cargo.lock", "flake.lock", "dagger-demo.html"]
 
-[[groupings]]
+[grouping]
 name = "package"
 markers = ["Cargo.toml", "package.json"]
