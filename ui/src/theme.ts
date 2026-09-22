@@ -31,7 +31,7 @@ export interface Theme {
 
 export const themes = Object.keys(WEARING);
 
-/* A signal so the canvas, which is painted rather than styled, redraws on a theme change. */
+/* A signal so the page can show which theme it's wearing. */
 const [worn, setWorn] = createSignal(themes[0]);
 export const wearing = worn;
 

@@ -9,6 +9,14 @@
 .canvas:active {
   cursor: grabbing;
 }
+.canvas svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.canvas svg * {
+  stroke-linejoin: round;
+}
 .viewkeys {
   position: absolute;
   inset-inline-start: 12px;
@@ -20,35 +28,123 @@
   align-items: center;
   gap: 4px;
 }
-/* Nodes, boxes and lines are painted, not styled; the painting code reads their colours
- * from the theme's custom properties. */
-.canvas canvas {
-  display: block;
+
+/* Boxes are outline-only so nested boxes don't stack into ever-paler fills. The rect
+ * still takes the pointer so the innermost box under it lights up. */
+.box rect {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1;
+  pointer-events: all;
+}
+.box.nested rect {
+  stroke-dasharray: 3 3;
+}
+.box.lit rect {
+  stroke: var(--muted);
+  stroke-width: 1.4;
+}
+.box text {
+  font: 12.5px var(--mono);
+  fill: var(--muted);
+  pointer-events: none;
 }
 
-/* Screen-reader only. `display: none` would hide it from screen readers too. */
-.spoken {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  list-style: none;
+.edge {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 1;
+  opacity: 0.85;
+  pointer-events: none;
 }
-.spoken button:focus-visible {
-  position: fixed;
-  inset-inline-start: 12px;
-  top: 12px;
-  z-index: 30;
-  width: auto;
-  height: auto;
-  clip-path: none;
-  padding: 8px 12px;
-  background: var(--surface);
-  border: 1px solid var(--lean);
-  border-radius: 8px;
-  font: 13px var(--mono);
+.edge.faith {
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+.edge.dim {
+  opacity: 0.3;
+}
+.edge.lean {
+  stroke: var(--lean);
+  stroke-width: 1.5;
+  opacity: 1;
+}
+
+.ahead {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.ahead .shaft {
+  fill: none;
+  stroke: var(--path);
+  stroke-width: 1.8;
+  stroke-dasharray: 5 3;
+}
+.ahead .tip {
+  fill: var(--path);
+}
+
+/* Outline and name share a colour; read nodes fade via opacity so both dim together. */
+.node {
+  --own: var(--muted);
+  --tone: var(--own);
+  cursor: pointer;
+  outline: none;
+}
+.node.add {
+  --own: var(--add);
+}
+.node.del {
+  --own: var(--del);
+}
+.node.chg {
+  --own: var(--chg);
+}
+.node.read {
+  opacity: 0.6;
+}
+.node.dim {
+  opacity: 0.55;
+}
+.node.read.dim {
+  opacity: 0.42;
+}
+.node.under,
+.node.soon,
+.node.here {
+  opacity: 1;
+}
+/* Filled with the page colour so edges drawn behind don't cross the name. */
+.node rect {
+  fill: var(--paper);
+  stroke: var(--tone);
+  stroke-width: 1.2;
+}
+.node.under rect {
+  stroke-width: 2;
+}
+.node.soon {
+  --tone: var(--path);
+}
+.node.soon rect {
+  stroke-width: 1.8;
+  stroke-dasharray: 5 3;
+}
+.node.here {
+  --tone: var(--lean);
+}
+.node.here rect {
+  stroke-width: 2;
+}
+.node:focus-visible rect {
+  stroke-width: 2;
+  stroke: var(--ink);
+}
+.node text {
+  font: 14px var(--mono);
+  fill: var(--tone);
+  pointer-events: none;
+}
+.node .mark {
+  fill: var(--own);
 }

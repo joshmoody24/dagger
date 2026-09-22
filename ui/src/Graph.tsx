@@ -2,20 +2,19 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  For,
   on,
   onCleanup,
   onMount,
+  Show,
 } from "solid-js";
 import type { Identity, Laid, Review } from "./dagger.ts";
-import { every, hit } from "./graph/hit.ts";
-import { paint, palette } from "./graph/paint.ts";
+import { scene, BOX_TEXT_Y, NODE_TEXT_Y } from "./graph/scene.ts";
 import { CLOSEST, viewport } from "./graph/viewport.ts";
 import { editing } from "./keys.ts";
-import { SpokenGraph } from "./SpokenGraph.tsx";
+import { RADIUS } from "./layout.ts";
 import { wearing } from "./theme.ts";
 import "./Graph.css";
-
-/* Drawn on a canvas. SpokenGraph keeps it keyboard/screen-reader accessible. */
 
 interface GraphProps {
   review: Review;
@@ -28,17 +27,17 @@ interface GraphProps {
 
 export function Graph(props: GraphProps) {
   let frame!: HTMLDivElement;
-  let paper!: HTMLCanvasElement;
-  let ink!: CanvasRenderingContext2D;
+  let paper!: SVGSVGElement;
 
   const [over, setOver] = createSignal<string | null>(null);
   const [touching, setTouching] = createSignal<Identity | null>(null);
+  const [seen, setSeen] = createSignal({ k: 1, x: 0, y: 0 });
 
   const view = viewport({
     paper: () => paper,
     room: () => frame.getBoundingClientRect(),
     laid: () => props.laid,
-    onZoom: () => redraw(),
+    onZoom: () => setSeen(view.seen()),
   });
 
   const spotOf = (id: Identity | null) =>
@@ -49,78 +48,17 @@ export function Graph(props: GraphProps) {
     if (spot) view.onto(spot, CLOSEST / 2);
   };
 
-  /* ---------------- what is where ---------------- */
-
-  const boxes = createMemo(() => every(props.laid.boxes));
-
-  const touched = (event: { clientX: number; clientY: number }) => {
-    const what = hit(props.laid, boxes(), view.pointing(event));
-    if (!what) return null;
-    if ("box" in what) return { file: what.box.key };
-    return {
-      node: what.node,
-      file: props.review.definitions.get(what.node)?.file ?? "",
-    };
-  };
-
-  const onPointerMove = (event: PointerEvent) => {
-    const what = touched(event);
-    setOver(what ? what.file : null);
-    setTouching(what && "node" in what ? what.node : null);
-  };
-  const hint = () => {
-    const id = touching();
-    return id === null ? "" : (props.review.definitions.get(id)?.path ?? "");
-  };
-
-  const onClick = (event: MouseEvent) => {
-    const what = touched(event);
-    if (what && "node" in what) props.onOpen(what.node);
-  };
-
-  /* ---------------- drawing ---------------- */
-
-  /* getComputedStyle forces a style flush, so only re-read the palette on theme change. */
-  const tint = createMemo(() => {
-    void wearing();
-    return palette(getComputedStyle(document.documentElement));
-  });
-
-  const scene = () => ({
-    review: props.review,
-    laid: props.laid,
-    here: props.here,
-    next: props.next,
-    read: props.read,
-    over: over(),
-    touching: touching(),
-    view: view.seen(),
-    room: frame.getBoundingClientRect(),
-    dense: window.devicePixelRatio || 1,
-  });
-
-  const draw = () => paint(ink, scene(), tint());
-
-  let drawing = 0;
-  const redraw = () => {
-    if (drawing || !ink) return;
-    drawing = requestAnimationFrame(() => {
-      drawing = 0;
-      draw();
-    });
-  };
-
-  /* Backing store scaled by devicePixelRatio, or text is blurry on dense screens. */
-  const sized = () => {
-    const room = frame.getBoundingClientRect();
-    const dense = window.devicePixelRatio || 1;
-    paper.width = Math.round(room.width * dense);
-    paper.height = Math.round(room.height * dense);
-    paper.style.width = `${room.width}px`;
-    paper.style.height = `${room.height}px`;
-  };
-
-  /* ---------------- keeping up ---------------- */
+  const shown = createMemo(() =>
+    scene({
+      review: props.review,
+      laid: props.laid,
+      here: props.here,
+      next: props.next,
+      read: props.read,
+      over: over(),
+      touching: touching(),
+    }),
+  );
 
   const onKey = (event: KeyboardEvent) => {
     if (event.metaKey || event.altKey || editing(event.target)) return;
@@ -133,19 +71,12 @@ export function Graph(props: GraphProps) {
   };
 
   onMount(() => {
-    ink = paper.getContext("2d")!;
-    sized();
     view.attach();
     frame.addEventListener("wheel", view.onWheel, { passive: true });
 
-    /* draw() directly, not redraw(): sizing clears the canvas, and rAF callbacks run
-     * before ResizeObserver callbacks, so a deferred redraw would leave a blank frame
-     * (visible as flicker while dragging the sidebar). */
     const resized = new ResizeObserver(() => {
-      sized();
       view.bounded();
       if (view.seen().k < view.whole().k) view.fit();
-      draw();
     });
     resized.observe(frame);
 
@@ -160,23 +91,6 @@ export function Graph(props: GraphProps) {
     });
   });
 
-  /* Everything the scene is drawn from, so a change to any of it redraws. */
-  createEffect(
-    on(
-      () => [
-        props.here,
-        props.next,
-        props.read,
-        props.review,
-        props.laid,
-        over(),
-        touching(),
-        tint(),
-      ],
-      redraw,
-    ),
-  );
-
   /* Pan to the current definition only when it's off screen. */
   createEffect(() => {
     const spot = spotOf(props.here);
@@ -185,25 +99,86 @@ export function Graph(props: GraphProps) {
   });
 
   return (
-    <div
-      class="canvas"
-      ref={frame}
-      style={{ cursor: over() === null ? "grab" : "pointer" }}
-      title={hint()}
-      onPointerMove={onPointerMove}
-      onPointerLeave={() => {
-        setOver(null);
-        setTouching(null);
-      }}
-      onClick={onClick}
-    >
-      <canvas
+    <div class="canvas" ref={frame}>
+      <svg
         ref={paper}
         role="img"
         aria-label="The definitions this change touches, and what holds up what"
-      />
-
-      <SpokenGraph review={props.review} onOpen={props.onOpen} />
+      >
+        <g transform={`translate(${seen().x} ${seen().y}) scale(${seen().k})`}>
+          <For each={shown().boxes}>
+            {(box) => (
+              <g
+                class="box"
+                classList={{ nested: box.depth > 0, lit: box.lit }}
+              >
+                <rect
+                  x={box.x}
+                  y={box.y}
+                  width={box.w}
+                  height={box.h}
+                  rx={box.radius}
+                  onPointerEnter={() => setOver(box.key)}
+                  onPointerLeave={() => setOver(null)}
+                />
+                <text x={box.x + 10} y={box.y + BOX_TEXT_Y}>
+                  {box.label}
+                </text>
+              </g>
+            )}
+          </For>
+          <For each={shown().edges}>
+            {(edge) => (
+              <path
+                class={`edge ${edge.kind}`}
+                classList={{ faith: edge.faith }}
+                d={edge.path}
+              />
+            )}
+          </For>
+          <Show when={shown().ahead}>
+            {(ahead) => (
+              <g class="ahead">
+                <path class="shaft" d={ahead().path} />
+                <path class="tip" d={ahead().tip} />
+              </g>
+            )}
+          </Show>
+          <For each={shown().nodes}>
+            {(node) => (
+              <g
+                class={["node", node.tint, ...node.classes].join(" ")}
+                tabindex="0"
+                onPointerEnter={() => setTouching(node.id)}
+                onPointerLeave={() => setTouching(null)}
+                onClick={() => props.onOpen(node.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") props.onOpen(node.id);
+                }}
+              >
+                <title>{node.title}</title>
+                <rect
+                  x={node.x}
+                  y={node.y}
+                  width={node.w}
+                  height={node.h}
+                  rx={RADIUS.node}
+                />
+                <text class="mark" x={node.x + 10} y={node.y + NODE_TEXT_Y}>
+                  {node.mark}
+                </text>
+                <text
+                  class="name"
+                  x={node.x + node.nameX}
+                  y={node.y + NODE_TEXT_Y}
+                >
+                  {node.name}
+                </text>
+              </g>
+            )}
+          </For>
+        </g>
+      </svg>
 
       <div class="viewkeys">
         <kbd>0</kbd> fit all · <kbd>1</kbd> zoom to current · <kbd>t</kbd>{" "}

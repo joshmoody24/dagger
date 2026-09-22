@@ -7,7 +7,7 @@ const EDGE = 24;
 export const CLOSEST = 4;
 
 interface Viewing {
-  paper: () => HTMLCanvasElement;
+  paper: () => SVGSVGElement;
   room: () => DOMRect;
   laid: () => Laid;
   onZoom: () => void;
@@ -16,7 +16,7 @@ interface Viewing {
 /* The d3 zoom behaviour is the single owner of the view transform; nothing sets it
  * directly. */
 export function viewport(of: Viewing) {
-  const behaviour = zooming<HTMLCanvasElement, unknown>()
+  const behaviour = zooming<SVGSVGElement, unknown>()
     /* Wheel is handled by onWheel instead. */
     .filter(
       (event: Event & { ctrlKey?: boolean; button?: number }) =>
@@ -71,9 +71,9 @@ export function viewport(of: Viewing) {
   const scaleBy = (by: number, towards?: [number, number]) =>
     behaviour.scaleBy(canvas(), by, towards);
 
-  /* Touchpads fire wheel events far faster than we can draw, and d3's built-in wheel
-   * handling is non-passive and recomputes per event, which lags. Batch deltas into one
-   * scale change per frame; passive is fine since the page never scrolls. */
+  /* Touchpads fire wheel events far faster than the page can keep up with, and d3's
+   * built-in wheel handling is non-passive and recomputes per event, which lags. Batch
+   * deltas into one scale change per frame; passive is fine since the page never scrolls. */
   let wheeled = 0;
   let towards: [number, number] = [0, 0];
   let turning = 0;
@@ -90,16 +90,6 @@ export function viewport(of: Viewing) {
       wheeled = 0;
       scaleBy(by, towards);
     });
-  };
-
-  /* Where a pointer event lands in layout coordinates. */
-  const pointing = (event: { clientX: number; clientY: number }) => {
-    const room = of.room();
-    const view = seen();
-    return {
-      x: (event.clientX - room.left - view.x) / view.k,
-      y: (event.clientY - room.top - view.y) / view.k,
-    };
   };
 
   /* Whether a spot is entirely on screen at the current view. */
@@ -126,7 +116,6 @@ export function viewport(of: Viewing) {
     onto,
     scaleBy,
     onWheel,
-    pointing,
     shows,
   };
 }

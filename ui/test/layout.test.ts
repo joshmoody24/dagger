@@ -1,4 +1,10 @@
-/* Runs on a saved review, so no browser, repository or language server is needed. */
+/* Runs on a saved review, so no browser, repository or language server is needed. The
+ * review is pinned to one commit of this repository; regenerate it when the output shape
+ * changes, from the repo root:
+ *
+ *   ./target/debug/dagger --json commits ea9d673~1 ea9d673 \
+ *     | npx --prefix ui prettier --parser json > ui/test/review.json
+ */
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
