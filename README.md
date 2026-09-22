@@ -70,8 +70,8 @@ ripples = 1
 
 - `[snapshots]`: how revisions are laid out on disk
   - `adapter`: `git` is built in
-  - `settings.trunk`: what a branch is compared against. Defaults to the remote's default branch.
-  - `settings.carry_ignored`: link ignored files (build output, installed packages) into each snapshot so language servers can resolve imports. Default true.
+  - `settings.trunk` (`git`): what a branch is compared against. Defaults to the remote's default branch.
+  - `settings.carry_ignored` (`git`): link ignored files (build output, installed packages) into each snapshot so language servers can resolve imports. Default true.
 - `[[extractors]]`: the extractor adapters that read the code, one per language
   - `adapter`: `rust` and `lsp` are built in
   - `include`: globs assigning files to this extractor adapter. A file matched by two is assigned to the later one. Files assigned to none are compared whole.
