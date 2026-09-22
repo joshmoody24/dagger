@@ -11,8 +11,14 @@ use tiny_http::{Header, Request, Response, Server, StatusCode};
 
 static PAGE: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../ui/dist");
 
+/// Always the same port when it's free, so the address can be bookmarked and browser
+/// extensions can be told about it. Only when it's taken does any free port do.
+const PORT: u16 = 4207;
+
 pub fn serve(repo: &Path, asked: Vec<String>) -> Result<()> {
-    let server = Server::http("127.0.0.1:0").map_err(|error| anyhow::anyhow!("{error}"))?;
+    let server = Server::http(("127.0.0.1", PORT))
+        .or_else(|_| Server::http("127.0.0.1:0"))
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
     let url = format!("http://{}/", server.server_addr());
     eprintln!("{url}");
     if let Err(error) = open::that(&url) {
