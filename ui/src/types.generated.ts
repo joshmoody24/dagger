@@ -159,7 +159,13 @@ at: number, } } | { "two_of_one_name": { locator: Locator, times: number, } } | 
  */
 at: Array<number>, } };
 
-export type Review = { definitions: { [key in Identity]: Definition }, 
+export type Review = { 
+/**
+ * What the commit under review is called, when whoever laid out the snapshots could
+ * say. Not dagger's to work out — a directory has no commit message, only the
+ * adapter that read the history knows whether there was one.
+ */
+title: string | null, definitions: { [key in Identity]: Definition }, 
 /**
  * What to read, in order. Whatever a step names is worth reading; everything else in
  * `definitions` is here to be drawn around it.

@@ -79,6 +79,7 @@ export function digest(raw: Raw): Review {
   }
 
   return {
+    title: raw.title,
     definitions,
     steps: raw.reading,
     edges: raw.edges,

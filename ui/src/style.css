@@ -149,6 +149,19 @@ header {
   padding: 12px 16px 8px;
   flex: none;
 }
+/* Whatever the commit under review calls itself. Not every reading has one — dagger's own
+ * model of a change has no commit message to read — so it's only ever here when there was
+ * something to show. Kept quiet: it names the page, it isn't the point of it. */
+.rt {
+  margin: 0 0 6px;
+  font: 400 12.5px/1.6 var(--sans);
+  /* Muted, not ink: ink is a theme's colour for a name in code, which in a high-contrast
+   * theme is gold. Muted is its plain foreground — the white the count beside this wears. */
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* One row, laid out rather than floated: the count and the warning sat on top of each
  * other when both were taken out of the flow. */
 .t {
@@ -610,7 +623,10 @@ kbd {
     max-width: 80vw;
     flex: none;
     border-radius: 0;
-    border-top: 0;
+    /* Beside the graph, the window frames its right and bottom and the left edge is
+     * drawn — so without this the top was the one edge left open, sitting against the
+     * header with nothing to say where the sheet began. */
+    border-top: 1px solid var(--rule);
     border-left: 1px solid var(--rule);
     box-shadow: none;
     transition: none;

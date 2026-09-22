@@ -67,6 +67,8 @@ export interface Definition {
 }
 
 export interface Review {
+  /** What the commit under review is called, when the adapter that read it could say. */
+  title: string | null;
   definitions: Map<Identity, Definition>;
   steps: Step[];
   edges: Edge[];

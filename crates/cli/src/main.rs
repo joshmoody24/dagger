@@ -142,7 +142,7 @@ fn main() -> Result<()> {
     }
 
     let claims = claims(&repo, &config)?;
-    let (before_rev, after_rev) = revisions(&repo, &config, &args)?;
+    let (before_rev, after_rev, title) = revisions(&repo, &config, &args)?;
     status(&format!("comparing {before_rev} to {after_rev}"));
 
     let before = lay_out(&repo, &config, &before_rev)?;
@@ -160,21 +160,26 @@ fn main() -> Result<()> {
             (&before_rev, &before),
             (&after_rev, &after),
             &args,
+            title,
         )
     }
 }
 
 /// What to compare. The user's word first, then whatever the snapshot adapter thinks is
 /// worth looking at, and failing both, the last commit.
-fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, String)> {
+fn revisions(
+    repo: &Path,
+    config: &Config,
+    args: &Args,
+) -> Result<(String, String, Option<String>)> {
     match (args.asked.as_slice(), &config.snapshots) {
         ([], _) => {}
         (asked, Some(snapshots)) => {
             let found = adapter::revisions(repo, snapshots, asked)?;
-            return Ok((found.before, found.after));
+            return Ok((found.before, found.after, found.title));
         }
         // Without an adapter there's nobody to ask, so two directories is all this can be.
-        ([before, after], None) => return Ok((before.clone(), after.clone())),
+        ([before, after], None) => return Ok((before.clone(), after.clone(), None)),
         (_, None) => bail!(
             "no snapshot adapter is configured in {}, so name two directories",
             config::FILE
@@ -195,8 +200,8 @@ fn revisions(repo: &Path, config: &Config, args: &Args) -> Result<(String, Strin
     };
 
     Ok(match suggested {
-        Some(revisions) => (revisions.before, revisions.after),
-        None => ("HEAD~1".to_string(), "HEAD".to_string()),
+        Some(revisions) => (revisions.before, revisions.after, revisions.title),
+        None => ("HEAD~1".to_string(), "HEAD".to_string(), None),
     })
 }
 
@@ -263,6 +268,7 @@ fn compare(
     before: (&str, &adapter::Snapshot),
     after: (&str, &adapter::Snapshot),
     args: &Args,
+    title: Option<String>,
 ) -> Result<()> {
     let changed = assign::not_ignored(&config.review.ignore, differing(before.1, after.1)?)?;
     status(&format!("{} files differ", changed.len()));
@@ -346,6 +352,7 @@ fn compare(
         &grouping,
         warnings,
         found,
+        title,
     );
 
     if args.json {

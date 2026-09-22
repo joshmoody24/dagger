@@ -83,6 +83,12 @@ pub enum Request {
 pub struct Revisions {
     pub before: String,
     pub after: String,
+    /// What the commit under review is called, when the adapter can say. A snapshot
+    /// adapter knows what "after" means in its own history — git reads it off the commit
+    /// message — and dagger's own model of a change has nothing of the kind to fall back
+    /// on, so this is only ever a suggestion, never required.
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 /// One file that differs, and the byte ranges inside it that do.

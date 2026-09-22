@@ -94,6 +94,10 @@ pub struct Definition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct Review {
+    /// What the commit under review is called, when whoever laid out the snapshots could
+    /// say. Not dagger's to work out — a directory has no commit message, only the
+    /// adapter that read the history knows whether there was one.
+    pub title: Option<String>,
     pub definitions: BTreeMap<Identity, Definition>,
     /// What to read, in order. Whatever a step names is worth reading; everything else in
     /// `definitions` is here to be drawn around it.
@@ -120,6 +124,7 @@ pub fn review(
     grouping: &Grouping,
     notes: Vec<Warning>,
     found: Vec<Diagnostic>,
+    title: Option<String>,
 ) -> Review {
     let mut findings = found;
     let changes: BTreeMap<Identity, Change> = definitions
@@ -199,6 +204,7 @@ pub fn review(
         .collect();
 
     Review {
+        title,
         groups: settled(grouping, &kept, &edges),
         grouping: (!grouping.name.is_empty()).then(|| grouping.name.clone()),
         definitions: kept,
@@ -444,6 +450,7 @@ mod tests {
             &Grouping::default(),
             Vec::new(),
             Vec::new(),
+            None,
         )
     }
 

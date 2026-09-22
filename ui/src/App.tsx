@@ -8,7 +8,13 @@ import {
   onMount,
   Show,
 } from "solid-js";
-import { ChartColumn, Info, TriangleAlert, Waves } from "lucide-solid";
+import {
+  ArrowRight,
+  ChartColumn,
+  Info,
+  TriangleAlert,
+  Waves,
+} from "lucide-solid";
 import { Graph } from "./Graph.tsx";
 import { Reading } from "./Reading.tsx";
 import type { Box, Identity, Raw } from "./dagger.ts";
@@ -79,6 +85,9 @@ export function App(props: { raw: Raw }) {
   const [read, setRead] = createSignal<Set<Identity>>(new Set());
   const [worriesOpen, setWorriesOpen] = createSignal(false);
   const [costOpen, setCostOpen] = createSignal(false);
+  /* Whether to draw where the reading goes next. Off to begin with: it's a hint about what's
+   * coming, and a reader working down the list already knows. */
+  const [showNext, setShowNext] = createSignal(false);
 
   /* Narrow enough that the sheet has to cover the graph rather than sit beside it. The
    * sheet is then a drawer with three heights, and the graph is only worth looking at while
@@ -301,6 +310,9 @@ export function App(props: { raw: Raw }) {
   return (
     <>
       <header>
+        <Show when={whole().title}>
+          <h1 class="rt">{whole().title}</h1>
+        </Show>
         <div class="t">
           <span class="prog">
             {at() + 1}/{steps().length}
@@ -339,6 +351,18 @@ export function App(props: { raw: Raw }) {
             <ChartColumn size={17} />
           </button>
 
+          {/* The arrow to what's read next, and the node it lands on. Drawn only when
+           * asked for, since it says what's coming rather than what's here. */}
+          <button
+            class={`worry${showNext() ? " on" : ""}`}
+            onClick={() => setShowNext((was) => !was)}
+            title="Show where the reading goes next"
+            aria-label="Show where the reading goes next"
+            aria-pressed={showNext()}
+          >
+            <ArrowRight size={17} />
+          </button>
+
           {/* How far out what the change reached is shown. The number is the point — a
            * reader turning it down wants to know what they've turned it down to — so it
            * sits beside the mark rather than hiding in a tooltip. */}
@@ -367,7 +391,7 @@ export function App(props: { raw: Raw }) {
             review={review()}
             laid={laid()}
             here={here()}
-            next={next()}
+            next={showNext() ? next() : null}
             read={read()}
             box={box()}
             onOpen={goTo}

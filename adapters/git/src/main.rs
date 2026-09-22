@@ -116,14 +116,17 @@ const CURRENT: &str = "current";
 fn worth_reviewing() -> Result<Revisions> {
     let dirty = !listing(&["status", "--porcelain", "-z"])?.is_empty();
     Ok(if dirty {
+        // Nothing committed means nothing to read a message off.
         Revisions {
             before: "HEAD".to_string(),
             after: CURRENT.to_string(),
+            title: None,
         }
     } else {
         Revisions {
             before: "HEAD~1".to_string(),
             after: "HEAD".to_string(),
+            title: subject("HEAD"),
         }
     })
 }
@@ -217,8 +220,17 @@ fn resolve(asked: &[String], settings: &Settings) -> Result<Revisions> {
 
     Ok(Revisions {
         before,
+        title: subject(&right),
         after: right,
     })
+}
+
+/// The commit's own one-line description of itself, when it has one to read. `current`
+/// isn't a commit, so there's nothing here for it either.
+fn subject(commit: &str) -> Option<String> {
+    say(&["log", "-1", "--format=%s", commit])
+        .ok()
+        .filter(|line| !line.is_empty())
 }
 
 /// What branches here are cut from.
