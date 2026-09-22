@@ -18,10 +18,7 @@ pub fn glyph(change: &Change) -> char {
 }
 
 pub fn name(definition: &Definition) -> String {
-    let occurrence = definition.sides.latest();
-    let mut path = occurrence.locator.scope.clone();
-    path.push(occurrence.locator.name.clone());
-    path.join("::")
+    definition.sides.latest().locator.to_string()
 }
 
 /// Write errors are ignored because a reader quitting a pager closes the pipe, and that

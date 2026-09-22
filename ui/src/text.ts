@@ -32,11 +32,9 @@ export function stitch(occurrence: Occurrence | null): Line[] | null {
 
 /** Blank lines at either end are the space around a definition, not part of it. */
 function trimmed(lines: Line[]) {
-  let from = 0;
-  let until = lines.length;
-  while (from < until && !lines[from].text.trim()) from += 1;
-  while (until > from && !lines[until - 1].text.trim()) until -= 1;
-  return lines.slice(from, until);
+  const written = (line: Line) => Boolean(line.text.trim());
+  const from = lines.findIndex(written);
+  return from < 0 ? [] : lines.slice(from, lines.findLastIndex(written) + 1);
 }
 
 /* The first line starts at the name, not the margin, so it lacks the indentation the lines
@@ -59,12 +57,11 @@ function straighten(lines: Line[]) {
 
 /* Names that appear exactly once, so the highlighter can link them. Linking the wrong one
  * is worse than linking nothing. */
-export function namesIn(review: Review) {
-  const seen = new Map<string, Identity | null>();
-  for (const definition of review.definitions.values()) {
-    seen.set(definition.name, seen.has(definition.name) ? null : definition.id);
-  }
-  const only = new Map<string, Identity>();
-  for (const [name, id] of seen) if (id !== null) only.set(name, id);
-  return only;
+export function namesIn(review: Review): Map<string, Identity> {
+  const named = Map.groupBy(review.definitions.values(), (one) => one.name);
+  return new Map(
+    [...named].flatMap(([name, ones]): [string, Identity][] =>
+      ones.length === 1 ? [[name, ones[0].id]] : [],
+    ),
+  );
 }

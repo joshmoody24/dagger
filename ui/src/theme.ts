@@ -20,7 +20,7 @@ const WEARING: Record<string, () => Promise<{ default: Theme }>> = {
 };
 
 /* Shiki's shape, loosely. A theme may leave out anything. */
-interface Theme {
+export interface Theme {
   type?: string;
   colors?: Record<string, string>;
   tokenColors?: {
@@ -155,11 +155,10 @@ function paint(theme: Theme, root: HTMLElement) {
 
 /* First rule for the scope that actually sets a foreground. */
 function scoped(theme: Theme, scope: string) {
-  for (const rule of theme.tokenColors || []) {
-    const scopes = ([] as string[]).concat(rule.scope || []);
-    if (scopes.includes(scope) && rule.settings && rule.settings.foreground) {
-      return rule.settings.foreground;
-    }
-  }
-  return null;
+  const rule = (theme.tokenColors || []).find(
+    (rule) =>
+      ([] as string[]).concat(rule.scope || []).includes(scope) &&
+      rule.settings?.foreground,
+  );
+  return rule?.settings?.foreground ?? null;
 }

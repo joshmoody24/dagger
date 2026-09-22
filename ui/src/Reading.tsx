@@ -15,6 +15,11 @@ import { dressing, wearing } from "./theme.ts";
 
 type Names = Map<string, Identity>;
 
+/** How far the drawer is open on a narrow screen. */
+export type Sheet = "closed" | "half" | "full";
+/** Where the sheet sits: a column on a wide screen, a drawer on a narrow one. */
+export type Facing = "beside" | "away" | Sheet;
+
 interface ReadingProps {
   review: Review;
   here: Identity | null;
@@ -22,7 +27,7 @@ interface ReadingProps {
   at: number;
   names: Names;
   read: boolean;
-  sheet: string;
+  sheet: Facing;
   width: number;
   onStep: (by: number) => void;
   onRead: (by: number) => void;
@@ -86,126 +91,116 @@ export function Reading(props: ReadingProps) {
 
   return (
     <Show when={definition()}>
-      <aside
-        class={`sheet ${props.sheet}`}
-        style={
-          props.sheet === "beside" && props.width
-            ? { width: `${props.width}px` }
-            : undefined
-        }
-      >
-        <Show when={props.sheet === "beside"}>
-          <div class="wider" onPointerDown={widen} />
-        </Show>
-        <div class="sh">
-          <Show when={definition()}>
-            {(one) => (
-              <b class={`ch ${TINT[one().mark]}`}>{MARK[one().mark]}</b>
-            )}
-          </Show>
-          <h2>{definition()?.path ?? ""}</h2>
-          <button
-            class="ib grip"
-            onClick={() => props.onExpand()}
-            aria-label={props.sheet === "full" ? "Shrink" : "Expand"}
-          >
-            {props.sheet === "full" ? "⌄" : "⌃"}
-          </button>
-          <button
-            class="ib grip"
-            onClick={() => props.onClose()}
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-
-        <div class="sm">
-          <Show when={definition()}>
-            {(one) => (
-              <About
-                definition={one()}
-                because={because()}
-                uses={uses()}
-                step={props.step}
-                review={props.review}
-                onOpen={props.onOpen}
-              />
-            )}
-          </Show>
-        </div>
-
-        <div
-          class="sb"
-          ref={(pane) => {
-            sheet = pane;
-            props.onPane(pane);
-          }}
+      {(one) => (
+        <aside
+          class={`sheet ${props.sheet}`}
+          style={
+            props.sheet === "beside" && props.width
+              ? { width: `${props.width}px` }
+              : undefined
+          }
         >
-          <Show when={definition()}>
-            {(one) => (
-              <Diff
-                definition={one()}
-                names={props.names}
-                onOpen={props.onOpen}
-              />
-            )}
+          <Show when={props.sheet === "beside"}>
+            <div class="wider" onPointerDown={widen} />
           </Show>
-        </div>
-
-        <div class="nav">
-          <div class="pair">
+          <div class="sh">
+            <b class={`ch ${TINT[one().mark]}`}>{MARK[one().mark]}</b>
+            <h2>{one().path}</h2>
             <button
-              class="by"
-              disabled={props.at === 0}
-              onClick={() => props.onStep(-1)}
-              aria-label="Back, without marking"
+              class="ib grip"
+              onClick={() => props.onExpand()}
+              aria-label={props.sheet === "full" ? "Shrink" : "Expand"}
             >
-              <span class="gl">back</span>
-              <kbd>p</kbd>
+              {props.sheet === "full" ? "⌄" : "⌃"}
             </button>
             <button
-              class="by"
-              disabled={props.at === props.review.steps.length - 1}
-              onClick={() => props.onStep(1)}
-              aria-label="Next, without marking"
+              class="ib grip"
+              onClick={() => props.onClose()}
+              aria-label="Close"
             >
-              <span class="gl">next</span>
-              <kbd>n</kbd>
-            </button>
-            <button
-              class={`pos${props.read ? " done" : ""}`}
-              onClick={() => props.onToggle()}
-              aria-label={
-                props.read ? "Viewed. Press to unmark" : "Not viewed yet"
-              }
-            >
-              <span class="gl">
-                {props.read ? "✓ " : ""}
-                {props.at + 1}/{props.review.steps.length}
-              </span>
-              <kbd>m</kbd>
-            </button>
-            <button
-              class="go"
-              disabled={props.at === 0}
-              onClick={() => props.onRead(-1)}
-              aria-label="Viewed, and back"
-            >
-              <span class="gl">✓ back</span>
-              <kbd>h</kbd>
-            </button>
-            <button
-              class="go"
-              onClick={() => props.onRead(1)}
-              aria-label="Viewed, and next"
-            >
-              <span class="gl">✓ next</span>
-              <kbd>l</kbd>
+              ×
             </button>
           </div>
-        </div>
-      </aside>
+
+          <div class="sm">
+            <About
+              definition={one()}
+              because={because()}
+              uses={uses()}
+              step={props.step}
+              review={props.review}
+              onOpen={props.onOpen}
+            />
+          </div>
+
+          <div
+            class="sb"
+            ref={(pane) => {
+              sheet = pane;
+              props.onPane(pane);
+            }}
+          >
+            <Diff
+              definition={one()}
+              names={props.names}
+              onOpen={props.onOpen}
+            />
+          </div>
+
+          <div class="nav">
+            <div class="pair">
+              <button
+                class="by"
+                disabled={props.at === 0}
+                onClick={() => props.onStep(-1)}
+                aria-label="Back, without marking"
+              >
+                <span class="gl">back</span>
+                <kbd>p</kbd>
+              </button>
+              <button
+                class="by"
+                disabled={props.at === props.review.steps.length - 1}
+                onClick={() => props.onStep(1)}
+                aria-label="Next, without marking"
+              >
+                <span class="gl">next</span>
+                <kbd>n</kbd>
+              </button>
+              <button
+                class={`pos${props.read ? " done" : ""}`}
+                onClick={() => props.onToggle()}
+                aria-label={
+                  props.read ? "Viewed. Press to unmark" : "Not viewed yet"
+                }
+              >
+                <span class="gl">
+                  {props.read ? "✓ " : ""}
+                  {props.at + 1}/{props.review.steps.length}
+                </span>
+                <kbd>m</kbd>
+              </button>
+              <button
+                class="go"
+                disabled={props.at === 0}
+                onClick={() => props.onRead(-1)}
+                aria-label="Viewed, and back"
+              >
+                <span class="gl">✓ back</span>
+                <kbd>h</kbd>
+              </button>
+              <button
+                class="go"
+                onClick={() => props.onRead(1)}
+                aria-label="Viewed, and next"
+              >
+                <span class="gl">✓ next</span>
+                <kbd>l</kbd>
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
     </Show>
   );
 }
@@ -300,12 +295,13 @@ function Diff(props: {
       stitch(props.definition.before),
       stitch(props.definition.after),
     ];
-    if (!was && !is) return [];
-    const all: Shown[] = !was
-      ? is!.map((line) => ({ mark: "+" as const, line }))
-      : !is
-        ? was.map((line) => ({ mark: "−" as const, line }))
-        : compare(was, is);
+    const all: Shown[] =
+      was && is
+        ? compare(was, is)
+        : [
+            ...(was ?? []).map((line) => ({ mark: "−" as const, line })),
+            ...(is ?? []).map((line) => ({ mark: "+" as const, line })),
+          ];
     return focused(all);
   });
 

@@ -55,10 +55,6 @@ impl Change {
     }
 }
 
-fn part_text(occ: &Occurrence, part: Part) -> Option<String> {
-    occ.text_of(part)
-}
-
 /// Landed somewhere else. A part moving on its own counts too, the way a C declaration
 /// can migrate to a different header.
 fn moved(before: &Occurrence, after: &Occurrence) -> bool {
@@ -76,7 +72,7 @@ fn changed_parts(before: &Occurrence, after: &Occurrence) -> BTreeSet<Part> {
         .keys()
         .chain(after.parts.keys())
         .copied()
-        .filter(|&part| part_text(before, part) != part_text(after, part))
+        .filter(|&part| before.text_of(part) != after.text_of(part))
         .collect()
 }
 
@@ -84,19 +80,20 @@ fn changed_parts(before: &Occurrence, after: &Occurrence) -> BTreeSet<Part> {
 /// tooling's contract. Any one is enough. The contract can be a summary (hover text) that
 /// stays the same while the declaration changed, so it must not overrule the written text.
 fn contract_changed(before: &Occurrence, after: &Occurrence) -> bool {
-    let told = match (before.contract.as_deref(), after.contract.as_deref()) {
-        (Some(before), Some(after)) => before != after,
-        _ => false,
-    };
+    let told = before
+        .contract
+        .as_deref()
+        .zip(after.contract.as_deref())
+        .is_some_and(|(before, after)| before != after);
 
-    told || part_text(before, Part::Type) != part_text(after, Part::Type)
+    told || before.text_of(Part::Type) != after.text_of(Part::Type)
         || before.locator.name != after.locator.name
 }
 
-pub fn classify(def: &Definition) -> (Change, Vec<Diagnostic>) {
+pub fn classify(def: &Definition) -> (Change, Option<Diagnostic>) {
     match &def.sides {
-        Sides::Added(_) => (Change::Added, Vec::new()),
-        Sides::Removed(_) => (Change::Removed, Vec::new()),
+        Sides::Added(_) => (Change::Added, None),
+        Sides::Removed(_) => (Change::Removed, None),
         Sides::Kept { before, after } => {
             let lopsided = before.contract.is_some() != after.contract.is_some();
             let change = Change::Kept(Edits {
@@ -104,14 +101,10 @@ pub fn classify(def: &Definition) -> (Change, Vec<Diagnostic>) {
                 moved: moved(before, after),
                 parts: changed_parts(before, after),
             });
-            let diagnostics = if lopsided {
-                vec![Diagnostic::LopsidedContract {
-                    definition: def.identity,
-                }]
-            } else {
-                Vec::new()
-            };
-            (change, diagnostics)
+            let diagnostic = lopsided.then_some(Diagnostic::LopsidedContract {
+                definition: def.identity,
+            });
+            (change, diagnostic)
         }
     }
 }
@@ -122,7 +115,7 @@ mod tests {
     use crate::model::Identity;
     use crate::testing::{occurrence, piece};
 
-    fn classify_sides(sides: Sides) -> (Change, Vec<Diagnostic>) {
+    fn classify_sides(sides: Sides) -> (Change, Option<Diagnostic>) {
         classify(&Definition {
             identity: Identity(0),
             sides,
@@ -288,12 +281,12 @@ mod tests {
         before.contract = Some("parseId(s: string): number".to_string());
         let after = occurrence("parseId", &[(Part::Type, "sig")]);
 
-        let (_, diagnostics) = classify_sides(Sides::Kept { before, after });
+        let (_, diagnostic) = classify_sides(Sides::Kept { before, after });
         assert_eq!(
-            diagnostics,
-            vec![Diagnostic::LopsidedContract {
+            diagnostic,
+            Some(Diagnostic::LopsidedContract {
                 definition: Identity(0)
-            }]
+            })
         );
     }
 }

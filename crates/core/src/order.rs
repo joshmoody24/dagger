@@ -8,7 +8,7 @@
 
 use crate::group::Grouping;
 use crate::model::{self, Identity, Locator, Role};
-use crate::review::Edge;
+use crate::review::{Edge, placed};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -172,9 +172,7 @@ fn relations(
     let mut leans_on = vec![BTreeSet::new(); count];
     let mut holds_up = vec![BTreeSet::new(); count];
     let mut lean = |from: Identity, to: Identity| {
-        if let (Some(&from), Some(&to)) = (places.get(&from), places.get(&to))
-            && from != to
-        {
+        if let Some((from, to)) = placed(places, from, to) {
             leans_on[from].insert(to);
             holds_up[to].insert(from);
         }
@@ -222,12 +220,13 @@ fn enclosing(definitions: &[model::Definition]) -> BTreeMap<Identity, Vec<Identi
     shown
         .iter()
         .map(|(identity, (file, _, parent))| {
-            let mut above = Vec::new();
-            let mut held = *parent;
-            while let Some(&up) = held.and_then(|name| by_name.get(&(*file, name))) {
-                above.push(up);
-                held = shown.get(&up).and_then(|(_, _, parent)| *parent);
-            }
+            let named = |parent: Option<&Locator>| {
+                parent.and_then(|name| by_name.get(&(*file, name)).copied())
+            };
+            let above = std::iter::successors(named(*parent), |up| {
+                named(shown.get(up).and_then(|(_, _, parent)| *parent))
+            })
+            .collect();
             (*identity, above)
         })
         .collect()
@@ -249,13 +248,6 @@ fn homes(
         })
         .collect();
 
-    // Neither a file name nor a path can contain a null, so the two halves can't be confused.
-    let named = |file: &str, locator: &Locator| {
-        let mut path = locator.scope.clone();
-        path.push(locator.name.clone());
-        format!("{file}\0{}", path.join("::"))
-    };
-
     members
         .iter()
         .map(|identity| {
@@ -264,7 +256,8 @@ fn homes(
                 .and_then(|above| above.last())
                 .unwrap_or(identity);
             match shown.get(outermost) {
-                Some((file, locator)) => named(file, locator),
+                // Neither a file name nor a path can contain a null, so the two halves can't be confused.
+                Some((file, locator)) => format!("{file}\0{locator}"),
                 None => String::new(),
             }
         })

@@ -48,24 +48,18 @@ function diffing(a: Line[], b: Line[]): Shown[] {
  * big comparison into many small ones.
  */
 function split(a: Line[], b: Line[]): Shown[] {
-  const counted = (lines: Line[]) => {
-    const seen = new Map<string, number>();
-    for (const line of lines)
-      seen.set(line.text, (seen.get(line.text) ?? 0) + 1);
-    return seen;
-  };
-  const [inA, inB] = [counted(a), counted(b)];
+  const once = (lines: Line[]) =>
+    new Map(
+      [...Map.groupBy(lines.entries(), ([, line]) => line.text)].flatMap(
+        ([text, found]): [string, number][] =>
+          found.length === 1 ? [[text, found[0][0]]] : [],
+      ),
+    );
+  const [inA, inB] = [once(a), once(b)];
 
-  const whereB = new Map<string, number>();
-  b.forEach((line, at) => {
-    if (inB.get(line.text) === 1) whereB.set(line.text, at);
-  });
-
-  const pairs: [number, number][] = [];
-  a.forEach((line, at) => {
-    const there = whereB.get(line.text);
-    if (inA.get(line.text) === 1 && there !== undefined)
-      pairs.push([at, there]);
+  const pairs = [...inA].flatMap(([text, at]): [number, number][] => {
+    const there = inB.get(text);
+    return there === undefined ? [] : [[at, there]];
   });
 
   const anchors = rising(pairs);
@@ -161,9 +155,11 @@ function exactly(a: Line[], b: Line[]): Shown[] {
       shown.push({ mark: "+", line: b[j++] });
     }
   }
-  while (i < a.length) shown.push({ mark: "−", line: a[i++] });
-  while (j < b.length) shown.push({ mark: "+", line: b[j++] });
-  return shown;
+  return [
+    ...shown,
+    ...a.slice(i).map((line) => ({ mark: "−" as const, line })),
+    ...b.slice(j).map((line) => ({ mark: "+" as const, line })),
+  ];
 }
 
 /* Lines of context around a change. A definition can be a 10,000-line file, and far from a

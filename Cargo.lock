@@ -115,6 +115,7 @@ dependencies = [
 name = "dagger-protocol"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "dagger-core",
  "serde",
  "serde_json",

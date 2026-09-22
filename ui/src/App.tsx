@@ -16,7 +16,7 @@ import {
   Workflow,
 } from "lucide-solid";
 import { Graph } from "./Graph.tsx";
-import { Reading } from "./Reading.tsx";
+import { Reading, type Sheet } from "./Reading.tsx";
 import type { Identity, Raw } from "./dagger.ts";
 import { digest } from "./digest.ts";
 import { layout } from "./layout.ts";
@@ -65,8 +65,9 @@ export function App(props: { raw: Raw }) {
 
   const [at, setAt] = createSignal(0);
   const [read, setRead] = createSignal<Set<Identity>>(new Set());
-  const [worriesOpen, setWorriesOpen] = createSignal(false);
-  const [costOpen, setCostOpen] = createSignal(false);
+  const [panel, setPanel] = createSignal<"worries" | "cost" | null>(null);
+  const toggle = (which: "worries" | "cost") =>
+    setPanel((was) => (was === which ? null : which));
   const [showNext, setShowNext] = createSignal(false);
 
   /* The diff pane, handed up by Reading so j/k can scroll it. */
@@ -102,7 +103,7 @@ export function App(props: { raw: Raw }) {
   onCleanup(() => rolling && cancelAnimationFrame(rolling));
 
   const [wide, setWide] = createSignal(true);
-  const [sheet, setSheet] = createSignal("closed");
+  const [sheet, setSheet] = createSignal<Sheet>("closed");
 
   onMount(() => {
     const room = window.matchMedia("(min-width: 900px)");
@@ -202,14 +203,7 @@ export function App(props: { raw: Raw }) {
     t: () => void wear(another(wearing())),
     g: () => setAt(0),
     G: () => setAt(steps().length - 1),
-    Escape: () => {
-      if (!worriesOpen() && !costOpen()) {
-        shut();
-        return;
-      }
-      setWorriesOpen(false);
-      setCostOpen(false);
-    },
+    Escape: () => (panel() === null ? shut() : setPanel(null)),
   };
 
   const onKey = (event: KeyboardEvent) => {
@@ -255,10 +249,7 @@ export function App(props: { raw: Raw }) {
           <Show when={review().warnings.length}>
             <button
               class={`worry${hiding().length ? " bad" : ""}`}
-              onClick={() => {
-                setCostOpen(false);
-                setWorriesOpen((was) => !was);
-              }}
+              onClick={() => toggle("worries")}
               title={said()}
               aria-label={said()}
             >
@@ -270,10 +261,7 @@ export function App(props: { raw: Raw }) {
 
           <button
             class="worry"
-            onClick={() => {
-              setWorriesOpen(false);
-              setCostOpen((was) => !was);
-            }}
+            onClick={() => toggle("cost")}
             title="Cognitive load metrics"
             aria-label="Cognitive load metrics"
           >
@@ -344,8 +332,8 @@ export function App(props: { raw: Raw }) {
       </main>
 
       <Panel
-        open={costOpen()}
-        onClose={() => setCostOpen(false)}
+        open={panel() === "cost"}
+        onClose={() => setPanel(null)}
         title="Cognitive load metrics"
       >
         <ul>
@@ -359,8 +347,8 @@ export function App(props: { raw: Raw }) {
       </Panel>
 
       <Panel
-        open={worriesOpen()}
-        onClose={() => setWorriesOpen(false)}
+        open={panel() === "worries"}
+        onClose={() => setPanel(null)}
         title={
           hiding().length
             ? "This review might not be showing"

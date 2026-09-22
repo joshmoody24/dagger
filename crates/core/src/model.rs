@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::path::Path;
+
+/// A path a segment at a time, the way a scope is written.
+pub fn segments(path: &Path) -> Vec<String> {
+    path.components()
+        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+        .collect()
+}
 
 /// The pieces a definition's text is split into. A part can be missing when it
 /// doesn't apply, like a type alias that has no body.
@@ -46,6 +54,16 @@ pub struct Piece {
 pub struct Locator {
     pub scope: Vec<String>,
     pub name: String,
+}
+
+/// A name as somebody would write it.
+impl std::fmt::Display for Locator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for part in &self.scope {
+            write!(f, "{part}::")?;
+        }
+        write!(f, "{}", self.name)
+    }
 }
 
 /// Whether a definition can hold others. The page draws containers as boxes. The

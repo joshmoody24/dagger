@@ -1,5 +1,5 @@
 use crate::diagnostic::Diagnostic;
-use crate::model::{Definition, Identity, Locator, Occurrence, Part, Piece, Sides};
+use crate::model::{Definition, Identity, Locator, Occurrence, Piece, Sides};
 use crate::reference::{Mention, Reference, Site, Target};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -74,12 +74,15 @@ fn tangled(occurrence: &Occurrence) -> Option<Diagnostic> {
 
 /// Names more than one definition in a snapshot answers to.
 fn twins(occurrences: &[Occurrence]) -> Vec<Diagnostic> {
-    let mut times: BTreeMap<&Locator, usize> = BTreeMap::new();
-    for occurrence in occurrences {
-        *times.entry(&occurrence.locator).or_default() += 1;
-    }
-
-    times
+    occurrences
+        .iter()
+        .fold(
+            BTreeMap::<&Locator, usize>::new(),
+            |mut times, occurrence| {
+                *times.entry(&occurrence.locator).or_default() += 1;
+                times
+            },
+        )
         .into_iter()
         .filter(|(_, times)| *times > 1)
         .map(|(locator, times)| Diagnostic::TwoOfOneName {
@@ -91,22 +94,25 @@ fn twins(occurrences: &[Occurrence]) -> Vec<Diagnostic> {
 
 /// Which after-occurrence, if any, each before-occurrence turned into.
 fn pair_up(before: &[Occurrence], after: &[Occurrence]) -> Vec<Option<usize>> {
-    let mut after_by_locator: BTreeMap<&Locator, usize> = BTreeMap::new();
-    for (index, occurrence) in after.iter().enumerate() {
-        after_by_locator.entry(&occurrence.locator).or_insert(index);
-    }
+    // Reversed so the first of a name wins, since a later insert overwrites an earlier one.
+    let after_by_locator: BTreeMap<&Locator, usize> = after
+        .iter()
+        .enumerate()
+        .rev()
+        .map(|(index, occurrence)| (&occurrence.locator, index))
+        .collect();
 
-    let mut taken = vec![false; after.len()];
     let mut pairs: Vec<Option<usize>> = before
         .iter()
-        .map(|occurrence| {
-            let found = after_by_locator.get(&occurrence.locator).copied();
-            if let Some(index) = found {
-                taken[index] = true;
-            }
-            found
-        })
+        .map(|occurrence| after_by_locator.get(&occurrence.locator).copied())
         .collect();
+    let mut taken = pairs
+        .iter()
+        .flatten()
+        .fold(vec![false; after.len()], |mut taken, &index| {
+            taken[index] = true;
+            taken
+        });
 
     rescue_renames(before, after, &mut pairs, &mut taken);
     pairs
@@ -120,27 +126,23 @@ fn rescue_renames(
     pairs: &mut [Option<usize>],
     taken: &mut [bool],
 ) {
-    let leftovers = |count: usize, used: &dyn Fn(usize) -> bool| {
-        (0..count).filter(|index| !used(*index)).collect::<Vec<_>>()
-    };
-    let earlier = leftovers(before.len(), &|index| pairs[index].is_some());
-    let later = leftovers(after.len(), &|index| taken[index]);
+    let earlier: Vec<usize> = (0..before.len())
+        .filter(|&index| pairs[index].is_none())
+        .collect();
+    let later: Vec<usize> = (0..after.len()).filter(|&index| !taken[index]).collect();
 
-    let mut candidates: Vec<(usize, usize, usize)> = Vec::new();
-    for &was in &earlier {
-        for &is in &later {
-            // A container and an item are never the same definition, however alike the
-            // text; one that changed role would be drawn from whichever side was asked.
-            if before[was].role != after[is].role {
-                continue;
-            }
+    let mut candidates: Vec<(usize, usize, usize)> = earlier
+        .iter()
+        .flat_map(|&was| later.iter().map(move |&is| (was, is)))
+        // A container and an item are never the same definition, however alike the
+        // text; one that changed role would be drawn from whichever side was asked.
+        .filter(|&(was, is)| before[was].role == after[is].role)
+        .filter_map(|(was, is)| {
             let alike = likeness(&before[was], &after[is]);
-            if alike >= ALIKE_ENOUGH {
-                // Scaled to an integer so pairs sort without comparing floats.
-                candidates.push(((alike * 1000.0) as usize, was, is));
-            }
-        }
-    }
+            // Scaled to an integer so pairs sort without comparing floats.
+            (alike >= ALIKE_ENOUGH).then_some(((alike * 1000.0) as usize, was, is))
+        })
+        .collect();
 
     // Best first, so the most convincing pair claims its halves before a weaker one can.
     candidates.sort_by(|a, b| b.cmp(a));
@@ -156,16 +158,21 @@ fn rescue_renames(
 /// characters, so a reformat doesn't look like a rewrite and it's cheap for every pair.
 fn likeness(before: &Occurrence, after: &Occurrence) -> f64 {
     let lines = |occurrence: &Occurrence| {
-        let mut counted: BTreeMap<String, usize> = BTreeMap::new();
-        for (_, text) in text_of(occurrence) {
-            for line in text.lines() {
-                let line = line.trim();
-                if !line.is_empty() {
-                    *counted.entry(line.to_string()).or_default() += 1;
-                }
-            }
-        }
-        counted
+        occurrence
+            .parts
+            .keys()
+            .filter_map(|&part| occurrence.text_of(part))
+            .flat_map(|text| {
+                text.lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .fold(BTreeMap::<String, usize>::new(), |mut counted, line| {
+                *counted.entry(line).or_default() += 1;
+                counted
+            })
     };
 
     let (was, is) = (lines(before), lines(after));
@@ -184,14 +191,6 @@ fn likeness(before: &Occurrence, after: &Occurrence) -> f64 {
 
 /// Half the lines in common: the threshold git uses for renames. A matter of taste.
 const ALIKE_ENOUGH: f64 = 0.5;
-
-fn text_of(occurrence: &Occurrence) -> Vec<(Part, String)> {
-    occurrence
-        .parts
-        .keys()
-        .filter_map(|&part| occurrence.text_of(part).map(|text| (part, text)))
-        .collect()
-}
 
 fn build_definitions(
     pairs: Vec<Option<usize>>,

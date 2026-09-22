@@ -8,43 +8,30 @@ mod modules;
 
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Role};
 use dagger_core::prose::preamble;
 use dagger_core::reference::BinderId;
-use dagger_lsp_client::walk::{Reach, Source, Walk, Walked};
-use dagger_lsp_client::{Lines, Server};
-use dagger_protocol::{Changed, Note, Progress, Request, Response};
+use dagger_lsp_client::walk::{Opened, Reach, Source, Walk, Walked};
+use dagger_lsp_client::{Lines, Server, fenced};
+use dagger_protocol::{Changed, Described, Note, Progress, Request, Response};
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
-use std::io::{self, Read};
 use std::ops::Range;
 use std::path::Path;
 
 fn main() -> Result<()> {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input)?;
-    let request: Request = serde_json::from_str(&input).context("that isn't a dagger request")?;
-
-    let response = match answer(request) {
-        Ok(response) => response,
-        Err(error) => Response::Failed {
-            message: format!("{error:#}"),
-        },
-    };
-
-    println!("{}", serde_json::to_string(&response)?);
-    Ok(())
+    dagger_protocol::serve(answer)
 }
 
 fn answer(request: Request) -> Result<Response> {
     match request {
-        Request::Describe { settings } => Ok(Response::Described {
+        Request::Describe { settings } => Ok(Response::Described(Described {
             // Settings are checked here so a bad one is reported before any snapshot is laid out.
             include: settings_of(settings).map(|_| vec!["**/*.rs".to_string()])?,
             revisions: None,
             usage: Vec::new(),
-        }),
+        })),
         Request::Extract {
             dir,
             files,
@@ -83,20 +70,13 @@ fn files_to_walk() -> usize {
 /// Unknown settings are rejected rather than ignored, so a typo doesn't silently change
 /// the run.
 fn settings_of(settings: serde_json::Value) -> Result<Settings> {
-    let settings = if settings.is_null() {
-        json!({})
-    } else {
-        settings
-    };
-    serde_json::from_value(settings)
-        .context("dagger-rust was told something under settings that it doesn't know")
+    dagger_protocol::settings(
+        settings,
+        "dagger-rust was told something under settings that it doesn't know",
+    )
 }
 
-struct Parsed {
-    path: String,
-    lines: Lines,
-    found: Vec<items::Found>,
-}
+type Parsed = Opened<items::Found>;
 
 fn extract(
     dir: &Path,
@@ -165,24 +145,21 @@ fn extract(
         contracts,
         mut notes,
     } = walk.finish();
-    let parsed: BTreeMap<String, Parsed> = seen
-        .into_iter()
-        .map(|(path, (lines, found))| (path.clone(), Parsed { path, lines, found }))
-        .collect();
 
-    let mut occurrences: Vec<Occurrence> = parsed
+    let occurrences: Vec<Occurrence> = seen
         .values()
-        .flat_map(|file| file.found.iter().map(|found| occurrence(file, found)))
+        .flat_map(|file| {
+            file.items
+                .iter()
+                .map(|found| occurrence(file, found, &contracts))
+        })
         .collect();
-    for occurrence in occurrences.iter_mut() {
-        occurrence.contract = contracts.get(&occurrence.locator).cloned();
-    }
 
     notes.extend(source.modules.notes);
     eprintln!(
         "{}",
         Progress::Finished {
-            files: parsed.len(),
+            files: seen.len(),
             definitions: occurrences.len(),
         }
     );
@@ -213,11 +190,14 @@ impl Source for RustSource {
         path: &str,
     ) -> Result<(Lines, Vec<items::Found>)> {
         let parsed = parse(dir, path, &mut self.modules)?;
-        Ok((parsed.lines, parsed.found))
+        Ok((parsed.lines, parsed.items))
     }
 
+    /// The contract is the last fenced rust block before the `---` rule: the first block only
+    /// names the module, and past the rule doc examples are fenced rust too, so reading one
+    /// would make editing an example a breaking change.
     fn contract(&self, hover: &serde_json::Value) -> Option<String> {
-        signature(hover)
+        fenced(hover, Some("rust"))
     }
 }
 
@@ -228,15 +208,16 @@ fn parse(dir: &Path, path: &str, modules: &mut modules::Modules) -> Result<Parse
     let file = syn::parse_file(&source).with_context(|| format!("couldn't parse {path}"))?;
     let scope = modules.path_of(dir, path);
 
-    let mut found = items::module(&file.attrs, &file.items, &scope, 0..source.len(), false)
-        .into_iter()
-        .collect::<Vec<_>>();
-    found.extend(items::find(&file.items, &scope));
+    let mut found: Vec<items::Found> =
+        items::module(&file.attrs, &file.items, &scope, 0..source.len(), false)
+            .into_iter()
+            .chain(items::find(&file.items, &scope))
+            .collect();
     told(&source, &mut found);
 
-    Ok(Parsed {
+    Ok(Opened {
         path: path.to_string(),
-        found,
+        items: found,
         lines: Lines::new(&source),
     })
 }
@@ -271,35 +252,32 @@ fn told(source: &str, found: &mut [items::Found]) {
     }
 }
 
-fn occurrence(file: &Parsed, found: &items::Found) -> Occurrence {
+fn occurrence(
+    file: &Parsed,
+    found: &items::Found,
+    contracts: &BTreeMap<Locator, String>,
+) -> Occurrence {
     let parts = found
         .parts
         .iter()
         .map(|(part, ranges)| {
             let pieces = ranges
                 .iter()
-                .map(|range| Piece {
-                    text: file.lines.slice(range).to_string(),
-                    span: Span {
-                        start: range.start as u32,
-                        end: range.end as u32,
-                    },
-                    line: file.lines.position(range.start).0 + 1,
-                    file: file.path.clone(),
-                })
+                .map(|range| file.lines.piece(&file.path, range))
                 .collect();
             (*part, pieces)
         })
         .collect();
 
+    let locator = locator(found);
     Occurrence {
-        locator: locator(found),
+        contract: contracts.get(&locator).cloned(),
+        locator,
         role: role_of(found.kind),
-        parent: holding(file, found).map(locator),
+        parent: holding(file, found).map(self::locator),
         kind: found.kind.to_string(),
         file: file.path.clone(),
         parts,
-        contract: None,
     }
 }
 
@@ -315,7 +293,7 @@ fn role_of(kind: &str) -> Role {
 /// The smallest definition that covers this one. Read off spans rather than scope names:
 /// a method's scope names its type, not the `impl` block it sits in.
 fn holding<'a>(file: &'a Parsed, found: &items::Found) -> Option<&'a items::Found> {
-    file.found
+    file.items
         .iter()
         .filter(|other| other.covers != found.covers)
         .filter(|other| {
@@ -329,28 +307,4 @@ fn locator(found: &items::Found) -> Locator {
         scope: found.scope.clone(),
         name: found.name.clone(),
     }
-}
-
-/// The contract is the last fenced rust block before the `---` rule: the first block only
-/// names the module, and past the rule doc examples are fenced rust too, so reading one
-/// would make editing an example a breaking change.
-fn signature(hover: &serde_json::Value) -> Option<String> {
-    let markdown = hover["contents"]["value"].as_str()?;
-    let declaration = markdown.split("\n---").next().unwrap_or(markdown);
-    let mut blocks = Vec::new();
-    let mut current: Option<Vec<&str>> = None;
-
-    for line in declaration.lines() {
-        match (&mut current, line.starts_with("```")) {
-            (None, true) if line.starts_with("```rust") => current = Some(Vec::new()),
-            (Some(code), true) => {
-                blocks.push(code.join("\n"));
-                current = None;
-            }
-            (Some(code), false) => code.push(line),
-            _ => {}
-        }
-    }
-
-    blocks.into_iter().rfind(|block| !block.is_empty())
 }

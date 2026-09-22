@@ -3,6 +3,7 @@
 //! The crate name comes from the nearest Cargo.toml, and `src`, `lib.rs`, `main.rs` and
 //! `mod.rs` name no module, so a locator survives the crate moving directories.
 
+use dagger_core::model::segments;
 use dagger_protocol::Note;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -57,20 +58,15 @@ fn inside_crate(crate_dir: &Path, file: &Path) -> Vec<String> {
         return Vec::new();
     };
 
-    relative
-        .with_extension("")
-        .components()
-        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+    segments(&relative.with_extension(""))
+        .into_iter()
         .filter(|part| !matches!(part.as_str(), "src" | "lib" | "main" | "mod"))
         .collect()
 }
 
 /// No Cargo.toml anywhere above, so the path is all we have to go on.
 fn fallback(file: &Path) -> Vec<String> {
-    file.with_extension("")
-        .components()
-        .map(|part| part.as_os_str().to_string_lossy().into_owned())
-        .collect()
+    segments(&file.with_extension(""))
 }
 
 #[derive(Deserialize)]

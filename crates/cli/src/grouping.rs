@@ -4,7 +4,7 @@
 
 use crate::config::GroupingConfig;
 use dagger_core::group::{Grouping, Path as GroupPath};
-use dagger_core::model::Definition;
+use dagger_core::model::{Definition, segments};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -40,16 +40,10 @@ fn group_of(markers: &[String], dir: &Path, file: &str) -> GroupPath {
             .iter()
             .any(|marker| dir.join(here).join(marker).exists())
         {
-            return named(here);
+            return segments(here);
         }
         at = here.parent();
     }
 
-    Path::new(file).parent().map(named).unwrap_or_default()
-}
-
-fn named(dir: &Path) -> GroupPath {
-    dir.components()
-        .map(|part| part.as_os_str().to_string_lossy().into_owned())
-        .collect()
+    Path::new(file).parent().map(segments).unwrap_or_default()
 }

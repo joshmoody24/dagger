@@ -1,5 +1,6 @@
 import {
   createEffect,
+  createMemo,
   createSignal,
   For,
   onCleanup,
@@ -11,14 +12,12 @@ import { select } from "d3-selection";
 import { zoom as zooming, zoomIdentity, zoomTransform } from "d3-zoom";
 import type { Box, Edge, Identity, Laid, Review, Spot } from "./dagger.ts";
 import { MARK, TINT } from "./digest.ts";
-import { NODE_H, RADIUS, shorten } from "./layout.ts";
+import { BOX_FONT, FONT, RADIUS, shorten } from "./layout.ts";
 import { wearing } from "./theme.ts";
 
 const EDGE = 24;
 /* Max zoom. Past this the text is too big to be useful. */
 const CLOSEST = 4;
-const FONT = 14;
-const BOX_FONT = 12.5;
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 /* Drawn on a canvas rather than DOM elements: hundreds of SVG nodes ran at ~10fps in the
@@ -30,11 +29,7 @@ interface Point {
   y: number;
 }
 
-interface Touched {
-  node?: Identity;
-  box?: Box;
-  file: string;
-}
+type Touched = { node: Identity; file: string } | { box: Box; file: string };
 
 interface GraphProps {
   review: Review;
@@ -100,7 +95,7 @@ export function Graph(props: GraphProps) {
     zoomIdentity
       .translate(pane().width / 2, pane().height / 2)
       .scale(k)
-      .translate(-(spot.x + spot.w / 2), -(spot.y + (spot.h ?? NODE_H) / 2));
+      .translate(-(spot.x + spot.w / 2), -(spot.y + spot.h / 2));
 
   const closer = () => {
     const spot = spotOf(props.here);
@@ -130,35 +125,32 @@ export function Graph(props: GraphProps) {
 
   /* ---------------- what is where ---------------- */
 
-  const spotOf = (id: Identity | null): Spot | null => {
-    if (id === null) return null;
-    const node = props.laid.at.get(id);
-    return node ? { x: node.x, y: node.y, w: node.w, h: NODE_H } : null;
-  };
+  const spotOf = (id: Identity | null): Spot | null =>
+    id === null ? null : (props.laid.at.get(id) ?? null);
 
   const every = (boxes: Box[]): Box[] =>
     boxes.flatMap((box) => [box, ...every(box.boxes)]);
 
   /* Nodes win over boxes; the innermost box wins over its parents. */
-  const at = ({ x, y }: { x: number; y: number }): Touched | null => {
-    for (const [id, spot] of props.laid.at) {
-      if (
-        x >= spot.x &&
-        x <= spot.x + spot.w &&
-        y >= spot.y &&
-        y <= spot.y + NODE_H
-      ) {
-        return { node: id, file: props.review.definitions.get(id)?.file ?? "" };
-      }
+  const at = ({ x, y }: Point): Touched | null => {
+    const covers = (spot: Point & { w: number; h: number }) =>
+      x >= spot.x &&
+      x <= spot.x + spot.w &&
+      y >= spot.y &&
+      y <= spot.y + spot.h;
+
+    const node = [...props.laid.at].find(([, spot]) => covers(spot));
+    if (node) {
+      const [id] = node;
+      return { node: id, file: props.review.definitions.get(id)?.file ?? "" };
     }
 
-    let innermost: Box | null = null;
-    for (const box of every(props.laid.boxes)) {
-      if (x < box.x || x > box.x + box.w || y < box.y || y > box.y + box.h)
-        continue;
-      if (!innermost || box.w * box.h < innermost.w * innermost.h)
-        innermost = box;
-    }
+    const innermost = every(props.laid.boxes)
+      .filter(covers)
+      .reduce<Box | null>(
+        (best, box) => (!best || box.w * box.h < best.w * best.h ? box : best),
+        null,
+      );
     return innermost ? { box: innermost, file: innermost.key } : null;
   };
 
@@ -174,27 +166,27 @@ export function Graph(props: GraphProps) {
   const onPointerMove = (event: PointerEvent) => {
     const what = at(pointing(event));
     setOver(what ? what.file : null);
-    setTouching(what && what.node !== undefined ? what.node : null);
-    frame.style.cursor = what ? "pointer" : "grab";
-    frame.title =
-      what && what.node !== undefined
-        ? (props.review.definitions.get(what.node)?.path ?? "")
-        : "";
+    setTouching(what && "node" in what ? what.node : null);
+  };
+  const hint = () => {
+    const id = touching();
+    return id === null ? "" : (props.review.definitions.get(id)?.path ?? "");
   };
 
   const onClick = (event: MouseEvent) => {
     const what = at(pointing(event));
-    if (what?.node !== undefined) props.onOpen(what.node);
+    if (what && "node" in what) props.onOpen(what.node);
   };
 
   /* ---------------- drawing ---------------- */
 
-  /* Read from CSS variables so the theme stays the one place colours are defined. */
-  let paint: Record<string, string> = {};
-  const readPaint = () => {
+  /* Read from CSS variables so the theme stays the one place colours are defined.
+   * getComputedStyle forces a style flush, so only re-read the palette on theme change. */
+  const paint = createMemo((): Record<string, string> => {
+    void wearing();
     const had = getComputedStyle(document.documentElement);
     const of = (name: string) => had.getPropertyValue(`--${name}`).trim();
-    paint = {
+    return {
       paper: of("paper"),
       ink: of("ink"),
       muted: of("muted"),
@@ -207,7 +199,7 @@ export function Graph(props: GraphProps) {
       chg: of("chg"),
       aff: of("muted"),
     };
-  };
+  });
 
   let drawing = 0;
   const redraw = () => {
@@ -264,13 +256,13 @@ export function Graph(props: GraphProps) {
     /* Boxes are outline-only so nested boxes don't stack into ever-paler fills. */
     ink.setLineDash(deep ? [3, 3] : []);
     ink.lineWidth = under ? 1.4 : 1;
-    ink.strokeStyle = under ? paint.muted : paint.rule;
+    ink.strokeStyle = under ? paint().muted : paint().rule;
     round(box.x, box.y, box.w, box.h, radius);
     ink.stroke();
     ink.setLineDash([]);
 
     ink.font = `${BOX_FONT}px ${MONO}`;
-    ink.fillStyle = paint.muted;
+    ink.fillStyle = paint().muted;
     ink.fillText(box.label, box.x + 10, box.y + 16);
 
     for (const child of box.boxes) place(child, deep + 1);
@@ -283,11 +275,11 @@ export function Graph(props: GraphProps) {
     const soon = id === props.next;
     const read = props.read.has(id);
     const dim = near.size > 0 && !near.has(id) && !here && !soon;
-    const tint = paint[TINT[definition.mark]];
+    const tint = paint()[TINT[definition.mark]];
 
     /* Filled with the page colour so edges drawn behind don't cross the name. */
-    ink.fillStyle = paint.paper;
-    round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);
+    ink.fillStyle = paint().paper;
+    round(spot.x, spot.y, spot.w, spot.h, RADIUS.node);
     ink.fill();
 
     const under = id === touching();
@@ -303,12 +295,12 @@ export function Graph(props: GraphProps) {
               : 1;
 
     /* Outline and name share a colour; read nodes fade via alpha so both dim together. */
-    const edge = here ? paint.lean : soon ? paint.path : tint;
+    const edge = here ? paint().lean : soon ? paint().path : tint;
 
     ink.setLineDash(soon ? [5, 3] : []);
     ink.lineWidth = here ? 2 : soon ? 1.8 : under ? 2 : 1.2;
     ink.strokeStyle = edge;
-    round(spot.x, spot.y, spot.w, NODE_H, RADIUS.node);
+    round(spot.x, spot.y, spot.w, spot.h, RADIUS.node);
     ink.stroke();
     ink.setLineDash([]);
 
@@ -335,7 +327,7 @@ export function Graph(props: GraphProps) {
     const upwards = to.y <= from.y;
 
     ink.globalAlpha = touching ? 1 : near.size ? 0.3 : 0.85;
-    ink.strokeStyle = touching ? paint.lean : paint.faint;
+    ink.strokeStyle = touching ? paint().lean : paint().faint;
     ink.lineWidth = touching ? 1.5 : upwards ? 1 : 1.2;
     ink.setLineDash(upwards ? [] : [4, 3]);
     ink.beginPath();
@@ -354,8 +346,8 @@ export function Graph(props: GraphProps) {
 
     const [leaves, arrives] = closest(from, to);
     ink.globalAlpha = 0.55;
-    ink.strokeStyle = paint.path;
-    ink.fillStyle = paint.path;
+    ink.strokeStyle = paint().path;
+    ink.fillStyle = paint().path;
     ink.lineWidth = 1.8;
     ink.setLineDash([5, 3]);
     ink.beginPath();
@@ -397,7 +389,7 @@ export function Graph(props: GraphProps) {
   };
 
   const bend = (up: Spot, down: Spot) => {
-    const [x1, y1] = [up.x + up.w / 2, up.y + (up.h ?? NODE_H)];
+    const [x1, y1] = [up.x + up.w / 2, up.y + up.h];
     const [x2, y2] = [down.x + down.w / 2, down.y];
     const mid = (y1 + y2) / 2;
     ink.moveTo(x1, y1);
@@ -405,8 +397,8 @@ export function Graph(props: GraphProps) {
   };
 
   const aside = (from: Spot, to: Spot) => {
-    const [x1, y1] = [from.x + from.w, from.y + (from.h ?? NODE_H) / 2];
-    const [x2, y2] = [to.x + to.w, to.y + (to.h ?? NODE_H) / 2];
+    const [x1, y1] = [from.x + from.w, from.y + from.h / 2];
+    const [x2, y2] = [to.x + to.w, to.y + to.h / 2];
     const out = 34 + Math.abs(y2 - y1) * 0.2;
     ink.moveTo(x1, y1);
     ink.bezierCurveTo(x1 + out, y1, x2 + out, y2, x2, y2);
@@ -428,7 +420,6 @@ export function Graph(props: GraphProps) {
 
   onMount(() => {
     ink = paper.getContext("2d")!;
-    readPaint();
     sized();
     select(paper).call(behaviour);
     frame.addEventListener("wheel", onWheel, { passive: true });
@@ -469,14 +460,8 @@ export function Graph(props: GraphProps) {
       props.laid,
       over(),
       touching(),
+      paint(),
     ];
-    redraw();
-  });
-
-  /* getComputedStyle forces a style flush, so only re-read the palette on theme change. */
-  createEffect(() => {
-    void wearing();
-    readPaint();
     redraw();
   });
 
@@ -492,7 +477,7 @@ export function Graph(props: GraphProps) {
       x >= 0 &&
       y >= 0 &&
       x + spot.w * view.k <= room.width &&
-      y + (spot.h ?? NODE_H) * view.k <= room.height;
+      y + spot.h * view.k <= room.height;
     if (showing) return;
 
     select(paper).call(behaviour.transform, onto(spot, view.k));
@@ -502,6 +487,8 @@ export function Graph(props: GraphProps) {
     <div
       class="canvas"
       ref={frame}
+      style={{ cursor: over() === null ? "grab" : "pointer" }}
+      title={hint()}
       onPointerMove={onPointerMove}
       onPointerLeave={() => {
         setOver(null);
@@ -537,33 +524,27 @@ export function Graph(props: GraphProps) {
 }
 
 function neighbours(review: Review, here: Identity | null) {
-  const near = new Set<Identity>();
-  if (here === null) return near;
-  near.add(here);
-  for (const edge of review.edges) {
-    if (edge.from === here) near.add(edge.to);
-    if (edge.to === here) near.add(edge.from);
-  }
-  return near;
+  if (here === null) return new Set<Identity>();
+  return new Set([
+    here,
+    ...review.edges.flatMap((edge) =>
+      edge.from === here ? [edge.to] : edge.to === here ? [edge.from] : [],
+    ),
+  ]);
 }
 
 function closest(from: Spot, to: Spot): [Point, Point] {
-  let best: { far: number; a: Point; b: Point } | null = null;
-  for (const a of faces(from)) {
-    for (const b of faces(to)) {
-      const far = Math.hypot(b.x - a.x, b.y - a.y);
-      if (!best || far < best.far) best = { far, a, b };
-    }
-  }
-  return best ? [best.a, best.b] : [faces(from)[0], faces(to)[0]];
+  const best = faces(from)
+    .flatMap((a) =>
+      faces(to).map((b) => ({ far: Math.hypot(b.x - a.x, b.y - a.y), a, b })),
+    )
+    .reduce((best, pair) => (pair.far < best.far ? pair : best));
+  return [best.a, best.b];
 }
 
-const faces = (box: Spot): Point[] => {
-  const h = box.h ?? NODE_H;
-  return [
-    { x: box.x + box.w / 2, y: box.y },
-    { x: box.x + box.w / 2, y: box.y + h },
-    { x: box.x, y: box.y + h / 2 },
-    { x: box.x + box.w, y: box.y + h / 2 },
-  ];
-};
+const faces = (box: Spot): Point[] => [
+  { x: box.x + box.w / 2, y: box.y },
+  { x: box.x + box.w / 2, y: box.y + box.h },
+  { x: box.x, y: box.y + box.h / 2 },
+  { x: box.x + box.w, y: box.y + box.h / 2 },
+];

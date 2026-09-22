@@ -7,8 +7,11 @@ pub mod frontier;
 pub mod walk;
 
 use anyhow::{Context, Result, bail};
+use dagger_core::model::{Piece, Span};
+use dagger_core::prose::line_starts;
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
+use std::ops::Range;
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
@@ -191,6 +194,33 @@ pub fn uri(path: &Path) -> String {
     format!("file://{}", path.display())
 }
 
+/// The declaration out of a hover's markdown: the last fenced block before the `---` rule.
+/// Past the rule is documentation, whose code examples are fenced too, and editing an
+/// example must not read as breaking every caller. `language` opens only fences marked
+/// with it, for servers that fence the module's name too.
+pub fn fenced(hover: &Value, language: Option<&str>) -> Option<String> {
+    let markdown = hover["contents"]["value"].as_str()?;
+    let declaration = markdown.split("\n---").next().unwrap_or(markdown);
+    let mut blocks = Vec::new();
+    let mut current: Option<Vec<&str>> = None;
+
+    for line in declaration.lines() {
+        match (&mut current, line.strip_prefix("```")) {
+            (None, Some(fence)) if language.is_none_or(|wanted| fence.starts_with(wanted)) => {
+                current = Some(Vec::new())
+            }
+            (Some(code), Some(_)) => {
+                blocks.push(code.join("\n"));
+                current = None;
+            }
+            (Some(code), None) => code.push(line),
+            _ => {}
+        }
+    }
+
+    blocks.into_iter().rfind(|block| !block.is_empty())
+}
+
 /// Byte offsets from the parser, line and UTF-16 column for the protocol.
 pub struct Lines {
     starts: Vec<usize>,
@@ -199,15 +229,22 @@ pub struct Lines {
 
 impl Lines {
     pub fn new(text: &str) -> Self {
-        let mut starts = vec![0];
-        starts.extend(
-            text.char_indices()
-                .filter(|(_, character)| *character == '\n')
-                .map(|(at, _)| at + 1),
-        );
         Self {
-            starts,
+            starts: line_starts(text),
             text: text.to_string(),
+        }
+    }
+
+    /// One stretch of the file as a definition's part, with the line it starts on.
+    pub fn piece(&self, file: &str, range: &Range<usize>) -> Piece {
+        Piece {
+            text: self.slice(range).to_string(),
+            span: Span {
+                start: range.start as u32,
+                end: range.end as u32,
+            },
+            line: self.position(range.start).0 + 1,
+            file: file.to_string(),
         }
     }
 
@@ -221,7 +258,7 @@ impl Lines {
         (line as u32, column as u32)
     }
 
-    pub fn slice(&self, range: &std::ops::Range<usize>) -> &str {
+    pub fn slice(&self, range: &Range<usize>) -> &str {
         &self.text[range.clone()]
     }
 
@@ -249,9 +286,52 @@ impl Lines {
 
 #[cfg(test)]
 mod tests {
-    use super::Lines;
+    use super::{Lines, fenced};
+    use serde_json::json;
 
     const SOURCE: &str = "export function zero() {\n  return 0;\n}\n";
+
+    #[test]
+    fn a_contract_stops_at_the_documentation() {
+        let hover = json!({
+            "contents": { "value": "```ts\nfunction add(a: number): number\n```\n---\nAdds.\n\n```ts\nadd(1)\n```" }
+        });
+
+        assert_eq!(
+            fenced(&hover, None).as_deref(),
+            Some("function add(a: number): number")
+        );
+    }
+
+    /* Servers often put the definition's module in a block of its own first. */
+    #[test]
+    fn the_last_block_before_the_rule_is_the_declaration() {
+        let hover = json!({
+            "contents": { "value": "```ts\nmodule \"money\"\n```\n```ts\nconst pence: number\n```" }
+        });
+
+        assert_eq!(fenced(&hover, None).as_deref(), Some("const pence: number"));
+    }
+
+    #[test]
+    fn a_hover_with_nothing_fenced_says_nothing() {
+        assert_eq!(
+            fenced(&json!({ "contents": { "value": "Adds." } }), None),
+            None
+        );
+    }
+
+    #[test]
+    fn only_fences_in_the_language_asked_for_open_a_block() {
+        let hover = json!({
+            "contents": { "value": "```text\nnot this\n```\n```rust\nfn add(a: u8) -> u8\n```" }
+        });
+
+        assert_eq!(
+            fenced(&hover, Some("rust")).as_deref(),
+            Some("fn add(a: u8) -> u8")
+        );
+    }
 
     #[test]
     fn a_position_and_an_offset_mean_the_same_spot() {

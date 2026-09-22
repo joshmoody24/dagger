@@ -14,16 +14,15 @@ mod symbols;
 
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, segments};
 use dagger_core::prose::{line_end, line_start, preamble};
 use dagger_core::reference::BinderId;
-use dagger_lsp_client::walk::{Reach, Source, Walk, Walked};
+use dagger_lsp_client::walk::{Opened, Reach, Source, Walk, Walked};
 use dagger_lsp_client::{self as lsp, Lines, Server};
-use dagger_protocol::{Changed, Note, Progress, Request, Response};
+use dagger_protocol::{Changed, Described, Note, Progress, Request, Response};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{self, Read};
 use std::ops::Range;
 use std::path::Path;
 
@@ -57,28 +56,16 @@ fn files_to_open() -> usize {
 }
 
 fn main() -> Result<()> {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input)?;
-    let request: Request = serde_json::from_str(&input).context("that isn't a dagger request")?;
-
-    let response = match answer(request) {
-        Ok(response) => response,
-        Err(error) => Response::Failed {
-            message: format!("{error:#}"),
-        },
-    };
-
-    println!("{}", serde_json::to_string(&response)?);
-    Ok(())
+    dagger_protocol::serve(answer)
 }
 
 fn answer(request: Request) -> Result<Response> {
     match request {
-        Request::Describe { settings } => Ok(Response::Described {
+        Request::Describe { settings } => Ok(Response::Described(Described {
             include: settings_of(settings)?.include,
             revisions: None,
             usage: Vec::new(),
-        }),
+        })),
         Request::Extract {
             dir,
             files,
@@ -102,18 +89,14 @@ fn answer(request: Request) -> Result<Response> {
 }
 
 fn settings_of(settings: Value) -> Result<Settings> {
-    serde_json::from_value(settings).context(
+    dagger_protocol::settings(
+        settings,
         "dagger-lsp couldn't make sense of its settings; it needs at least a server, \
          like server = [\"tsc\", \"--lsp\", \"--stdio\"]",
     )
 }
 
-/// A file the adapter has looked at, and what it found there.
-struct Opened {
-    path: String,
-    lines: Lines,
-    symbols: Vec<symbols::Symbol>,
-}
+type File = Opened<symbols::Symbol>;
 
 fn extract(
     dir: &Path,
@@ -162,19 +145,6 @@ fn extract(
         mut notes,
     } = walk.finish();
     notes.extend(source.notes);
-    let seen: BTreeMap<String, Opened> = seen
-        .into_iter()
-        .map(|(path, (lines, symbols))| {
-            (
-                path.clone(),
-                Opened {
-                    path,
-                    lines,
-                    symbols,
-                },
-            )
-        })
-        .collect();
 
     let occurrences = definitions(&seen, &contracts);
     eprintln!(
@@ -210,16 +180,12 @@ impl Source for LspSource {
         root: &Path,
         path: &str,
     ) -> Result<(Lines, Vec<symbols::Symbol>)> {
-        let Opened {
-            path: _,
-            lines,
-            symbols,
-        } = open(server, root, path, &mut self.notes)?;
-        Ok((lines, symbols))
+        let Opened { lines, items, .. } = open(server, root, path, &mut self.notes)?;
+        Ok((lines, items))
     }
 
     fn contract(&self, hover: &Value) -> Option<String> {
-        fenced(hover)
+        lsp::fenced(hover, None)
     }
 }
 /// Whether this name is defined elsewhere. Imports are reported as symbols too, and
@@ -228,7 +194,7 @@ impl Source for LspSource {
 fn borrowed(
     server: &mut Server,
     at: &Value,
-    file: &Opened,
+    file: &File,
     symbol: &symbols::Symbol,
 ) -> Option<bool> {
     /* An import binding is a symbol that is only its name. Asked about an import of
@@ -264,7 +230,7 @@ fn borrowed(
     Some(borrowed)
 }
 
-fn open(server: &mut Server, root: &Path, path: &str, notes: &mut Vec<Note>) -> Result<Opened> {
+fn open(server: &mut Server, root: &Path, path: &str, notes: &mut Vec<Note>) -> Result<File> {
     let full = root.join(path);
     let text = std::fs::read_to_string(&full).with_context(|| format!("couldn't read {path}"))?;
     let lines = Lines::new(&text);
@@ -275,19 +241,19 @@ fn open(server: &mut Server, root: &Path, path: &str, notes: &mut Vec<Note>) -> 
         json!({ "textDocument": { "uri": lsp::uri(&full) } }),
     )?;
 
-    let mut file = Opened {
+    let file = Opened {
         path: path.to_string(),
-        symbols: symbols::read(&reported, &lines, &path_scope(path)),
+        items: symbols::read(&reported, &lines, &path_scope(path)),
         lines,
     };
 
     let asked: Vec<Option<bool>> = file
-        .symbols
+        .items
         .iter()
         .map(|symbol| borrowed(server, &position(root, &file, symbol), &file, symbol))
         .collect();
     let unplaced: Vec<&str> = file
-        .symbols
+        .items
         .iter()
         .zip(&asked)
         .filter(|(_, answer)| answer.is_none())
@@ -307,19 +273,27 @@ fn open(server: &mut Server, root: &Path, path: &str, notes: &mut Vec<Note>) -> 
             file: Some(path.to_string()),
         });
     }
-    let mut keep = asked.iter();
-    file.symbols.retain(|_| keep.next() == Some(&Some(false)));
 
     // Two definitions with the same name can't be told apart between snapshots, so only
     // the first keeps it.
     let mut taken = BTreeSet::new();
-    file.symbols
-        .retain(|symbol| taken.insert((symbol.scope.clone(), symbol.name.clone())));
+    let items = file
+        .items
+        .into_iter()
+        .zip(asked)
+        .filter(|(_, answer)| *answer == Some(false))
+        .map(|(symbol, _)| symbol)
+        .filter(|symbol| taken.insert((symbol.scope.clone(), symbol.name.clone())))
+        .collect();
 
-    Ok(file)
+    Ok(Opened {
+        path: file.path,
+        lines: file.lines,
+        items,
+    })
 }
 
-fn position(root: &Path, file: &Opened, symbol: &symbols::Symbol) -> Value {
+fn position(root: &Path, file: &File, symbol: &symbols::Symbol) -> Value {
     let (line, column) = file.lines.position(symbol.name_at.start);
     json!({
         "textDocument": { "uri": lsp::uri(&root.join(&file.path)) },
@@ -329,22 +303,18 @@ fn position(root: &Path, file: &Opened, symbol: &symbols::Symbol) -> Value {
 
 /// The file's own scope: its path without the extension, split into segments.
 fn path_scope(path: &str) -> Vec<String> {
-    path.trim_end_matches(|character: char| character != '.')
-        .trim_end_matches('.')
-        .split('/')
-        .map(str::to_string)
-        .collect()
+    segments(&Path::new(path).with_extension(""))
 }
 
 fn definitions(
-    seen: &BTreeMap<String, Opened>,
+    seen: &BTreeMap<String, File>,
     contracts: &BTreeMap<Locator, String>,
 ) -> Vec<Occurrence> {
     seen.values()
         .flat_map(|file| {
             let lines = claimed(file);
 
-            let symbols = file.symbols.iter().map(move |symbol| {
+            let symbols = file.items.iter().map(move |symbol| {
                 /* Start from the line start so a leading `export` the server leaves out is
                  * included; it decides whether a change is visible to callers. */
                 let text = file.lines.text();
@@ -389,7 +359,7 @@ fn definitions(
 /// The file itself, holding whatever none of its definitions do: imports, stray comments,
 /// load-time statements. Without it a change that only touches those has nothing to show.
 /// It's all body, since nothing refers to a file by name.
-fn module(file: &Opened) -> Option<Occurrence> {
+fn module(file: &File) -> Option<Occurrence> {
     let leftovers = leftovers(file);
     if leftovers.is_empty() {
         return None;
@@ -408,14 +378,8 @@ fn module(file: &Opened) -> Option<Occurrence> {
 }
 
 /// What a file's own module is called: its path without the extension.
-fn module_of(file: &Opened) -> Option<Locator> {
-    let mut scope: Vec<String> = file
-        .path
-        .rsplit_once('.')
-        .map_or(file.path.as_str(), |(stem, _)| stem)
-        .split('/')
-        .map(str::to_string)
-        .collect();
+fn module_of(file: &File) -> Option<Locator> {
+    let mut scope = path_scope(&file.path);
     let name = scope.pop()?;
     Some(Locator { scope, name })
 }
@@ -423,20 +387,20 @@ fn module_of(file: &Opened) -> Option<Locator> {
 /// The whole lines each definition sits on. A server's span starts at the name, which
 /// would leave `const` and `;` to the module and let the line above read as the
 /// definition's documentation.
-fn claimed(file: &Opened) -> Vec<Range<usize>> {
+fn claimed(file: &File) -> Vec<Range<usize>> {
     let text = file.lines.text();
-    file.symbols
+    file.items
         .iter()
         .map(|symbol| line_start(text, symbol.whole.start)..line_end(text, symbol.whole.end))
         .collect()
 }
 
 /// The non-blank stretches of a file no definition covers.
-fn leftovers(file: &Opened) -> Vec<Range<usize>> {
+fn leftovers(file: &File) -> Vec<Range<usize>> {
     let lines = claimed(file);
 
     let mut claimed: Vec<Range<usize>> = file
-        .symbols
+        .items
         .iter()
         .flat_map(|symbol| preamble(file.lines.text(), &symbol.whole, &lines))
         .chain(lines.iter().cloned())
@@ -460,18 +424,10 @@ fn leftovers(file: &Opened) -> Vec<Range<usize>> {
     left
 }
 
-fn pieces(file: &Opened, ranges: &[Range<usize>]) -> Vec<Piece> {
+fn pieces(file: &File, ranges: &[Range<usize>]) -> Vec<Piece> {
     ranges
         .iter()
-        .map(|range| Piece {
-            text: file.lines.slice(range).to_string(),
-            span: Span {
-                start: range.start as u32,
-                end: range.end as u32,
-            },
-            line: file.lines.position(range.start).0 + 1,
-            file: file.path.clone(),
-        })
+        .map(|range| file.lines.piece(&file.path, range))
         .collect()
 }
 
@@ -490,30 +446,6 @@ fn language_of(path: &str) -> &'static str {
         "rs" => "rust",
         _ => "plaintext",
     }
-}
-
-/// The declaration out of a hover's markdown: the last fenced block before the `---` rule.
-/// Past the rule is documentation, whose code examples are fenced too, and editing an
-/// example must not read as breaking every caller.
-fn fenced(hover: &Value) -> Option<String> {
-    let markdown = hover["contents"]["value"].as_str()?;
-    let declaration = markdown.split("\n---").next().unwrap_or(markdown);
-    let mut blocks = Vec::new();
-    let mut current: Option<Vec<&str>> = None;
-
-    for line in declaration.lines() {
-        match (&mut current, line.starts_with("```")) {
-            (None, true) => current = Some(Vec::new()),
-            (Some(code), true) => {
-                blocks.push(code.join("\n"));
-                current = None;
-            }
-            (Some(code), false) => code.push(line),
-            _ => {}
-        }
-    }
-
-    blocks.into_iter().rfind(|block| !block.is_empty())
 }
 
 #[cfg(test)]
@@ -551,23 +483,23 @@ mod tests {
         })
     }
 
-    fn opened(source: &str, reported: Value) -> Opened {
+    fn opened(source: &str, reported: Value) -> File {
         let lines = Lines::new(source);
         Opened {
             path: "src/money.ts".to_string(),
-            symbols: symbols::read(&reported, &lines, &path_scope("src/money.ts")),
+            items: symbols::read(&reported, &lines, &path_scope("src/money.ts")),
             lines,
         }
     }
 
-    fn preambles(file: &Opened) -> Vec<String> {
+    fn preambles(file: &File) -> Vec<String> {
         let wholes: Vec<Range<usize>> = file
-            .symbols
+            .items
             .iter()
             .map(|symbol| symbol.whole.clone())
             .collect();
 
-        file.symbols
+        file.items
             .iter()
             .filter_map(|symbol| preamble(file.lines.text(), &symbol.whole, &wholes))
             .map(|range| file.lines.slice(&range).to_string())
@@ -686,33 +618,6 @@ mod tests {
         );
 
         assert!(module(&file).is_none());
-    }
-
-    #[test]
-    fn a_contract_stops_at_the_documentation() {
-        let hover = json!({
-            "contents": { "value": "```ts\nfunction add(a: number): number\n```\n---\nAdds.\n\n```ts\nadd(1)\n```" }
-        });
-
-        assert_eq!(
-            fenced(&hover).as_deref(),
-            Some("function add(a: number): number")
-        );
-    }
-
-    /* Servers often put the definition's module in a block of its own first. */
-    #[test]
-    fn the_last_block_before_the_rule_is_the_declaration() {
-        let hover = json!({
-            "contents": { "value": "```ts\nmodule \"money\"\n```\n```ts\nconst pence: number\n```" }
-        });
-
-        assert_eq!(fenced(&hover).as_deref(), Some("const pence: number"));
-    }
-
-    #[test]
-    fn a_hover_with_nothing_fenced_says_nothing() {
-        assert_eq!(fenced(&json!({ "contents": { "value": "Adds." } })), None);
     }
 
     #[test]

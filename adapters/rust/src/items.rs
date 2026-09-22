@@ -311,11 +311,10 @@ fn from_item(item: &Item, scope: &[String]) -> Vec<Found> {
         Item::Mod(item) => match &item.content {
             Some((_, items)) => {
                 let path = nest(scope, &item.ident.to_string());
-                let mut found = module(&item.attrs, items, &path, range(item.span()), true)
+                module(&item.attrs, items, &path, range(item.span()), true)
                     .into_iter()
-                    .collect::<Vec<_>>();
-                found.extend(find(items, &path));
-                found
+                    .chain(find(items, &path))
+                    .collect()
             }
             None => Vec::new(),
         },
@@ -472,12 +471,10 @@ mod tests {
     fn read(source: &str) -> Vec<Found> {
         let file = syn::parse_file(source).expect("the source should parse");
         let scope = vec!["thing".to_string()];
-        let mut found: Vec<Found> =
-            module(&file.attrs, &file.items, &scope, 0..source.len(), false)
-                .into_iter()
-                .collect();
-        found.extend(find(&file.items, &scope));
-        found
+        module(&file.attrs, &file.items, &scope, 0..source.len(), false)
+            .into_iter()
+            .chain(find(&file.items, &scope))
+            .collect()
     }
 
     fn named<'a>(found: &'a [Found], name: &str) -> &'a Found {

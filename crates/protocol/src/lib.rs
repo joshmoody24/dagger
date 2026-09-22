@@ -4,9 +4,37 @@
 //! and stderr reaches the user. Snapshots are handed over as a directory because real
 //! language tooling wants a project on disk.
 
+use anyhow::{Context, Result};
 use dagger_core::matching::Extraction;
 use dagger_core::model::Span;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::io::Read;
+
+/// Runs an adapter: one request read from stdin, one response printed. A failed answer
+/// is reported as a response rather than a crash, so the user reads the adapter's wording.
+pub fn serve(answer: impl FnOnce(Request) -> Result<Response>) -> Result<()> {
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input)?;
+    let request: Request = serde_json::from_str(&input).context("that isn't a dagger request")?;
+
+    let response = answer(request).unwrap_or_else(|error| Response::Failed {
+        message: format!("{error:#}"),
+    });
+
+    println!("{}", serde_json::to_string(&response)?);
+    Ok(())
+}
+
+/// An adapter's settings as the repo wrote them; nothing written means the defaults.
+/// `context` is the adapter's own wording for settings it can't make sense of.
+pub fn settings<T: DeserializeOwned>(value: serde_json::Value, context: &str) -> Result<T> {
+    let value = match value {
+        serde_json::Value::Null => serde_json::Value::Object(Default::default()),
+        value => value,
+    };
+    serde_json::from_value(value).with_context(|| context.to_string())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -117,22 +145,26 @@ pub struct Note {
     pub file: Option<String>,
 }
 
+/// What an adapter can do.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Described {
+    /// Glob patterns this adapter claims by default. A repo that says `include`
+    /// replaces this outright rather than adding to it.
+    pub include: Vec<String>,
+    /// What to compare when the user named nothing. Only a snapshot adapter knows,
+    /// since only it knows whether there's uncommitted work around.
+    #[serde(default)]
+    pub revisions: Option<Revisions>,
+    /// The ways of naming a change this adapter accepts, a line each, for dagger's
+    /// help text. Kept here so there's only one copy of the list.
+    #[serde(default)]
+    pub usage: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum Response {
-    Described {
-        /// Glob patterns this adapter claims by default. A repo that says `include`
-        /// replaces this outright rather than adding to it.
-        include: Vec<String>,
-        /// What to compare when the user named nothing. Only a snapshot adapter knows,
-        /// since only it knows whether there's uncommitted work around.
-        #[serde(default)]
-        revisions: Option<Revisions>,
-        /// The ways of naming a change this adapter accepts, a line each, for dagger's
-        /// help text. Kept here so there's only one copy of the list.
-        #[serde(default)]
-        usage: Vec<String>,
-    },
+    Described(Described),
     Resolved {
         revisions: Revisions,
     },

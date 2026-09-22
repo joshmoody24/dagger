@@ -5,7 +5,7 @@
 use crate::group::Grouping;
 use crate::model::Identity;
 use crate::order::Step;
-use crate::review::{Definition, Edge};
+use crate::review::{Definition, Edge, placed};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -37,14 +37,21 @@ impl Group {
     }
 
     /// Every definition in it, however deep.
-    fn within(&self, out: &mut BTreeSet<Identity>) {
+    fn within(&self) -> Vec<Identity> {
         match self {
-            Group::Node { id, .. } => {
-                out.insert(*id);
-            }
-            Group::Group { children, .. } => {
-                children.iter().for_each(|one| one.within(out));
-            }
+            Group::Node { id, .. } => vec![*id],
+            Group::Group { children, .. } => children.iter().flat_map(Group::within).collect(),
+        }
+    }
+
+    fn on(self, tier: u32) -> Group {
+        match self {
+            Group::Group { name, children, .. } => Group::Group {
+                name,
+                tier,
+                children,
+            },
+            Group::Node { id, .. } => Group::Node { id, tier },
         }
     }
 }
@@ -128,43 +135,30 @@ impl<'a> Shape<'a> {
 
 /// Fills in tiers and sorts by tier, then reading order. A box counts as one thing that
 /// depends on whatever its contents depend on outside it.
-fn arranged(mut held: Vec<Group>, edges: &[Edge], first: &BTreeMap<Identity, usize>) -> Vec<Group> {
-    let units: Vec<BTreeSet<Identity>> = held
-        .iter()
-        .map(|one| {
-            let mut out = BTreeSet::new();
-            one.within(&mut out);
-            out
-        })
-        .collect();
-    let soonest: Vec<usize> = units
-        .iter()
-        .map(|members| {
-            members
+fn arranged(held: Vec<Group>, edges: &[Edge], first: &BTreeMap<Identity, usize>) -> Vec<Group> {
+    let units: Vec<Vec<Identity>> = held.iter().map(Group::within).collect();
+    let tiers = tiers(&units, edges);
+    let mut placed: Vec<(u32, usize, Group)> = held
+        .into_iter()
+        .zip(&units)
+        .zip(tiers)
+        .map(|((one, members), tier)| {
+            let soonest = members
                 .iter()
                 .filter_map(|id| first.get(id))
                 .min()
                 .copied()
-                .unwrap_or(usize::MAX)
+                .unwrap_or(usize::MAX);
+            (tier, soonest, one.on(tier))
         })
         .collect();
-    for (one, tier) in held.iter_mut().zip(tiers(&units, edges)) {
-        match one {
-            Group::Group { tier: own, .. } | Group::Node { tier: own, .. } => *own = tier,
-        }
-    }
-    let mut order: Vec<usize> = (0..held.len()).collect();
-    order.sort_by_key(|&at| (held[at].tier(), soonest[at]));
-    let mut taken: Vec<Option<Group>> = held.into_iter().map(Some).collect();
-    order
-        .into_iter()
-        .map(|at| taken[at].take().expect("each index once"))
-        .collect()
+    placed.sort_by_key(|(tier, soonest, _)| (*tier, *soonest));
+    placed.into_iter().map(|(_, _, one)| one).collect()
 }
 
 /// Zero for a unit that depends on nothing else here, else one more than its deepest
 /// dependency. A cycle has no right answer, so it's settled by whichever unit is visited first.
-fn tiers(units: &[BTreeSet<Identity>], edges: &[Edge]) -> Vec<u32> {
+fn tiers(units: &[Vec<Identity>], edges: &[Edge]) -> Vec<u32> {
     let unit_of: BTreeMap<Identity, usize> = units
         .iter()
         .enumerate()
@@ -172,9 +166,7 @@ fn tiers(units: &[BTreeSet<Identity>], edges: &[Edge]) -> Vec<u32> {
         .collect();
     let mut leans: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); units.len()];
     for edge in edges {
-        if let (Some(&from), Some(&to)) = (unit_of.get(&edge.from), unit_of.get(&edge.to))
-            && from != to
-        {
+        if let Some((from, to)) = placed(&unit_of, edge.from, edge.to) {
             leans[from].insert(to);
         }
     }

@@ -3,6 +3,7 @@
 
 use dagger_core::diagnostic::Diagnostic;
 use dagger_core::model::{Definition, Occurrence};
+use dagger_core::prose::line_starts;
 use similar::{ChangeTag, TextDiff};
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -79,7 +80,7 @@ fn unaccounted(
     was_covered: Option<&[Range<usize>]>,
     is_covered: Option<&[Range<usize>]>,
 ) -> Vec<u32> {
-    let (was, is) = (offsets(before), offsets(after));
+    let (was, is) = (line_starts(before), line_starts(after));
     let diff = TextDiff::from_lines(before, after);
     let mut missed = Vec::new();
 
@@ -110,17 +111,6 @@ fn unaccounted(
     }
 
     missed
-}
-
-/// Line start offsets, so line numbers can be matched against extractors' byte ranges.
-fn offsets(text: &str) -> Vec<usize> {
-    let mut starts = vec![0];
-    starts.extend(
-        text.char_indices()
-            .filter(|(_, character)| *character == '\n')
-            .map(|(at, _)| at + 1),
-    );
-    starts
 }
 
 /// The stretch of bytes one line occupies.

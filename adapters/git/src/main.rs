@@ -4,28 +4,15 @@
 //! touched. The revision `current` is the working tree itself, so it needs no copying.
 
 use anyhow::{Context, Result, bail};
-use dagger_protocol::{Request, Response, Revisions};
+use dagger_protocol::{Described, Request, Response, Revisions};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 fn main() -> Result<()> {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input)?;
-    let request: Request = serde_json::from_str(&input).context("that isn't a dagger request")?;
-
-    let response = match answer(request) {
-        Ok(response) => response,
-        Err(error) => Response::Failed {
-            message: format!("{error:#}"),
-        },
-    };
-
-    println!("{}", serde_json::to_string(&response)?);
-    Ok(())
+    dagger_protocol::serve(answer)
 }
 
 /// What a repo can tell this adapter.
@@ -66,7 +53,7 @@ fn answer(request: Request) -> Result<Response> {
                 files,
             })
         }
-        Request::Describe { settings } => Ok(Response::Described {
+        Request::Describe { settings } => Ok(Response::Described(Described {
             include: {
                 // Settings are checked here so a bad one is reported before any snapshot is laid out.
                 settings_of(settings)?;
@@ -74,7 +61,7 @@ fn answer(request: Request) -> Result<Response> {
             },
             revisions: Some(worth_reviewing()?),
             usage: UNDERSTOOD.lines().map(str::to_string).collect(),
-        }),
+        })),
         Request::Resolve { asked, settings } => {
             let settings = settings_of(settings)?;
             Ok(Response::Resolved {
@@ -88,11 +75,10 @@ fn answer(request: Request) -> Result<Response> {
 /// Unknown settings are rejected rather than ignored, so a typo in `dagger.toml` doesn't
 /// silently change the run.
 fn settings_of(settings: serde_json::Value) -> Result<Settings> {
-    if settings.is_null() {
-        return Ok(Settings::default());
-    }
-    serde_json::from_value(settings)
-        .context("dagger-git was told something under settings that it doesn't know")
+    dagger_protocol::settings(
+        settings,
+        "dagger-git was told something under settings that it doesn't know",
+    )
 }
 
 /// Not a revision git knows about, so we answer it ourselves.
@@ -428,17 +414,7 @@ fn holds_a_way_home(carry: &Carry, dir: &Path, deep: u32) -> Result<bool> {
 }
 
 fn rev_parse(rev: &str) -> Result<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", rev])
-        .output()
-        .context("couldn't run git")?;
-    if !output.status.success() {
-        bail!(
-            "git doesn't know the revision {rev}: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    Ok(String::from_utf8(output.stdout)?.trim().to_string())
+    say(&["rev-parse", rev]).with_context(|| format!("git doesn't know the revision {rev}"))
 }
 
 /// `git archive | tar -x`, wired up directly so no shell gets involved.

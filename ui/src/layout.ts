@@ -24,7 +24,7 @@ const PAD_X = 12,
 
 /* Must agree with style.css. Monospace advance is 0.6 of the font size; widths are computed
  * rather than measured so tests can run without a page. */
-const FONT = 14;
+export const FONT = 14;
 const CHAR = FONT * 0.6;
 /* Test names are sentences with underscores; one can be as wide as a dozen ordinary nodes. */
 const LONGEST = 22;
@@ -34,7 +34,7 @@ const LONGEST = 22;
 export const RADIUS = { node: 5, box: 9, step: 2 };
 
 /* A box can't be narrower than its label. Must agree with style.css. */
-const BOX_FONT = 12.5;
+export const BOX_FONT = 12.5;
 const labelWidth = (text: string) =>
   Math.ceil(text.length * BOX_FONT * 0.6) + 22;
 
@@ -57,6 +57,8 @@ interface Sized {
   h: number;
 }
 
+const rows = (cell: Cell): cell is { lines: Definition[][] } => "lines" in cell;
+
 export function layout(review: Review): Laid {
   const at = new Map<Identity, Spot>();
 
@@ -69,46 +71,30 @@ export function layout(review: Review): Laid {
   const shown = review.groups.flatMap((group) => kept(group) ?? []);
   const top = sized({ type: "group", name: "", tier: 0, children: shown });
 
-  let y = MARGIN;
-  let widest = 0;
-  const boxes: Box[] = [];
-  for (const [index, band] of top.bands.entries()) {
-    if (index) y += gapAbove(top.bands[index - 1], band);
-    let x = MARGIN;
-    for (const cell of band) {
-      if ("box" in cell) boxes.push(placed(cell.box, x, y, "", at));
-      else spots(cell.lines, x, y, at);
-      x += cellWidth(cell) + BOX_GAP;
-    }
-    widest = Math.max(widest, x - BOX_GAP + MARGIN);
-    y += bandHeight(band);
-  }
-
-  return { at, boxes, w: widest, h: y + MARGIN };
+  const { boxes } = stacked(top.bands, MARGIN, MARGIN, "", at, null);
+  const { across, deep } = extent(top.bands);
+  return {
+    at,
+    boxes,
+    w: top.bands.length ? across + 2 * MARGIN : 0,
+    h: deep + 2 * MARGIN,
+  };
 
   function sized(group: Group & { type: "group" }): Sized {
-    const bands: Cell[][] = [];
-    let tier = -1;
-    for (const child of group.children) {
-      if (child.tier !== tier) bands.push([]);
-      tier = child.tier;
-      const band = bands[bands.length - 1];
-      if (child.type === "group") band.push({ box: sized(child) });
-      else {
-        const node = review.definitions.get(child.id)!;
-        const last = band[band.length - 1];
-        if (last && "lines" in last)
-          last.lines = folded([...last.lines.flat(), node]);
-        else band.push({ lines: [[node]] });
-      }
-    }
-
-    const across = bands.length ? Math.max(...bands.map(bandWidth)) : 0;
-    const deep = bands.reduce(
-      (sum, band, index) =>
-        sum + bandHeight(band) + (index ? gapAbove(bands[index - 1], band) : 0),
-      0,
+    const cell = (child: Group): Cell =>
+      child.type === "group"
+        ? { box: sized(child) }
+        : { lines: [[review.definitions.get(child.id)!]] };
+    const bands = runs(group.children, (a, b) => a.tier === b.tier).map(
+      (band) =>
+        runs(band.map(cell), (a, b) => rows(a) && rows(b)).map((run) =>
+          run.every(rows)
+            ? { lines: folded(run.flatMap((one) => one.lines.flat())) }
+            : run[0],
+        ),
     );
+
+    const { across, deep } = extent(bands);
     /* An empty box is just its label. */
     return {
       label: group.name,
@@ -119,22 +105,34 @@ export function layout(review: Review): Laid {
   }
 }
 
-function placed(
-  box: Sized,
+/* Neighbours that belong together, kept together. */
+function runs<T>(items: T[], joins: (a: T, b: T) => boolean): T[][] {
+  return items.reduce<T[][]>((runs, item) => {
+    const last = runs.at(-1);
+    if (last && joins(last[last.length - 1], item)) last.push(item);
+    else runs.push([item]);
+    return runs;
+  }, []);
+}
+
+/* Bands one below the last, each centred within `width` when there is one. Returns what
+ * was placed directly in them. */
+function stacked(
+  bands: Cell[][],
   x: number,
   y: number,
-  above: string,
+  key: string,
   at: Map<Identity, Spot>,
-): Box {
-  const key = `${above}/${box.label}`;
+  width: number | null,
+) {
   const boxes: Box[] = [];
   const nodes: Identity[] = [];
-  let down = y + PAD_TOP;
+  let down = y;
 
-  for (const [index, band] of box.bands.entries()) {
-    if (index) down += gapAbove(box.bands[index - 1], band);
+  for (const [index, band] of bands.entries()) {
+    if (index) down += gapAbove(bands[index - 1], band);
     // Centred, so a lone definition under a wide band sits beneath it, not in a corner.
-    let across = x + PAD_X + (box.w - 2 * PAD_X - bandWidth(band)) / 2;
+    let across = width === null ? x : x + (width - bandWidth(band)) / 2;
     for (const cell of band) {
       if ("box" in cell) boxes.push(placed(cell.box, across, down, key, at));
       else nodes.push(...spots(cell.lines, across, down, at));
@@ -143,6 +141,25 @@ function placed(
     down += bandHeight(band);
   }
 
+  return { boxes, nodes };
+}
+
+function placed(
+  box: Sized,
+  x: number,
+  y: number,
+  above: string,
+  at: Map<Identity, Spot>,
+): Box {
+  const key = `${above}/${box.label}`;
+  const { boxes, nodes } = stacked(
+    box.bands,
+    x + PAD_X,
+    y + PAD_TOP,
+    key,
+    at,
+    box.w - 2 * PAD_X,
+  );
   return { key, label: box.label, x, y, w: box.w, h: box.h, boxes, nodes };
 }
 
@@ -156,7 +173,7 @@ function spots(
   for (const nodes of lines) {
     let along = x;
     for (const node of nodes) {
-      at.set(node.id, { x: along, y: line, w: widthOf(node.name) });
+      at.set(node.id, { x: along, y: line, w: widthOf(node.name), h: NODE_H });
       along += widthOf(node.name) + NODE_GAP;
     }
     line += NODE_H + ROW_GAP;
@@ -169,10 +186,9 @@ function spots(
  * tier lower), so splitting it can't make an edge point the wrong way. */
 function folded(row: Definition[]) {
   const across = Math.ceil(Math.sqrt(row.length));
-  const lines = [];
-  for (let at = 0; at < row.length; at += across)
-    lines.push(row.slice(at, at + across));
-  return lines;
+  return Array.from({ length: Math.ceil(row.length / across) }, (_, line) =>
+    row.slice(line * across, (line + 1) * across),
+  );
 }
 
 const rowWidth = (row: Definition[]) =>
@@ -193,3 +209,12 @@ const gapAbove = (above: Cell[], band: Cell[]) =>
   [above, band].every((one) => one.every((cell) => "lines" in cell))
     ? ROW_GAP
     : BAND_GAP;
+/* How far a stack of bands reaches across and down. */
+const extent = (bands: Cell[][]) => ({
+  across: bands.length ? Math.max(...bands.map(bandWidth)) : 0,
+  deep: bands.reduce(
+    (sum, band, index) =>
+      sum + bandHeight(band) + (index ? gapAbove(bands[index - 1], band) : 0),
+    0,
+  ),
+});

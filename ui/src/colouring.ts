@@ -1,6 +1,11 @@
-import { createHighlighterCore, type HighlighterCore } from "shiki/core";
+import {
+  createHighlighterCore,
+  type HighlighterCore,
+  type ThemeRegistrationAny,
+} from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { createSignal } from "solid-js";
+import type { Theme } from "./theme.ts";
 
 /* Shiki, using the theme already being worn, so code looks like the reader's editor. Whole
  * blocks are highlighted at once because grammars carry state between lines (block
@@ -61,7 +66,7 @@ export const colouring = settled;
 /** Gets ready to colour this language in this theme, if it isn't already. */
 export async function readied(
   language: string | null,
-  theme: any,
+  theme: Theme | null,
   name: string,
 ) {
   if (!language || !GRAMMARS[language]) return;
@@ -79,7 +84,7 @@ export async function readied(
       });
     }
     if (!ready.getLoadedThemes().includes(name)) {
-      await ready.loadTheme({ ...theme, name });
+      await ready.loadTheme({ ...theme, name } as ThemeRegistrationAny);
     }
     if (!ready.getLoadedLanguages().includes(language)) {
       await ready.loadLanguage((await GRAMMARS[language]()) as any);

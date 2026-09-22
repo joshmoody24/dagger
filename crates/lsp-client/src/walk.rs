@@ -69,6 +69,13 @@ impl Reach {
     pub const OPEN: usize = 500_000;
 }
 
+/// A file the walk has looked at, and what it found there.
+pub struct Opened<I> {
+    pub path: String,
+    pub lines: Lines,
+    pub items: Vec<I>,
+}
+
 /// Which files are worth reading, worked outward from what changed, and what's been asked
 /// about each so far.
 pub struct Walk<S: Source> {
@@ -77,7 +84,7 @@ pub struct Walk<S: Source> {
     binder: BinderId,
     ours: BTreeSet<String>,
     source: S,
-    seen: BTreeMap<String, (Lines, Vec<S::Item>)>,
+    seen: BTreeMap<String, Opened<S::Item>>,
     mentions: Vec<Mention>,
     contracts: BTreeMap<Locator, String>,
     notes: Vec<Note>,
@@ -89,7 +96,7 @@ pub struct Walk<S: Source> {
 /// What a walk found, plus the source, since a source may hold state of its own to read out.
 pub struct Walked<S: Source> {
     pub source: S,
-    pub seen: BTreeMap<String, (Lines, Vec<S::Item>)>,
+    pub seen: BTreeMap<String, Opened<S::Item>>,
     pub mentions: Vec<Mention>,
     pub contracts: BTreeMap<Locator, String>,
     pub notes: Vec<Note>,
@@ -120,8 +127,13 @@ impl<S: Source> Walk<S> {
             return true;
         }
         match self.source.open(&mut self.server, &self.root, path) {
-            Ok(found) => {
-                self.seen.insert(path.to_string(), found);
+            Ok((lines, items)) => {
+                let opened = Opened {
+                    path: path.to_string(),
+                    lines,
+                    items,
+                };
+                self.seen.insert(path.to_string(), opened);
                 true
             }
             Err(error) => {
@@ -206,8 +218,8 @@ impl<S: Source> Walk<S> {
         away: u32,
     ) -> Vec<(String, Locator)> {
         let questions: Vec<(Value, Locator, String)> = {
-            let (lines, found) = &self.seen[path];
-            found
+            let Opened { lines, items, .. } = &self.seen[path];
+            items
                 .iter()
                 .filter(|item| item.referenceable())
                 .filter(|item| wanted.covers(&item.whole(), &item.locator()))
@@ -286,9 +298,9 @@ impl<S: Source> Walk<S> {
                 continue;
             }
 
-            let (lines, found) = &self.seen[&path];
+            let Opened { lines, items, .. } = &self.seen[&path];
             let at = lines.offset(line, column);
-            let Some(from) = innermost(found, at) else {
+            let Some(from) = innermost(items, at) else {
                 continue;
             };
             let Some(part) = from.part_at(at) else {

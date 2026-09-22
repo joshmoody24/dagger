@@ -2,7 +2,7 @@
 //! nothing in a review can go unmentioned.
 
 use dagger_core::matching::Extraction;
-use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span};
+use dagger_core::model::{Locator, Occurrence, Part, Piece, Role, Span, segments};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -21,15 +21,7 @@ fn occurrence(dir: &Path, file: &str) -> Option<Occurrence> {
     let text = std::fs::read_to_string(dir.join(file)).ok()?;
     let path = Path::new(file);
     let name = path.file_name()?.to_string_lossy().into_owned();
-    let scope = path
-        .parent()
-        .map(|parent| {
-            parent
-                .components()
-                .map(|part| part.as_os_str().to_string_lossy().into_owned())
-                .collect()
-        })
-        .unwrap_or_default();
+    let scope = path.parent().map(segments).unwrap_or_default();
 
     let span = Span {
         start: 0,

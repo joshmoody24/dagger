@@ -31,44 +31,14 @@ export const TINT = {
 };
 
 export function digest(raw: Raw): Review {
-  const definitions = new Map<Identity, Definition>();
-  for (const [id, one] of Object.entries(raw.definitions)) {
-    /* Checked by discriminant so the compiler enforces added, removed or kept, never
-     * neither. */
-    const sides = one.sides;
-    const before =
-      "kept" in sides
-        ? sides.kept.before
-        : "removed" in sides
-          ? sides.removed
-          : null;
-    const after =
-      "kept" in sides
-        ? sides.kept.after
-        : "added" in sides
-          ? sides.added
-          : null;
-    const shown = (after || before)!;
-
-    definitions.set(id, {
-      id,
-      name: shown.locator.name,
-      scope: shown.locator.scope,
-      path: [...shown.locator.scope, shown.locator.name].join("::"),
-      file: shown.file,
-      kind: shown.kind,
-      change: one.change,
-      before,
-      after,
-      mark: marking(one),
-      away: one.reached ?? 0,
-      parent: one.parent,
-    });
-  }
-
   return {
     title: raw.title,
-    definitions,
+    definitions: new Map(
+      Object.entries(raw.definitions).map(([id, one]) => [
+        id,
+        digested(id, one),
+      ]),
+    ),
     steps: raw.reading,
     edges: raw.edges,
     ripples: raw.ripples,
@@ -76,6 +46,36 @@ export function digest(raw: Raw): Review {
     grouping: raw.grouping ?? undefined,
     groups: raw.groups,
     warnings: raw.warnings,
+  };
+}
+
+function digested(id: Identity, one: RawDefinition): Definition {
+  /* Checked by discriminant so the compiler enforces added, removed or kept, never
+   * neither. */
+  const sides = one.sides;
+  const before =
+    "kept" in sides
+      ? sides.kept.before
+      : "removed" in sides
+        ? sides.removed
+        : null;
+  const after =
+    "kept" in sides ? sides.kept.after : "added" in sides ? sides.added : null;
+  const shown = (after || before)!;
+
+  return {
+    id,
+    name: shown.locator.name,
+    scope: shown.locator.scope,
+    path: [...shown.locator.scope, shown.locator.name].join("::"),
+    file: shown.file,
+    kind: shown.kind,
+    change: one.change,
+    before,
+    after,
+    mark: marking(one),
+    away: one.reached ?? 0,
+    parent: one.parent,
   };
 }
 
@@ -95,8 +95,6 @@ function marking(one: RawDefinition): Mark {
 
 /** Whether a change to this one means its callers have to change too. */
 export function broke(review: Review, id: Identity) {
-  const change = review.definitions.get(id)?.change;
-  if (change === "removed") return true;
-  if (change === undefined || change === "added") return false;
-  return Boolean(change.kept && change.kept.contract);
+  const mark = review.definitions.get(id)?.mark;
+  return mark === "removed" || mark === "contract";
 }

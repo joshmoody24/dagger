@@ -1,7 +1,7 @@
 use crate::config::{Adapter, Extractor};
 use anyhow::{Context, Result, bail};
 use dagger_core::matching::Extraction;
-use dagger_protocol::{Changed, Note, Request, Response, Revisions};
+use dagger_protocol::{Changed, Described, Note, Request, Response, Revisions};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -93,26 +93,10 @@ pub fn describe(
         },
         None,
     )? {
-        Response::Described {
-            include,
-            revisions,
-            usage,
-        } => Ok(Described {
-            include,
-            revisions,
-            usage,
-        }),
+        Response::Described(described) => Ok(described),
         Response::Failed { message } => bail!("{adapter} wouldn't say what it does: {message}"),
         other => bail!("asked {adapter} what it does and got {other:?}"),
     }
-}
-
-pub struct Described {
-    pub include: Vec<String>,
-    /// Only a snapshot adapter fills this in.
-    pub revisions: Option<Revisions>,
-    /// Help lines for naming a change. Only a snapshot adapter fills this in.
-    pub usage: Vec<String>,
 }
 
 /// A revision on disk, whether we clean it up, and the adapter's file listing.

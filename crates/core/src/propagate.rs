@@ -3,6 +3,7 @@ use crate::diagnostic::Diagnostic;
 use crate::model::{Identity, Part};
 use crate::reference::{Reference, Target};
 use std::collections::{BTreeMap, VecDeque};
+use std::num::NonZeroU32;
 
 /// Unchanged definitions downstream of a contract break, each with how many hops away it
 /// is. Only type parts are followed: a body can call anything without its callers caring.
@@ -11,7 +12,7 @@ pub fn affected(
     changes: &BTreeMap<Identity, Change>,
     references: &[Reference],
     depth: u32,
-) -> (BTreeMap<Identity, u32>, Vec<Diagnostic>) {
+) -> (BTreeMap<Identity, NonZeroU32>, Vec<Diagnostic>) {
     let mut callers: BTreeMap<Identity, Vec<Identity>> = BTreeMap::new();
     let mut diagnostics = Vec::new();
 
@@ -25,7 +26,7 @@ pub fn affected(
         }
     }
 
-    let mut reached: BTreeMap<Identity, u32> = BTreeMap::new();
+    let mut reached: BTreeMap<Identity, NonZeroU32> = BTreeMap::new();
     let mut queue: VecDeque<(Identity, u32)> = changes
         .iter()
         .filter(|(_, change)| change.breaks_callers())
@@ -40,8 +41,9 @@ pub fn affected(
         }
         for caller in callers.get(&broken).into_iter().flatten() {
             if let std::collections::btree_map::Entry::Vacant(spot) = reached.entry(*caller) {
-                spot.insert(away + 1);
-                queue.push_back((*caller, away + 1));
+                let further = NonZeroU32::MIN.saturating_add(away);
+                spot.insert(further);
+                queue.push_back((*caller, further.get()));
             }
         }
     }
@@ -83,7 +85,11 @@ mod tests {
 
     /// How far out each one sits.
     fn away(references: &[Reference], depth: u32) -> BTreeMap<Identity, u32> {
-        affected(&broken_at_zero(), references, depth).0
+        affected(&broken_at_zero(), references, depth)
+            .0
+            .into_iter()
+            .map(|(identity, far)| (identity, far.get()))
+            .collect()
     }
 
     #[test]

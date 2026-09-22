@@ -16,8 +16,10 @@ use config::Config;
 use dagger_core::group::Grouping;
 use dagger_core::matching::{Extraction, match_snapshots};
 use dagger_core::model::Span;
+use dagger_core::prose::line_starts;
 use dagger_core::review::{Impact, Warning, review};
 use dagger_protocol::{Changed, Note, Revisions};
+use std::collections::BTreeSet;
 use std::io::{IsTerminal, Write};
 use std::path::Path;
 
@@ -274,7 +276,7 @@ fn compare(
 
     // Read sequentially on purpose. Reading both at once means two language servers each
     // loading the whole project, which took 24GB and nearly hit the OOM killer.
-    let (before, mut notes) = read(
+    let (before, notes) = read(
         repo,
         config,
         claims,
@@ -283,7 +285,7 @@ fn compare(
         ripples,
         "before",
     )?;
-    let (after, mut later) = read(
+    let (after, later) = read(
         repo,
         config,
         claims,
@@ -292,7 +294,6 @@ fn compare(
         ripples,
         "after",
     )?;
-    notes.append(&mut later);
 
     let matched = match_snapshots(before, after);
 
@@ -304,6 +305,7 @@ fn compare(
 
     let warnings: Vec<Warning> = notes
         .into_iter()
+        .chain(later)
         .map(|note| Warning {
             // An adapter's note is always about something it couldn't do.
             impact: Impact::Incomplete,
@@ -357,10 +359,7 @@ fn differing(before: &adapter::Snapshot, after: &adapter::Snapshot) -> Result<Ve
         }
     };
 
-    let mut names: Vec<String> = listed(before)?;
-    names.extend(listed(after)?);
-    names.sort();
-    names.dedup();
+    let names: BTreeSet<String> = listed(before)?.into_iter().chain(listed(after)?).collect();
 
     Ok(names
         .into_iter()
@@ -376,45 +375,40 @@ fn differing(before: &adapter::Snapshot, after: &adapter::Snapshot) -> Result<Ve
 /// small edit didn't touch. A file the line diff can't narrow (a binary, usually) gets no
 /// ranges, which an adapter reads as "the whole file".
 fn changed_ranges(before: &Path, after: &Path, files: &[String]) -> (Vec<Changed>, Vec<Changed>) {
-    let mut on_before = Vec::with_capacity(files.len());
-    let mut on_after = Vec::with_capacity(files.len());
-
-    for file in files {
-        let was = std::fs::read_to_string(before.join(file)).unwrap_or_default();
-        let now = std::fs::read_to_string(after.join(file)).unwrap_or_default();
-        let (at_before, at_after) = ranges(&was, &now);
-        on_before.push(Changed {
-            file: file.clone(),
-            at: at_before,
-        });
-        on_after.push(Changed {
-            file: file.clone(),
-            at: at_after,
-        });
-    }
-
-    (on_before, on_after)
+    files
+        .iter()
+        .map(|file| {
+            let was = std::fs::read_to_string(before.join(file)).unwrap_or_default();
+            let now = std::fs::read_to_string(after.join(file)).unwrap_or_default();
+            let (at_before, at_after) = ranges(&was, &now);
+            (
+                Changed {
+                    file: file.clone(),
+                    at: at_before,
+                },
+                Changed {
+                    file: file.clone(),
+                    at: at_after,
+                },
+            )
+        })
+        .unzip()
 }
 
 /// The unequal stretches of each side, as byte spans since that's what definition spans use.
 fn ranges(before: &str, after: &str) -> (Vec<Span>, Vec<Span>) {
-    let starts = |text: &str| -> Vec<u32> {
-        let mut at = vec![0u32];
-        at.extend(text.match_indices('\n').map(|(pos, _)| pos as u32 + 1));
-        at
-    };
-    let (was, is) = (starts(before), starts(after));
-    let span = |starts: &[u32], text: &str, from: usize, to: usize| -> Span {
+    let (was, is) = (line_starts(before), line_starts(after));
+    let span = |starts: &[usize], text: &str, from: usize, to: usize| -> Span {
         Span {
-            start: starts[from],
-            end: starts.get(to).copied().unwrap_or(text.len() as u32),
+            start: starts[from] as u32,
+            end: starts.get(to).copied().unwrap_or(text.len()) as u32,
         }
     };
     // A zero-width span on the side that has no lines for an insertion or deletion. The
     // enclosing definition still has to count as changed on both sides, or the two
     // readings disagree.
-    let seam = |starts: &[u32], text: &str, at: usize| -> Span {
-        let point = starts.get(at).copied().unwrap_or(text.len() as u32);
+    let seam = |starts: &[usize], text: &str, at: usize| -> Span {
+        let point = starts.get(at).copied().unwrap_or(text.len()) as u32;
         Span {
             start: point,
             end: point,

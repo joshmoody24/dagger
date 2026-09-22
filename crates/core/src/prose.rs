@@ -52,6 +52,13 @@ fn encloses(outer: &Range<usize>, inner: &Range<usize>) -> bool {
     outer.start <= inner.start && outer.end >= inner.end
 }
 
+/// Where every line begins, so line numbers and byte offsets can be converted either way.
+pub fn line_starts(text: &str) -> Vec<usize> {
+    std::iter::once(0)
+        .chain(text.match_indices('\n').map(|(at, _)| at + 1))
+        .collect()
+}
+
 /// Where the line holding this spot begins.
 pub fn line_start(text: &str, at: usize) -> usize {
     text[..at].rfind('\n').map(|found| found + 1).unwrap_or(0)

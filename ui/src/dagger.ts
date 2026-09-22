@@ -85,7 +85,7 @@ export interface Spot {
   x: number;
   y: number;
   w: number;
-  h?: number;
+  h: number;
 }
 
 /** A box on the page: where it is, and what's directly inside it. */

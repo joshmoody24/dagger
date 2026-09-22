@@ -13,6 +13,7 @@ use crate::reference::{Reference, Target};
 use crate::shape::{Group, Shape};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::num::NonZeroU32;
 
 /// One definition depending on another, as the reader will see it. Definitions that
 /// nobody needs to read are left out, so an edge can stand in for a chain that ran
@@ -22,6 +23,20 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 pub struct Edge {
     pub from: Identity,
     pub to: Identity,
+}
+
+/// A dependency between two of `places`' members, as their places. Nothing when either
+/// end isn't among them, or both ends are the same one.
+pub(crate) fn placed(
+    places: &BTreeMap<Identity, usize>,
+    from: Identity,
+    to: Identity,
+) -> Option<(usize, usize)> {
+    places
+        .get(&from)
+        .zip(places.get(&to))
+        .map(|(&from, &to)| (from, to))
+        .filter(|(from, to)| from != to)
 }
 
 /// How much trust a warning costs the review it's about.
@@ -61,7 +76,7 @@ pub struct Definition {
     /// What happened to it.
     pub change: Change,
     /// Hops from the nearest change that reached it. Never zero: its own change is `change`.
-    pub reached: Option<u32>,
+    pub reached: Option<NonZeroU32>,
     /// What it's written inside. Always present in this review when it isn't `None`.
     pub parent: Option<Identity>,
 }
@@ -98,21 +113,30 @@ pub fn review(
     found: Vec<Diagnostic>,
     title: Option<String>,
 ) -> Review {
-    let mut findings = found;
-    let changes: BTreeMap<Identity, Change> = definitions
+    let (classified, lopsided): (Vec<(&model::Definition, Change)>, Vec<Option<Diagnostic>>) =
+        definitions
+            .iter()
+            .map(|def| {
+                let (change, found) = classify(def);
+                ((def, change), found)
+            })
+            .unzip();
+    let changes: BTreeMap<Identity, Change> = classified
         .iter()
-        .map(|def| {
-            let (change, mut more) = classify(def);
-            findings.append(&mut more);
-            (def.identity, change)
-        })
+        .map(|(def, change)| (def.identity, change.clone()))
         .collect();
 
-    let (reached, mut more) = affected(&changes, references, ripples);
-    findings.append(&mut more);
+    let (reached, unbound) = affected(&changes, references, ripples);
+    let findings: Vec<Diagnostic> = found
+        .into_iter()
+        .chain(lopsided.into_iter().flatten())
+        .chain(unbound)
+        .collect();
 
-    let mut warnings = notes;
-    warnings.extend(findings.iter().map(|one| told(one, &definitions)));
+    let warnings: Vec<Warning> = notes
+        .into_iter()
+        .chain(findings.iter().map(|one| told(one, &definitions)))
+        .collect();
 
     let read: BTreeSet<Identity> = changes
         .iter()
@@ -137,29 +161,24 @@ pub fn review(
 
     // Everything worth reading plus every container around it, so a box is never drawn
     // around something whose container isn't here.
-    let mut shown = read.clone();
-    let mut queue: VecDeque<Identity> = read.iter().copied().collect();
-    while let Some(one) = queue.pop_front() {
-        if let Some(&parent) = parent_of.get(&one)
-            && shown.insert(parent)
-        {
-            queue.push_back(parent);
-        }
-    }
+    let shown: BTreeSet<Identity> = read
+        .iter()
+        .flat_map(|&one| std::iter::successors(Some(one), |at| parent_of.get(at).copied()))
+        .collect();
 
     let edges = project(&shown, references);
 
-    let kept: BTreeMap<Identity, Definition> = definitions
-        .iter()
-        .filter(|def| shown.contains(&def.identity))
-        .map(|def| {
+    let kept: BTreeMap<Identity, Definition> = classified
+        .into_iter()
+        .filter(|(def, _)| shown.contains(&def.identity))
+        .map(|(def, change)| {
             let identity = def.identity;
             (
                 identity,
                 Definition {
                     role: def.sides.latest().role,
-                    change: changes.get(&identity).cloned().unwrap_or(Change::Added),
-                    reached: reached.get(&identity).copied().filter(|&far| far > 0),
+                    change,
+                    reached: reached.get(&identity).copied(),
                     parent: parent_of.get(&identity).copied(),
                     sides: def.sides.clone(),
                 },
@@ -192,7 +211,7 @@ fn told(found: &Diagnostic, definitions: &[model::Definition]) -> Warning {
         .find(|def| def.identity == identity)
         .map(|def| def.sides.latest())
     {
-        Some(shows) => format!("{} ({})", written(&shows.locator), shows.file),
+        Some(shows) => format!("{} ({})", shows.locator, shows.file),
         None => format!("definition {}", identity.0),
     };
 
@@ -215,26 +234,21 @@ fn told(found: &Diagnostic, definitions: &[model::Definition]) -> Warning {
         ),
         Diagnostic::MentionFromNowhere { from } => (
             Impact::Incomplete,
-            format!(
-                "a mention came from {}, which was never reported",
-                written(from)
-            ),
+            format!("a mention came from {from}, which was never reported"),
         ),
         Diagnostic::Tangled { definition, at } => (
             Impact::Incomplete,
             format!(
-                "{} was handed over with two of its pieces covering the same text, around \
-                 byte {at} — so a line of it is shown twice, and read as two different \
-                 kinds of change",
-                written(definition)
+                "{definition} was handed over with two of its pieces covering the same text, \
+                 around byte {at} — so a line of it is shown twice, and read as two different \
+                 kinds of change"
             ),
         ),
         Diagnostic::TwoOfOneName { locator, times } => (
             Impact::Incomplete,
             format!(
-                "{times} definitions are called {}, so only one of them could be followed \
-                 from one side to the other",
-                written(locator)
+                "{times} definitions are called {locator}, so only one of them could be \
+                 followed from one side to the other"
             ),
         ),
         Diagnostic::LopsidedContract { definition } => (
@@ -254,29 +268,19 @@ fn told(found: &Diagnostic, definitions: &[model::Definition]) -> Warning {
     }
 }
 
-/// A name as somebody would write it.
-fn written(locator: &Locator) -> String {
-    locator
-        .scope
-        .iter()
-        .chain(std::iter::once(&locator.name))
-        .cloned()
-        .collect::<Vec<_>>()
-        .join("::")
-}
-
 /// A mention counts if it was there in either snapshot, so that a deleted definition
 /// still hangs off whatever it used to call.
 fn dependencies(references: &[Reference]) -> BTreeMap<Identity, Vec<Identity>> {
-    let mut out: BTreeMap<Identity, Vec<Identity>> = BTreeMap::new();
-    for reference in references {
-        if let Target::Known(to) = reference.to
-            && reference.from != to
-        {
-            out.entry(reference.from).or_default().push(to);
-        }
-    }
-    out
+    references
+        .iter()
+        .filter_map(|reference| match reference.to {
+            Target::Known(to) if reference.from != to => Some((reference.from, to)),
+            _ => None,
+        })
+        .fold(BTreeMap::new(), |mut out, (from, to)| {
+            out.entry(from).or_default().push(to);
+            out
+        })
 }
 
 /// Walk out from each definition worth drawing, stepping over anything the reader won't
@@ -454,7 +458,6 @@ mod tests {
                     "{identity:?} is inside something that holds nothing"
                 );
             }
-            assert_ne!(one.reached, Some(0), "reached counts hops, never nought");
         }
         for warning in &review.warnings {
             assert!(warning.about.is_none_or(|about| known(&about)));
